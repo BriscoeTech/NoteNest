@@ -409,11 +409,22 @@ export function useNotesStore() {
         const existingCategoryIds = new Set(getAllCategoryIds(prev.categories));
         const existingCardIds = new Set(prev.cards.map(c => c.id));
         
+        console.log('Import merge debug:', {
+          importedCards: importedCards.length,
+          existingCardIds: [...existingCardIds],
+          importedCardIds: importedCards.map((c: Card) => c.id)
+        });
+        
         // Merge categories - adds new ones and recursively merges children of existing ones
         const mergedCategories = mergeCategories(prev.categories, importedCategories, existingCategoryIds);
         
         // Add new cards that don't exist
         const newCards = importedCards.filter((c: Card) => !existingCardIds.has(c.id));
+        
+        console.log('After filter:', {
+          newCardsCount: newCards.length,
+          newCardIds: newCards.map((c: Card) => c.id)
+        });
         
         return {
           categories: sortCategoriesBySortOrder(mergedCategories),
