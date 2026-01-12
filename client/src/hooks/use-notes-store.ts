@@ -35,13 +35,26 @@ function sortCategoriesBySortOrder(categories: Category[]): Category[] {
     }));
 }
 
-function filterNewCategories(categories: Category[], existingIds: Set<string>): Category[] {
-  return categories
-    .filter(cat => !existingIds.has(cat.id))
-    .map(cat => ({
-      ...cat,
-      children: filterNewCategories(cat.children, existingIds)
-    }));
+function mergeCategories(existing: Category[], imported: Category[], existingIds: Set<string>): Category[] {
+  const result = [...existing];
+  
+  for (const importedCat of imported) {
+    const existingIndex = result.findIndex(c => c.id === importedCat.id);
+    
+    if (existingIndex === -1) {
+      // Category doesn't exist - add it with all its children (filtering out any that exist elsewhere)
+      const filteredChildren = mergeCategories([], importedCat.children, existingIds);
+      result.push({ ...importedCat, children: filteredChildren });
+    } else {
+      // Category exists - merge its children recursively
+      result[existingIndex] = {
+        ...result[existingIndex],
+        children: mergeCategories(result[existingIndex].children, importedCat.children, existingIds)
+      };
+    }
+  }
+  
+  return result;
 }
 
 function loadState(): AppState {
@@ -396,14 +409,14 @@ export function useNotesStore() {
         const existingCategoryIds = new Set(getAllCategoryIds(prev.categories));
         const existingCardIds = new Set(prev.cards.map(c => c.id));
         
-        // Add new categories that don't exist
-        const newCategories = filterNewCategories(importedCategories, existingCategoryIds);
+        // Merge categories - adds new ones and recursively merges children of existing ones
+        const mergedCategories = mergeCategories(prev.categories, importedCategories, existingCategoryIds);
         
         // Add new cards that don't exist
         const newCards = importedCards.filter((c: Card) => !existingCardIds.has(c.id));
         
         return {
-          categories: sortCategoriesBySortOrder([...prev.categories, ...newCategories]),
+          categories: sortCategoriesBySortOrder(mergedCategories),
           cards: [...prev.cards, ...newCards]
         };
       });
