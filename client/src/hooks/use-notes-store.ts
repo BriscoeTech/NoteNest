@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Category, Card, AppState } from '@/lib/types';
+import type { Category, Card, AppState, ContentBlock } from '@/lib/types';
 import { 
   generateId, 
   removeCategoryById, 
@@ -7,7 +7,8 @@ import {
   updateCategoryInTree,
   getAllCategoryIds,
   canMoveCategory,
-  moveCategoryToParent
+  moveCategoryToParent,
+  migrateCard
 } from '@/lib/types';
 
 const STORAGE_KEY = 'notecards_data';
@@ -21,7 +22,12 @@ function loadState(): AppState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      // Migrate old cards to new block-based format
+      return {
+        ...parsed,
+        cards: (parsed.cards || []).map(migrateCard)
+      };
     }
   } catch (e) {
     console.error('Failed to load state:', e);
@@ -44,7 +50,7 @@ export function useNotesStore() {
     saveState(state);
   }, [state]);
 
-  const addCategory = useCallback((name: string, parentId: string | null) => {
+  const addCategory = useCallback((name: string, parentId: string | null): string => {
     const newCategory: Category = {
       id: generateId(),
       name,
@@ -97,12 +103,11 @@ export function useNotesStore() {
     });
   }, []);
 
-  const addCard = useCallback((categoryId: string) => {
+  const addCard = useCallback((categoryId: string): string => {
     const newCard: Card = {
       id: generateId(),
       title: '',
-      content: '',
-      bullets: [],
+      blocks: [],
       categoryId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -121,6 +126,17 @@ export function useNotesStore() {
       cards: prev.cards.map(card => 
         card.id === id 
           ? { ...card, ...updates, updatedAt: Date.now() }
+          : card
+      )
+    }));
+  }, []);
+
+  const updateCardBlocks = useCallback((id: string, blocks: ContentBlock[]) => {
+    setState(prev => ({
+      ...prev,
+      cards: prev.cards.map(card => 
+        card.id === id 
+          ? { ...card, blocks, updatedAt: Date.now() }
           : card
       )
     }));
@@ -184,12 +200,15 @@ export function useNotesStore() {
       if (card.categoryId !== categoryId) return false;
       
       const matchesTitle = card.title.toLowerCase().includes(lowerQuery);
-      const matchesContent = card.content.toLowerCase().includes(lowerQuery);
-      const matchesBullets = card.bullets.some(b => 
-        b.content.toLowerCase().includes(lowerQuery)
-      );
+      const matchesBlocks = card.blocks.some(block => {
+        if (block.type === 'text') {
+          return block.content.toLowerCase().includes(lowerQuery);
+        } else {
+          return block.items.some(item => item.content.toLowerCase().includes(lowerQuery));
+        }
+      });
       
-      return matchesTitle || matchesContent || matchesBullets;
+      return matchesTitle || matchesBlocks;
     });
   }, [state.cards]);
 
@@ -206,6 +225,7 @@ export function useNotesStore() {
     deleteCategory,
     addCard,
     updateCard,
+    updateCardBlocks,
     moveCard,
     deleteCard,
     restoreCard,
