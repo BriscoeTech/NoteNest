@@ -749,9 +749,12 @@ export function CategoryTree({
         onDrop={handleRootDrop}
       >
         {categories.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-xs px-2">
+          <div 
+            className="text-center py-6 text-muted-foreground text-xs px-2 cursor-pointer hover:bg-accent/50 rounded-md mx-1"
+            onClick={() => onSelectCategory(null)}
+          >
             <p>No categories</p>
-            <p className="mt-1 opacity-70">Create one to get started</p>
+            <p className="mt-1 opacity-70">Click here to create one</p>
           </div>
         ) : (
           categories.map(category => (
