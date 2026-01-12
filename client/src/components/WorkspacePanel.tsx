@@ -632,6 +632,24 @@ export function WorkspacePanel({
 
   const subcategories = currentCategory?.children || [];
 
+  // Get all descendant categories for search
+  const getAllDescendantCategories = (cat: Category): Category[] => {
+    const result: Category[] = [];
+    const traverse = (c: Category) => {
+      result.push(c);
+      c.children.forEach(traverse);
+    };
+    cat.children.forEach(traverse);
+    return result;
+  };
+
+  // Filter categories by search query (case insensitive)
+  const matchingCategories = searchQuery && currentCategory
+    ? getAllDescendantCategories(currentCategory).filter(cat => 
+        cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
+
   useEffect(() => {
     if (isAddingCategory && newCategoryInputRef.current) {
       newCategoryInputRef.current.focus();
@@ -838,7 +856,7 @@ export function WorkspacePanel({
           }
         }}
       >
-        {subcategories.length === 0 && cards.length === 0 ? (
+        {subcategories.length === 0 && cards.length === 0 && matchingCategories.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <p className="text-lg font-medium">
               {searchQuery ? 'No matching notes' : isRecycleBin ? 'Recycle bin is empty' : 'Empty category'}
@@ -898,7 +916,36 @@ export function WorkspacePanel({
               </div>
             )}
 
-            {subcategories.length > 0 && cards.length > 0 && !searchQuery && (
+            {matchingCategories.length > 0 && searchQuery && (
+              <>
+                <p className="text-xs text-muted-foreground font-medium mb-2">Matching Categories</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {matchingCategories.map(cat => (
+                    <div
+                      key={cat.id}
+                      data-testid={`search-category-${cat.id}`}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors"
+                      onClick={() => onSelectCategory(cat.id)}
+                    >
+                      <FolderOpen className="w-10 h-10 text-primary/70" />
+                      <span className="text-sm font-medium text-center truncate w-full">{cat.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(() => {
+                          const folderCount = cat.children.length;
+                          const cardCount = allCards.filter(c => c.categoryId === cat.id && !c.isDeleted).length;
+                          const parts = [];
+                          if (folderCount > 0) parts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
+                          if (cardCount > 0) parts.push(`${cardCount} note${cardCount !== 1 ? 's' : ''}`);
+                          return parts.join(', ');
+                        })()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {((subcategories.length > 0 && !searchQuery) || (matchingCategories.length > 0 && searchQuery)) && cards.length > 0 && (
               <div className="border-t border-border my-4" />
             )}
 
