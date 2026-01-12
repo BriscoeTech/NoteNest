@@ -1,29 +1,29 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNotesStore } from '@/hooks/use-notes-store';
 import { CategoryTree } from '@/components/CategoryTree';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
-import { ALL_NOTES_ID, RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
+import { RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
 
 export default function NotesApp() {
   const store = useNotesStore();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(ALL_NOTES_ID);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [triggerAddCategory, setTriggerAddCategory] = useState(0);
 
   const isRecycleBin = selectedCategoryId === RECYCLE_BIN_ID;
-  const isAllNotes = selectedCategoryId === ALL_NOTES_ID;
 
   const categoryName = useMemo(() => {
     if (isRecycleBin) return 'Recycle Bin';
-    if (isAllNotes) return 'All Notes';
     if (selectedCategoryId) {
       const cat = findCategoryById(store.categories, selectedCategoryId);
       return cat?.name || 'Unknown';
     }
-    return 'Uncategorized';
-  }, [selectedCategoryId, store.categories, isRecycleBin, isAllNotes]);
+    return '';
+  }, [selectedCategoryId, store.categories, isRecycleBin]);
 
   const displayedCards = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    
     if (isRecycleBin) {
       const deleted = store.getDeletedCards();
       if (searchQuery) {
@@ -37,11 +37,7 @@ export default function NotesApp() {
     }
 
     if (searchQuery) {
-      return store.searchCards(searchQuery, isAllNotes ? null : selectedCategoryId);
-    }
-
-    if (isAllNotes) {
-      return store.cards.filter(c => !c.isDeleted);
+      return store.searchCards(searchQuery, selectedCategoryId);
     }
 
     return store.getCardsForCategory(selectedCategoryId);
@@ -49,30 +45,29 @@ export default function NotesApp() {
     selectedCategoryId, 
     searchQuery, 
     store.cards, 
-    isRecycleBin, 
-    isAllNotes,
+    isRecycleBin,
     store.getDeletedCards,
     store.searchCards,
     store.getCardsForCategory
   ]);
 
   const deletedCount = store.getDeletedCards().length;
+  const hasCategories = store.categories.length > 0;
 
   const handleSelectCategory = (id: string | null) => {
     setSelectedCategoryId(id);
-    setSelectedCardId(null);
     setSearchQuery('');
   };
 
   const handleAddCard = () => {
-    const categoryId = isAllNotes || isRecycleBin ? null : selectedCategoryId;
-    const newCardId = store.addCard(categoryId);
-    setSelectedCardId(newCardId);
+    if (selectedCategoryId && selectedCategoryId !== RECYCLE_BIN_ID) {
+      store.addCard(selectedCategoryId);
+    }
   };
 
-  const handleSelectCard = (id: string | null) => {
-    setSelectedCardId(id);
-  };
+  const handleCreateCategory = useCallback(() => {
+    setTriggerAddCategory(prev => prev + 1);
+  }, []);
 
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
@@ -92,12 +87,11 @@ export default function NotesApp() {
       <main className="flex-1 min-w-0">
         <WorkspacePanel
           cards={displayedCards}
-          selectedCardId={selectedCardId}
           categoryId={selectedCategoryId}
           categoryName={categoryName}
           isRecycleBin={isRecycleBin}
+          hasCategories={hasCategories}
           categories={store.categories}
-          onSelectCard={handleSelectCard}
           onAddCard={handleAddCard}
           onUpdateCard={store.updateCard}
           onMoveCard={store.moveCard}
@@ -106,6 +100,7 @@ export default function NotesApp() {
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
+          onCreateCategory={handleCreateCategory}
         />
       </main>
     </div>

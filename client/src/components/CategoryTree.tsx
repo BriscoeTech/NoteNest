@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Trash2, MoreHorizontal, Pencil, FileText, FolderInput, FolderPlus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Trash2, MoreHorizontal, Pencil, FolderInput, FolderPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category } from '@/lib/types';
-import { ALL_NOTES_ID, RECYCLE_BIN_ID } from '@/lib/types';
+import { RECYCLE_BIN_ID } from '@/lib/types';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -52,6 +52,29 @@ interface CategoryItemProps {
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDrop: (targetId: string | null) => void;
+}
+
+function getDescendantIds(categories: Category[], id: string): string[] {
+  const category = findCategory(categories, id);
+  if (!category) return [];
+  const ids: string[] = [];
+  function traverse(cats: Category[]) {
+    for (const cat of cats) {
+      ids.push(cat.id);
+      traverse(cat.children);
+    }
+  }
+  traverse(category.children);
+  return ids;
+}
+
+function findCategory(categories: Category[], id: string): Category | null {
+  for (const cat of categories) {
+    if (cat.id === id) return cat;
+    const found = findCategory(cat.children, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 function CategoryItem({
@@ -288,20 +311,22 @@ export function CategoryTree({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [isAddingRoot, setIsAddingRoot] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [addingToParent, setAddingToParent] = useState<string | null>(null);
+  const [addingToParent, setAddingToParent] = useState<string | null | undefined>(undefined);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
   const newInputRef = useRef<HTMLInputElement>(null);
 
+  const isAdding = addingToParent !== undefined;
+
   useEffect(() => {
-    if ((isAddingRoot || addingToParent !== null) && newInputRef.current) {
+    if (isAdding && newInputRef.current) {
       newInputRef.current.focus();
     }
-  }, [isAddingRoot, addingToParent]);
+  }, [isAdding]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -335,14 +360,20 @@ export function CategoryTree({
     setAddingToParent(parentId);
     setNewCategoryName('');
     setExpandedIds(prev => new Set([...Array.from(prev), parentId]));
+    setShowAddDropdown(false);
+  };
+
+  const startAddRoot = () => {
+    setAddingToParent(null);
+    setNewCategoryName('');
+    setShowAddDropdown(false);
   };
 
   const handleAddCategory = () => {
     if (newCategoryName.trim()) {
-      onAddCategory(newCategoryName.trim(), addingToParent);
+      onAddCategory(newCategoryName.trim(), addingToParent ?? null);
     }
-    setIsAddingRoot(false);
-    setAddingToParent(null);
+    setAddingToParent(undefined);
     setNewCategoryName('');
   };
 
@@ -350,8 +381,7 @@ export function CategoryTree({
     if (e.key === 'Enter') {
       handleAddCategory();
     } else if (e.key === 'Escape') {
-      setIsAddingRoot(false);
-      setAddingToParent(null);
+      setAddingToParent(undefined);
       setNewCategoryName('');
     }
   };
@@ -395,25 +425,37 @@ export function CategoryTree({
     ? [categoryToMove, ...getDescendantIds(categories, categoryToMove)]
     : [];
 
-  const isValidCategory = selectedId && selectedId !== ALL_NOTES_ID && selectedId !== RECYCLE_BIN_ID;
+  const isValidCategorySelected = selectedId && selectedId !== RECYCLE_BIN_ID;
 
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 border-b border-border flex items-center justify-between">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categories</h2>
-        {isValidCategory && (
-          <Button
-            data-testid="button-add-subcategory"
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => startAddChild(selectedId)}
-            title="Add subcategory to selected"
-          >
-            <FolderPlus className="w-3 h-3 mr-1" />
-            Subcategory
-          </Button>
-        )}
+        
+        <DropdownMenu open={showAddDropdown} onOpenChange={setShowAddDropdown}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              data-testid="button-add-category"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={startAddRoot}>
+              <Folder className="w-4 h-4 mr-2" />
+              New Top-Level Category
+            </DropdownMenuItem>
+            {isValidCategorySelected && (
+              <DropdownMenuItem onClick={() => startAddChild(selectedId)}>
+                <FolderPlus className="w-4 h-4 mr-2" />
+                New Subcategory in "{findCategory(categories, selectedId)?.name}"
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div 
@@ -425,82 +467,68 @@ export function CategoryTree({
         onDragLeave={() => setRootDragOver(false)}
         onDrop={handleRootDrop}
       >
-        <div
-          data-testid="category-all-notes"
-          className={cn(
-            "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer transition-colors",
-            selectedId === ALL_NOTES_ID 
-              ? "bg-primary/10 text-primary" 
-              : "hover:bg-accent text-foreground"
-          )}
-          onClick={() => onSelect(ALL_NOTES_ID)}
-        >
-          <FileText className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">All Notes</span>
-        </div>
-
-        <div className="my-2 border-t border-border" />
-
-        {categories.map(category => (
-          <CategoryItem
-            key={category.id}
-            category={category}
-            depth={0}
-            selectedId={selectedId}
-            expandedIds={expandedIds}
-            allCategories={categories}
-            onToggleExpand={toggleExpand}
-            onSelect={onSelect}
-            onAddChild={startAddChild}
-            onRename={startRename}
-            onMove={handleMove}
-            onDelete={onDeleteCategory}
-            editingId={editingId}
-            editingName={editingName}
-            onEditingNameChange={setEditingName}
-            onFinishEditing={finishEditing}
-            draggedId={draggedId}
-            onDragStart={setDraggedId}
-            onDragEnd={() => setDraggedId(null)}
-            onDrop={handleDrop}
-          />
-        ))}
-
-        {(isAddingRoot || addingToParent !== null) && (
-          <div 
-            className="flex items-center gap-1 py-1 px-2" 
-            style={{ paddingLeft: addingToParent ? '24px' : '8px' }}
-          >
-            <Folder className="w-4 h-4 text-muted-foreground ml-4" />
-            <Input
-              ref={newInputRef}
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              onBlur={handleAddCategory}
-              onKeyDown={handleNewCategoryKeyDown}
-              placeholder="Category name..."
-              className="h-6 py-0 px-1 text-sm flex-1"
-            />
+        {categories.length === 0 && !isAdding ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            <p>No categories yet</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={startAddRoot}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Create one
+            </Button>
           </div>
+        ) : (
+          <>
+            {categories.map(category => (
+              <CategoryItem
+                key={category.id}
+                category={category}
+                depth={0}
+                selectedId={selectedId}
+                expandedIds={expandedIds}
+                allCategories={categories}
+                onToggleExpand={toggleExpand}
+                onSelect={onSelect}
+                onAddChild={startAddChild}
+                onRename={startRename}
+                onMove={handleMove}
+                onDelete={onDeleteCategory}
+                editingId={editingId}
+                editingName={editingName}
+                onEditingNameChange={setEditingName}
+                onFinishEditing={finishEditing}
+                draggedId={draggedId}
+                onDragStart={setDraggedId}
+                onDragEnd={() => setDraggedId(null)}
+                onDrop={handleDrop}
+              />
+            ))}
+
+            {isAdding && (
+              <div 
+                className="flex items-center gap-1 py-1 px-2" 
+                style={{ paddingLeft: addingToParent ? '24px' : '8px' }}
+              >
+                <Folder className="w-4 h-4 text-muted-foreground ml-4" />
+                <Input
+                  ref={newInputRef}
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onBlur={handleAddCategory}
+                  onKeyDown={handleNewCategoryKeyDown}
+                  placeholder="Category name..."
+                  className="h-6 py-0 px-1 text-sm flex-1"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      <div className="p-2 border-t border-border space-y-1">
-        <Button
-          data-testid="button-add-category"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
-          onClick={() => {
-            setIsAddingRoot(true);
-            setAddingToParent(null);
-            setNewCategoryName('');
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Category
-        </Button>
-
+      <div className="p-2 border-t border-border">
         <div
           data-testid="category-recycle-bin"
           className={cn(
@@ -533,27 +561,4 @@ export function CategoryTree({
       />
     </div>
   );
-}
-
-function findCategory(categories: Category[], id: string): Category | null {
-  for (const cat of categories) {
-    if (cat.id === id) return cat;
-    const found = findCategory(cat.children, id);
-    if (found) return found;
-  }
-  return null;
-}
-
-function getDescendantIds(categories: Category[], id: string): string[] {
-  const category = findCategory(categories, id);
-  if (!category) return [];
-  const ids: string[] = [];
-  function traverse(cats: Category[]) {
-    for (const cat of cats) {
-      ids.push(cat.id);
-      traverse(cat.children);
-    }
-  }
-  traverse(category.children);
-  return ids;
 }

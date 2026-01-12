@@ -1,47 +1,37 @@
-import { useState, useMemo } from 'react';
-import { ArrowLeft, Plus, Search, MoreVertical, Trash2, FolderInput, RotateCcw, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useState } from 'react';
+import { Plus, Search, X, Folder } from 'lucide-react';
 import type { Card, Category } from '@/lib/types';
-import { RECYCLE_BIN_ID, ALL_NOTES_ID } from '@/lib/types';
+import { RECYCLE_BIN_ID } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuSeparator,
-} from '@/components/ui/context-menu';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
-import { CardEditor } from './CardEditor';
-import { formatDistanceToNow } from 'date-fns';
+import { InlineCardEditor } from './InlineCardEditor';
 
 interface WorkspacePanelProps {
   cards: Card[];
-  selectedCardId: string | null;
   categoryId: string | null;
   categoryName: string;
   isRecycleBin: boolean;
+  hasCategories: boolean;
   categories: Category[];
-  onSelectCard: (id: string | null) => void;
   onAddCard: () => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
-  onMoveCard: (cardId: string, categoryId: string | null) => void;
+  onMoveCard: (cardId: string, categoryId: string) => void;
   onDeleteCard: (id: string) => void;
-  onRestoreCard: (id: string, categoryId: string | null) => void;
+  onRestoreCard: (id: string, categoryId: string) => void;
   onPermanentlyDeleteCard: (id: string) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
+  onCreateCategory: () => void;
 }
 
 export function WorkspacePanel({
   cards,
-  selectedCardId,
   categoryId,
   categoryName,
   isRecycleBin,
+  hasCategories,
   categories,
-  onSelectCard,
   onAddCard,
   onUpdateCard,
   onMoveCard,
@@ -49,16 +39,13 @@ export function WorkspacePanel({
   onRestoreCard,
   onPermanentlyDeleteCard,
   onSearch,
-  searchQuery
+  searchQuery,
+  onCreateCategory
 }: WorkspacePanelProps) {
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
-
-  const selectedCard = useMemo(() => {
-    if (!selectedCardId) return null;
-    return cards.find(c => c.id === selectedCardId) || null;
-  }, [selectedCardId, cards]);
 
   const handleMoveClick = (cardId: string) => {
     setCardToMove(cardId);
@@ -73,7 +60,7 @@ export function WorkspacePanel({
   };
 
   const handleCategorySelect = (targetCategoryId: string | null) => {
-    if (cardToMove) {
+    if (cardToMove && targetCategoryId) {
       if (isRestoring) {
         onRestoreCard(cardToMove, targetCategoryId);
       } else {
@@ -84,37 +71,32 @@ export function WorkspacePanel({
     setCardToMove(null);
   };
 
-  const getCardPreview = (card: Card): string => {
-    if (card.content) return card.content.slice(0, 100);
-    if (card.bullets.length > 0) {
-      return card.bullets.map(b => '• ' + b.content).join(' ').slice(0, 100);
-    }
-    return 'Empty note';
+  const toggleCardExpand = (cardId: string) => {
+    setExpandedCardId(prev => prev === cardId ? null : cardId);
   };
 
-  if (selectedCard) {
+  const isValidCategory = categoryId && categoryId !== RECYCLE_BIN_ID;
+
+  if (!categoryId) {
     return (
-      <div className="flex flex-col h-full bg-background">
-        <div className="p-3 border-b border-border flex items-center gap-2">
-          <Button
-            data-testid="button-back-to-cards"
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2"
-            onClick={() => onSelectCard(null)}
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {categoryName}
-          </span>
+      <div className="flex flex-col h-full bg-background items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <Folder className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">
+            {hasCategories ? 'Select a Category' : 'Create Your First Category'}
+          </h2>
+          <p className="text-muted-foreground mb-6">
+            {hasCategories 
+              ? 'Choose a category from the sidebar to view and create notes.'
+              : 'Notes must belong to a category. Create one to get started.'}
+          </p>
+          {!hasCategories && (
+            <Button onClick={onCreateCategory}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Category
+            </Button>
+          )}
         </div>
-        <CardEditor
-          card={selectedCard}
-          onUpdateCard={onUpdateCard}
-          isRecycleBin={isRecycleBin}
-        />
       </div>
     );
   }
@@ -124,7 +106,7 @@ export function WorkspacePanel({
       <div className="p-4 border-b border-border space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">{categoryName}</h2>
-          {!isRecycleBin && (
+          {isValidCategory && (
             <Button
               data-testid="button-add-card"
               size="sm"
@@ -141,7 +123,7 @@ export function WorkspacePanel({
           <Input
             data-testid="input-search-cards"
             type="search"
-            placeholder="Search notes..."
+            placeholder="Search in this category..."
             value={searchQuery}
             onChange={(e) => onSearch(e.target.value)}
             className="pl-9"
@@ -164,9 +146,13 @@ export function WorkspacePanel({
               {searchQuery ? 'No matching notes' : isRecycleBin ? 'Recycle bin is empty' : 'No notes yet'}
             </p>
             <p className="text-sm mt-1">
-              {searchQuery ? 'Try a different search term' : isRecycleBin ? 'Deleted notes will appear here' : 'Create your first note to get started'}
+              {searchQuery 
+                ? 'Try a different search term' 
+                : isRecycleBin 
+                  ? 'Deleted notes will appear here' 
+                  : 'Create your first note to get started'}
             </p>
-            {!isRecycleBin && !searchQuery && (
+            {isValidCategory && !searchQuery && (
               <Button
                 className="mt-4"
                 onClick={onAddCard}
@@ -177,63 +163,20 @@ export function WorkspacePanel({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="space-y-3 max-w-3xl mx-auto">
             {cards.map(card => (
-              <ContextMenu key={card.id}>
-                <ContextMenuTrigger asChild>
-                  <div
-                    data-testid={`card-item-${card.id}`}
-                    className={cn(
-                      "p-4 rounded-xl cursor-pointer transition-all border bg-card hover:shadow-md hover:border-primary/30",
-                      "group"
-                    )}
-                    onClick={() => onSelectCard(card.id)}
-                  >
-                    <h3 className="text-base font-medium text-foreground truncate">
-                      {card.title || 'Untitled'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-2 line-clamp-3 min-h-[3.75rem]">
-                      {getCardPreview(card)}
-                    </p>
-                    <p className="text-xs text-muted-foreground/70 mt-3">
-                      {formatDistanceToNow(card.updatedAt, { addSuffix: true })}
-                    </p>
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-48">
-                  {isRecycleBin ? (
-                    <>
-                      <ContextMenuItem onClick={() => handleRestoreClick(card.id)}>
-                        <RotateCcw className="w-4 h-4 mr-2" />
-                        Restore to...
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem 
-                        onClick={() => onPermanentlyDeleteCard(card.id)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Permanently
-                      </ContextMenuItem>
-                    </>
-                  ) : (
-                    <>
-                      <ContextMenuItem onClick={() => handleMoveClick(card.id)}>
-                        <FolderInput className="w-4 h-4 mr-2" />
-                        Move to...
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem 
-                        onClick={() => onDeleteCard(card.id)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </ContextMenuItem>
-                    </>
-                  )}
-                </ContextMenuContent>
-              </ContextMenu>
+              <InlineCardEditor
+                key={card.id}
+                card={card}
+                isExpanded={expandedCardId === card.id}
+                isRecycleBin={isRecycleBin}
+                onToggleExpand={() => toggleCardExpand(card.id)}
+                onUpdateCard={onUpdateCard}
+                onMoveCard={handleMoveClick}
+                onDeleteCard={onDeleteCard}
+                onRestoreCard={handleRestoreClick}
+                onPermanentlyDeleteCard={onPermanentlyDeleteCard}
+              />
             ))}
           </div>
         )}
@@ -245,6 +188,7 @@ export function WorkspacePanel({
         categories={categories}
         onSelect={handleCategorySelect}
         title={isRestoring ? "Restore to Category" : "Move to Category"}
+        showRoot={false}
       />
     </div>
   );
