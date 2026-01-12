@@ -296,7 +296,9 @@ function CategoryItem({
   const isSelected = selectedCategoryId === category.id;
   const isEditing = editingCategoryId === category.id;
   const hasChildren = category.children.length > 0;
-  const categoryCards = cards.filter(c => c.categoryId === category.id && !c.isDeleted);
+  const categoryCards = cards
+    .filter(c => c.categoryId === category.id && !c.isDeleted)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
   const hasContent = hasChildren || categoryCards.length > 0;
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
