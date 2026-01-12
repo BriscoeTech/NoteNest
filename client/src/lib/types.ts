@@ -96,3 +96,26 @@ export function getAllCategoryIds(categories: Category[]): string[] {
   traverse(categories);
   return ids;
 }
+
+export function getDescendantIds(categories: Category[], id: string): string[] {
+  const category = findCategoryById(categories, id);
+  if (!category) return [];
+  return getAllCategoryIds(category.children);
+}
+
+export function canMoveCategory(categories: Category[], categoryId: string, targetParentId: string | null): boolean {
+  if (categoryId === targetParentId) return false;
+  if (targetParentId === null) return true;
+  const descendantIds = getDescendantIds(categories, categoryId);
+  return !descendantIds.includes(targetParentId);
+}
+
+export function moveCategoryToParent(categories: Category[], categoryId: string, newParentId: string | null): Category[] {
+  const category = findCategoryById(categories, categoryId);
+  if (!category) return categories;
+  
+  const withoutCategory = removeCategoryById(categories, categoryId);
+  const movedCategory: Category = { ...category, parentId: newParentId };
+  
+  return addCategoryToParent(withoutCategory, newParentId, movedCategory);
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import {
@@ -17,6 +17,9 @@ interface CategoryPickerDialogProps {
   categories: Category[];
   onSelect: (categoryId: string | null) => void;
   title: string;
+  excludeIds?: string[];
+  showRoot?: boolean;
+  rootLabel?: string;
 }
 
 interface PickerItemProps {
@@ -25,11 +28,15 @@ interface PickerItemProps {
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
+  excludeIds: string[];
 }
 
-function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect }: PickerItemProps) {
+function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect, excludeIds }: PickerItemProps) {
   const isExpanded = expandedIds.has(category.id);
   const hasChildren = category.children.length > 0;
+  const isExcluded = excludeIds.includes(category.id);
+
+  if (isExcluded) return null;
 
   return (
     <div>
@@ -71,6 +78,7 @@ function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect }: 
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
+              excludeIds={excludeIds}
             />
           ))}
         </div>
@@ -84,7 +92,10 @@ export function CategoryPickerDialog({
   onOpenChange,
   categories,
   onSelect,
-  title
+  title,
+  excludeIds = [],
+  showRoot = true,
+  rootLabel = "Uncategorized"
 }: CategoryPickerDialogProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -114,16 +125,18 @@ export function CategoryPickerDialog({
         
         <ScrollArea className="max-h-80">
           <div className="py-2">
-            <div
-              data-testid="picker-uncategorized"
-              className="flex items-center gap-2 py-2 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
-              onClick={() => handleSelect(null)}
-            >
-              <FileText className="w-4 h-4 text-muted-foreground ml-5" />
-              <span className="text-sm font-medium">Uncategorized</span>
-            </div>
+            {showRoot && (
+              <div
+                data-testid="picker-root"
+                className="flex items-center gap-2 py-2 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => handleSelect(null)}
+              >
+                <Home className="w-4 h-4 text-muted-foreground ml-5" />
+                <span className="text-sm font-medium">{rootLabel}</span>
+              </div>
+            )}
             
-            {categories.length > 0 && <div className="my-2 border-t border-border mx-2" />}
+            {categories.length > 0 && showRoot && <div className="my-2 border-t border-border mx-2" />}
             
             {categories.map(category => (
               <PickerItem
@@ -133,6 +146,7 @@ export function CategoryPickerDialog({
                 expandedIds={expandedIds}
                 onToggleExpand={toggleExpand}
                 onSelect={handleSelect}
+                excludeIds={excludeIds}
               />
             ))}
           </div>
