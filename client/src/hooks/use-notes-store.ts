@@ -409,28 +409,28 @@ export function useNotesStore() {
         const existingCategoryIds = new Set(getAllCategoryIds(prev.categories));
         const existingCardIds = new Set(prev.cards.map(c => c.id));
         
-        console.log('Import merge debug:', {
-          importedCards: importedCards.length,
-          existingCardIds: [...existingCardIds],
-          importedCardIds: importedCards.map((c: Card) => c.id),
-          importedCardsDetails: importedCards.map((c: Card) => ({ id: c.id, categoryId: c.categoryId, isDeleted: c.isDeleted, title: c.title })),
-          existingCardsDetails: prev.cards.map(c => ({ id: c.id, categoryId: c.categoryId, isDeleted: c.isDeleted, title: c.title }))
-        });
-        
         // Merge categories - adds new ones and recursively merges children of existing ones
         const mergedCategories = mergeCategories(prev.categories, importedCategories, existingCategoryIds);
         
         // Add new cards that don't exist
         const newCards = importedCards.filter((c: Card) => !existingCardIds.has(c.id));
         
-        console.log('After filter:', {
-          newCardsCount: newCards.length,
-          newCardIds: newCards.map((c: Card) => c.id)
+        // Create a map of imported cards for quick lookup
+        const importedCardMap = new Map(importedCards.map((c: Card) => [c.id, c]));
+        
+        // Update existing cards: restore if currently deleted but imported version is not deleted
+        const updatedExistingCards = prev.cards.map(card => {
+          const importedVersion = importedCardMap.get(card.id);
+          if (importedVersion && card.isDeleted && !importedVersion.isDeleted) {
+            // Restore the card with imported data
+            return { ...importedVersion, isDeleted: false };
+          }
+          return card;
         });
         
         return {
           categories: sortCategoriesBySortOrder(mergedCategories),
-          cards: [...prev.cards, ...newCards]
+          cards: [...updatedExistingCards, ...newCards]
         };
       });
     }
