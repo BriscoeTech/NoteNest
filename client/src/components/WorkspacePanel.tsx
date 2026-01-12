@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle, Image } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle, Image, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Card, Category, BulletItem, ContentBlock, TextBlock, BulletBlock, ImageBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, generateId, findCategoryById } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -50,6 +53,7 @@ interface WorkspacePanelProps {
   onRestoreCard: (id: string, categoryId: string) => void;
   onPermanentlyDeleteCard: (id: string) => void;
   onReorderCard: (cardId: string, direction: 'up' | 'down') => void;
+  onReorderCardsByIndex: (cardIds: string[]) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
 }
@@ -315,6 +319,10 @@ interface InlineCardProps {
   onMoveDown: () => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  dragHandleProps?: {
+    attributes: Record<string, any>;
+    listeners: Record<string, any>;
+  };
 }
 
 function InlineCard({
@@ -331,7 +339,8 @@ function InlineCard({
   onMoveUp,
   onMoveDown,
   canMoveUp,
-  canMoveDown
+  canMoveDown,
+  dragHandleProps
 }: InlineCardProps) {
   const [title, setTitle] = useState(card.title);
   const [blocks, setBlocks] = useState<ContentBlock[]>(card.blocks);
@@ -452,10 +461,19 @@ function InlineCard({
           data-testid={`card-item-${card.id}`}
           onClick={onSelect}
           className={cn(
-            "border rounded-lg bg-card p-4 transition-colors",
+            "border rounded-lg bg-card p-4 transition-colors relative",
             isSelected ? "ring-2 ring-primary/40 border-primary/40" : "hover:border-primary/30"
           )}
         >
+          {!isRecycleBin && dragHandleProps && (
+            <div 
+              className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 text-muted-foreground/50 hover:text-muted-foreground"
+              {...dragHandleProps.attributes}
+              {...dragHandleProps.listeners}
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0 space-y-2 pr-6">
               <Textarea
@@ -525,37 +543,6 @@ function InlineCard({
                 {formatDistanceToNow(card.updatedAt, { addSuffix: true })}
               </p>
             </div>
-
-            {isSelected && !isRecycleBin && (canMoveUp || canMoveDown) && (
-              <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 -ml-6">
-                <button
-                  data-testid={`card-move-up-${card.id}`}
-                  onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-                  disabled={!canMoveUp}
-                  className={cn(
-                    "p-1 rounded transition-colors",
-                    canMoveUp 
-                      ? "text-muted-foreground hover:text-foreground hover:bg-accent" 
-                      : "text-muted-foreground/30 cursor-not-allowed"
-                  )}
-                >
-                  <ChevronUp className="w-4 h-4" />
-                </button>
-                <button
-                  data-testid={`card-move-down-${card.id}`}
-                  onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-                  disabled={!canMoveDown}
-                  className={cn(
-                    "p-1 rounded transition-colors",
-                    canMoveDown 
-                      ? "text-muted-foreground hover:text-foreground hover:bg-accent" 
-                      : "text-muted-foreground/30 cursor-not-allowed"
-                  )}
-                >
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </div>
-            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -639,6 +626,33 @@ function InlineCard({
   );
 }
 
+interface SortableCardProps extends InlineCardProps {
+  id: string;
+}
+
+function SortableCard({ id, ...props }: SortableCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <InlineCard {...props} dragHandleProps={{ attributes, listeners: listeners || {} }} />
+    </div>
+  );
+}
+
 export function WorkspacePanel({
   cards,
   allCards,
@@ -660,6 +674,7 @@ export function WorkspacePanel({
   onRestoreCard,
   onPermanentlyDeleteCard,
   onReorderCard,
+  onReorderCardsByIndex,
   onSearch,
   searchQuery
 }: WorkspacePanelProps) {
@@ -748,6 +763,27 @@ export function WorkspacePanel({
   const handleAddNote = () => {
     if (hasCategories && categoryId && categoryId !== RECYCLE_BIN_ID) {
       onAddCard();
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = cards.findIndex(c => c.id === active.id);
+      const newIndex = cards.findIndex(c => c.id === over.id);
+      const newOrder = arrayMove(cards, oldIndex, newIndex);
+      onReorderCardsByIndex(newOrder.map(c => c.id));
     }
   };
 
@@ -990,7 +1026,43 @@ export function WorkspacePanel({
               <div className="border-t border-border my-4" />
             )}
 
-            {cards.length > 0 && (
+            {cards.length > 0 && !isRecycleBin && !searchQuery && (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={cards.map(c => c.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3 pl-6">
+                    {cards.map((card, index) => (
+                      <SortableCard
+                        key={card.id}
+                        id={card.id}
+                        card={card}
+                        isRecycleBin={isRecycleBin}
+                        isSelected={selectedCardId === card.id}
+                        onSelect={() => onSelectCard(card.id)}
+                        onUpdateCard={onUpdateCard}
+                        onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                        onMoveCard={handleMoveClick}
+                        onDeleteCard={onDeleteCard}
+                        onRestoreCard={handleRestoreClick}
+                        onPermanentlyDeleteCard={onPermanentlyDeleteCard}
+                        onMoveUp={() => onReorderCard(card.id, 'up')}
+                        onMoveDown={() => onReorderCard(card.id, 'down')}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < cards.length - 1}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+
+            {cards.length > 0 && (isRecycleBin || searchQuery) && (
               <div className="space-y-3 pl-6">
                 {cards.map((card, index) => (
                   <InlineCard
