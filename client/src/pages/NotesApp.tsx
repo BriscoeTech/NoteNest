@@ -8,18 +8,19 @@ export default function NotesApp() {
   const store = useNotesStore();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [triggerAddCategory, setTriggerAddCategory] = useState(0);
 
   const isRecycleBin = selectedCategoryId === RECYCLE_BIN_ID;
 
+  const currentCategory = useMemo(() => {
+    if (!selectedCategoryId || isRecycleBin) return null;
+    return findCategoryById(store.categories, selectedCategoryId);
+  }, [selectedCategoryId, store.categories, isRecycleBin]);
+
   const categoryName = useMemo(() => {
     if (isRecycleBin) return 'Recycle Bin';
-    if (selectedCategoryId) {
-      const cat = findCategoryById(store.categories, selectedCategoryId);
-      return cat?.name || 'Unknown';
-    }
+    if (currentCategory) return currentCategory.name;
     return '';
-  }, [selectedCategoryId, store.categories, isRecycleBin]);
+  }, [isRecycleBin, currentCategory]);
 
   const displayedCards = useMemo(() => {
     if (!selectedCategoryId) return [];
@@ -54,29 +55,29 @@ export default function NotesApp() {
   const deletedCount = store.getDeletedCards().length;
   const hasCategories = store.categories.length > 0;
 
-  const handleSelectCategory = (id: string | null) => {
+  const handleSelectCategory = useCallback((id: string | null) => {
     setSelectedCategoryId(id);
     setSearchQuery('');
-  };
+  }, []);
 
-  const handleAddCard = () => {
+  const handleAddCard = useCallback(() => {
     if (selectedCategoryId && selectedCategoryId !== RECYCLE_BIN_ID) {
       store.addCard(selectedCategoryId);
     }
-  };
+  }, [selectedCategoryId, store.addCard]);
 
-  const handleCreateCategory = useCallback(() => {
-    setTriggerAddCategory(prev => prev + 1);
-  }, []);
+  const handleAddCategory = useCallback((name: string, parentId: string | null) => {
+    const newId = store.addCategory(name, parentId);
+    setSelectedCategoryId(newId);
+  }, [store.addCategory]);
 
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
-      <aside className="w-64 border-r border-border bg-sidebar flex-shrink-0">
+      <aside className="w-56 border-r border-border bg-sidebar flex-shrink-0">
         <CategoryTree
           categories={store.categories}
           selectedId={selectedCategoryId}
           onSelect={handleSelectCategory}
-          onAddCategory={store.addCategory}
           onRenameCategory={store.renameCategory}
           onMoveCategory={store.moveCategory}
           onDeleteCategory={store.deleteCategory}
@@ -92,7 +93,10 @@ export default function NotesApp() {
           isRecycleBin={isRecycleBin}
           hasCategories={hasCategories}
           categories={store.categories}
+          currentCategory={currentCategory}
+          onSelectCategory={handleSelectCategory}
           onAddCard={handleAddCard}
+          onAddCategory={handleAddCategory}
           onUpdateCard={store.updateCard}
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}
@@ -100,7 +104,6 @@ export default function NotesApp() {
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
-          onCreateCategory={handleCreateCategory}
         />
       </main>
     </div>

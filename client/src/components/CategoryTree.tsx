@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Trash2, MoreHorizontal, Pencil, FolderInput, FolderPlus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FolderPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
 
@@ -25,7 +24,6 @@ interface CategoryTreeProps {
   categories: Category[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onAddCategory: (name: string, parentId: string | null) => void;
   onRenameCategory: (id: string, name: string) => void;
   onMoveCategory: (id: string, newParentId: string | null) => void;
   onDeleteCategory: (id: string) => void;
@@ -40,7 +38,6 @@ interface CategoryItemProps {
   allCategories: Category[];
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
-  onAddChild: (parentId: string) => void;
   onRename: (id: string) => void;
   onMove: (id: string) => void;
   onDelete: (id: string) => void;
@@ -85,7 +82,6 @@ function CategoryItem({
   allCategories,
   onToggleExpand,
   onSelect,
-  onAddChild,
   onRename,
   onMove,
   onDelete,
@@ -218,10 +214,6 @@ function CategoryItem({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => onAddChild(category.id)}>
-                  <FolderPlus className="w-4 h-4 mr-2" />
-                  Add Subcategory
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onRename(category.id)}>
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename
@@ -243,10 +235,6 @@ function CategoryItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48">
-          <ContextMenuItem onClick={() => onAddChild(category.id)}>
-            <FolderPlus className="w-4 h-4 mr-2" />
-            Add Subcategory
-          </ContextMenuItem>
           <ContextMenuItem onClick={() => onRename(category.id)}>
             <Pencil className="w-4 h-4 mr-2" />
             Rename
@@ -278,7 +266,6 @@ function CategoryItem({
               allCategories={allCategories}
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
-              onAddChild={onAddChild}
               onRename={onRename}
               onMove={onMove}
               onDelete={onDelete}
@@ -302,7 +289,6 @@ export function CategoryTree({
   categories,
   selectedId,
   onSelect,
-  onAddCategory,
   onRenameCategory,
   onMoveCategory,
   onDeleteCategory,
@@ -311,22 +297,10 @@ export function CategoryTree({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [addingToParent, setAddingToParent] = useState<string | null | undefined>(undefined);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
-  const [showAddDropdown, setShowAddDropdown] = useState(false);
-  const newInputRef = useRef<HTMLInputElement>(null);
-
-  const isAdding = addingToParent !== undefined;
-
-  useEffect(() => {
-    if (isAdding && newInputRef.current) {
-      newInputRef.current.focus();
-    }
-  }, [isAdding]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -354,36 +328,6 @@ export function CategoryTree({
     }
     setEditingId(null);
     setEditingName('');
-  };
-
-  const startAddChild = (parentId: string) => {
-    setAddingToParent(parentId);
-    setNewCategoryName('');
-    setExpandedIds(prev => new Set([...Array.from(prev), parentId]));
-    setShowAddDropdown(false);
-  };
-
-  const startAddRoot = () => {
-    setAddingToParent(null);
-    setNewCategoryName('');
-    setShowAddDropdown(false);
-  };
-
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      onAddCategory(newCategoryName.trim(), addingToParent ?? null);
-    }
-    setAddingToParent(undefined);
-    setNewCategoryName('');
-  };
-
-  const handleNewCategoryKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleAddCategory();
-    } else if (e.key === 'Escape') {
-      setAddingToParent(undefined);
-      setNewCategoryName('');
-    }
   };
 
   const handleMove = (id: string) => {
@@ -425,37 +369,10 @@ export function CategoryTree({
     ? [categoryToMove, ...getDescendantIds(categories, categoryToMove)]
     : [];
 
-  const isValidCategorySelected = selectedId && selectedId !== RECYCLE_BIN_ID;
-
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border flex items-center justify-between">
+      <div className="p-3 border-b border-border">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categories</h2>
-        
-        <DropdownMenu open={showAddDropdown} onOpenChange={setShowAddDropdown}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              data-testid="button-add-category"
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-muted-foreground hover:text-foreground"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={startAddRoot}>
-              <Folder className="w-4 h-4 mr-2" />
-              New Top-Level Category
-            </DropdownMenuItem>
-            {isValidCategorySelected && (
-              <DropdownMenuItem onClick={() => startAddChild(selectedId)}>
-                <FolderPlus className="w-4 h-4 mr-2" />
-                New Subcategory in "{findCategory(categories, selectedId)?.name}"
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <div 
@@ -467,64 +384,35 @@ export function CategoryTree({
         onDragLeave={() => setRootDragOver(false)}
         onDrop={handleRootDrop}
       >
-        {categories.length === 0 && !isAdding ? (
+        {categories.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
             <p>No categories yet</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2"
-              onClick={startAddRoot}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Create one
-            </Button>
+            <p className="text-xs mt-1">Create one from the right panel</p>
           </div>
         ) : (
-          <>
-            {categories.map(category => (
-              <CategoryItem
-                key={category.id}
-                category={category}
-                depth={0}
-                selectedId={selectedId}
-                expandedIds={expandedIds}
-                allCategories={categories}
-                onToggleExpand={toggleExpand}
-                onSelect={onSelect}
-                onAddChild={startAddChild}
-                onRename={startRename}
-                onMove={handleMove}
-                onDelete={onDeleteCategory}
-                editingId={editingId}
-                editingName={editingName}
-                onEditingNameChange={setEditingName}
-                onFinishEditing={finishEditing}
-                draggedId={draggedId}
-                onDragStart={setDraggedId}
-                onDragEnd={() => setDraggedId(null)}
-                onDrop={handleDrop}
-              />
-            ))}
-
-            {isAdding && (
-              <div 
-                className="flex items-center gap-1 py-1 px-2" 
-                style={{ paddingLeft: addingToParent ? '24px' : '8px' }}
-              >
-                <Folder className="w-4 h-4 text-muted-foreground ml-4" />
-                <Input
-                  ref={newInputRef}
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  onBlur={handleAddCategory}
-                  onKeyDown={handleNewCategoryKeyDown}
-                  placeholder="Category name..."
-                  className="h-6 py-0 px-1 text-sm flex-1"
-                />
-              </div>
-            )}
-          </>
+          categories.map(category => (
+            <CategoryItem
+              key={category.id}
+              category={category}
+              depth={0}
+              selectedId={selectedId}
+              expandedIds={expandedIds}
+              allCategories={categories}
+              onToggleExpand={toggleExpand}
+              onSelect={onSelect}
+              onRename={startRename}
+              onMove={handleMove}
+              onDelete={onDeleteCategory}
+              editingId={editingId}
+              editingName={editingName}
+              onEditingNameChange={setEditingName}
+              onFinishEditing={finishEditing}
+              draggedId={draggedId}
+              onDragStart={setDraggedId}
+              onDragEnd={() => setDraggedId(null)}
+              onDrop={handleDrop}
+            />
+          ))
         )}
       </div>
 
