@@ -82,6 +82,10 @@ export default function NotesApp() {
     setSelectedCardId(null);
   }, [store.addCategory]);
 
+  const handleRenameCard = useCallback((cardId: string, title: string) => {
+    store.updateCard(cardId, { title });
+  }, [store.updateCard]);
+
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
@@ -95,6 +99,9 @@ export default function NotesApp() {
           onRenameCategory={store.renameCategory}
           onMoveCategory={store.moveCategory}
           onDeleteCategory={store.deleteCategory}
+          onRenameCard={handleRenameCard}
+          onMoveCard={store.moveCard}
+          onDeleteCard={store.deleteCard}
           deletedCount={deletedCount}
         />
       </aside>
