@@ -222,9 +222,24 @@ export function useNotesStore() {
     };
     findAndAddDescendants(state.categories);
     
+    // Find categories whose names match the query
+    const matchingCategoryIds = new Set<string>();
+    const findMatchingCategories = (cats: Category[]) => {
+      for (const cat of cats) {
+        if (categoryIdsToSearch.has(cat.id) && cat.name.toLowerCase().includes(lowerQuery)) {
+          matchingCategoryIds.add(cat.id);
+        }
+        findMatchingCategories(cat.children);
+      }
+    };
+    findMatchingCategories(state.categories);
+    
     return state.cards.filter(card => {
       if (card.isDeleted) return false;
       if (!categoryIdsToSearch.has(card.categoryId)) return false;
+      
+      // Include all cards from categories whose names match
+      if (matchingCategoryIds.has(card.categoryId)) return true;
       
       const matchesTitle = card.title.toLowerCase().includes(lowerQuery);
       const matchesBlocks = card.blocks.some(block => {
