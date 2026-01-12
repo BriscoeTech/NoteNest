@@ -133,6 +133,21 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
     const imageBlock = block as ImageBlock;
     return (
       <div className="group relative">
+        {isSelected && (
+          <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-2">
+            <span className="text-xs text-muted-foreground">Size:</span>
+            <input
+              type="range"
+              min="10"
+              max="100"
+              step="5"
+              value={imageBlock.width}
+              onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
+              className="flex-1 h-1 accent-primary"
+            />
+            <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
+          </div>
+        )}
         <div 
           className="bg-muted/30 rounded p-2"
           style={{ width: `${imageBlock.width}%` }}
@@ -142,21 +157,6 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
             alt="Note image" 
             className="w-full h-auto rounded"
           />
-          {isSelected && (
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Size:</span>
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={imageBlock.width}
-                onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
-                className="flex-1 h-1 accent-primary"
-              />
-              <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
-            </div>
-          )}
         </div>
         {isSelected && (
           <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
