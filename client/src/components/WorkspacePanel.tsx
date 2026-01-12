@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 
 interface WorkspacePanelProps {
   cards: Card[];
+  allCards: Card[];
   categoryId: string | null;
   categoryName: string;
   isRecycleBin: boolean;
@@ -504,6 +505,7 @@ function InlineCard({
 
 export function WorkspacePanel({
   cards,
+  allCards,
   categoryId,
   categoryName,
   isRecycleBin,
@@ -772,7 +774,14 @@ export function WorkspacePanel({
                     <FolderOpen className="w-10 h-10 text-primary/70" />
                     <span className="text-sm font-medium text-center truncate w-full">{sub.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {sub.children.length > 0 ? `${sub.children.length} folders` : ''}
+                      {(() => {
+                        const folderCount = sub.children.length;
+                        const cardCount = allCards.filter(c => c.categoryId === sub.id && !c.isDeleted).length;
+                        const parts = [];
+                        if (folderCount > 0) parts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
+                        if (cardCount > 0) parts.push(`${cardCount} note${cardCount !== 1 ? 's' : ''}`);
+                        return parts.join(', ');
+                      })()}
                     </span>
                   </div>
                 ))}

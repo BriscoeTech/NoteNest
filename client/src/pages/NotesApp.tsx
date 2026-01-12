@@ -109,6 +109,7 @@ export default function NotesApp() {
       <main className="flex-1 min-w-0">
         <WorkspacePanel
           cards={displayedCards}
+          allCards={store.cards}
           categoryId={selectedCategoryId}
           categoryName={categoryName}
           isRecycleBin={isRecycleBin}
