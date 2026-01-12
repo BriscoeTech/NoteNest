@@ -56,6 +56,7 @@ interface WorkspacePanelProps {
 interface BlockEditorProps {
   block: ContentBlock;
   isRecycleBin: boolean;
+  isSelected: boolean;
   onUpdate: (block: ContentBlock) => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -64,7 +65,7 @@ interface BlockEditorProps {
   canMoveDown: boolean;
 }
 
-function BlockEditor({ block, isRecycleBin, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: BlockEditorProps) {
+function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: BlockEditorProps) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
   const focusNextBullet = useRef<string | null>(null);
@@ -103,25 +104,27 @@ function BlockEditor({ block, isRecycleBin, onUpdate, onDelete, onMoveUp, onMove
           }}
           onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
           disabled={isRecycleBin}
-          placeholder="Type text here..."
+          placeholder={isSelected ? "Type text here..." : ""}
           className="w-full border-none shadow-none focus-visible:ring-0 p-2 resize-none min-h-0 overflow-hidden text-sm bg-muted/30 rounded placeholder:text-muted-foreground/40"
           rows={1}
         />
-        <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
-          {canMoveUp && (
-            <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
-              <ChevronUp className="w-3 h-3" />
+        {isSelected && (
+          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
+            {canMoveUp && (
+              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronUp className="w-3 h-3" />
+              </button>
+            )}
+            {canMoveDown && (
+              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            )}
+            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-3 h-3" />
             </button>
-          )}
-          {canMoveDown && (
-            <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          )}
-          <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -200,42 +203,48 @@ function BlockEditor({ block, isRecycleBin, onUpdate, onDelete, onMoveUp, onMove
               onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)}
               onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
               disabled={isRecycleBin}
-              placeholder="..."
+              placeholder={isSelected ? "..." : ""}
               className="flex-1 min-h-0 py-0 px-0.5 border-none shadow-none focus-visible:ring-0 resize-none text-xs bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
               rows={1}
             />
-            <button
-              className="opacity-0 group-hover/bullet:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
-              onClick={() => removeBullet(bullet.id)}
-              disabled={isRecycleBin}
-            >
-              <Trash2 className="w-2.5 h-2.5" />
-            </button>
+            {isSelected && (
+              <button
+                className="opacity-0 group-hover/bullet:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                onClick={() => removeBullet(bullet.id)}
+                disabled={isRecycleBin}
+              >
+                <Trash2 className="w-2.5 h-2.5" />
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <button
-        className="text-xs text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
-        onClick={() => addBullet(bulletBlock.items.length - 1, 0)}
-        disabled={isRecycleBin}
-      >
-        <Plus className="w-3 h-3" /> bullet
-      </button>
-      <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
-        {canMoveUp && (
-          <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
-            <ChevronUp className="w-3 h-3" />
+      {isSelected && (
+        <>
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
+            onClick={() => addBullet(bulletBlock.items.length - 1, 0)}
+            disabled={isRecycleBin}
+          >
+            <Plus className="w-3 h-3" /> bullet
           </button>
-        )}
-        {canMoveDown && (
-          <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
-            <ChevronDown className="w-3 h-3" />
-          </button>
-        )}
-        <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
+          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
+            {canMoveUp && (
+              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronUp className="w-3 h-3" />
+              </button>
+            )}
+            {canMoveDown && (
+              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            )}
+            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -386,6 +395,7 @@ function InlineCard({
                       key={block.id}
                       block={block}
                       isRecycleBin={isRecycleBin}
+                      isSelected={isSelected}
                       onUpdate={(b) => updateBlock(index, b)}
                       onDelete={() => deleteBlock(index)}
                       onMoveUp={() => moveBlock(index, -1)}
@@ -396,10 +406,10 @@ function InlineCard({
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground/60 italic">No content blocks</p>
+                isSelected ? null : <p className="text-xs text-muted-foreground/60 italic">Empty note</p>
               )}
 
-              {!isRecycleBin && (
+              {!isRecycleBin && isSelected && (
                 <div className="flex items-center gap-2 pt-2">
                   <button
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
