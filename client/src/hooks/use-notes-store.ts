@@ -412,7 +412,9 @@ export function useNotesStore() {
         console.log('Import merge debug:', {
           importedCards: importedCards.length,
           existingCardIds: [...existingCardIds],
-          importedCardIds: importedCards.map((c: Card) => c.id)
+          importedCardIds: importedCards.map((c: Card) => c.id),
+          importedCardsDetails: importedCards.map((c: Card) => ({ id: c.id, categoryId: c.categoryId, isDeleted: c.isDeleted, title: c.title })),
+          existingCardsDetails: prev.cards.map(c => ({ id: c.id, categoryId: c.categoryId, isDeleted: c.isDeleted, title: c.title }))
         });
         
         // Merge categories - adds new ones and recursively merges children of existing ones
