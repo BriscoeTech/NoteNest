@@ -49,6 +49,7 @@ interface WorkspacePanelProps {
   onDeleteCard: (id: string) => void;
   onRestoreCard: (id: string, categoryId: string) => void;
   onPermanentlyDeleteCard: (id: string) => void;
+  onReorderCard: (cardId: string, direction: 'up' | 'down') => void;
   onSearch: (query: string) => void;
   searchQuery: string;
 }
@@ -310,6 +311,10 @@ interface InlineCardProps {
   onDeleteCard: (id: string) => void;
   onRestoreCard: (cardId: string) => void;
   onPermanentlyDeleteCard: (id: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }
 
 function InlineCard({
@@ -322,7 +327,11 @@ function InlineCard({
   onMoveCard,
   onDeleteCard,
   onRestoreCard,
-  onPermanentlyDeleteCard
+  onPermanentlyDeleteCard,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown
 }: InlineCardProps) {
   const [title, setTitle] = useState(card.title);
   const [blocks, setBlocks] = useState<ContentBlock[]>(card.blocks);
@@ -517,6 +526,37 @@ function InlineCard({
               </p>
             </div>
 
+            {isSelected && !isRecycleBin && (canMoveUp || canMoveDown) && (
+              <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 -ml-6">
+                <button
+                  data-testid={`card-move-up-${card.id}`}
+                  onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                  disabled={!canMoveUp}
+                  className={cn(
+                    "p-1 rounded transition-colors",
+                    canMoveUp 
+                      ? "text-muted-foreground hover:text-foreground hover:bg-accent" 
+                      : "text-muted-foreground/30 cursor-not-allowed"
+                  )}
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  data-testid={`card-move-down-${card.id}`}
+                  onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                  disabled={!canMoveDown}
+                  className={cn(
+                    "p-1 rounded transition-colors",
+                    canMoveDown 
+                      ? "text-muted-foreground hover:text-foreground hover:bg-accent" 
+                      : "text-muted-foreground/30 cursor-not-allowed"
+                  )}
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -619,6 +659,7 @@ export function WorkspacePanel({
   onDeleteCard,
   onRestoreCard,
   onPermanentlyDeleteCard,
+  onReorderCard,
   onSearch,
   searchQuery
 }: WorkspacePanelProps) {
@@ -950,8 +991,8 @@ export function WorkspacePanel({
             )}
 
             {cards.length > 0 && (
-              <div className="space-y-3">
-                {cards.map(card => (
+              <div className="space-y-3 pl-6">
+                {cards.map((card, index) => (
                   <InlineCard
                     key={card.id}
                     card={card}
@@ -964,6 +1005,10 @@ export function WorkspacePanel({
                     onDeleteCard={onDeleteCard}
                     onRestoreCard={handleRestoreClick}
                     onPermanentlyDeleteCard={onPermanentlyDeleteCard}
+                    onMoveUp={() => onReorderCard(card.id, 'up')}
+                    onMoveDown={() => onReorderCard(card.id, 'down')}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < cards.length - 1}
                   />
                 ))}
               </div>

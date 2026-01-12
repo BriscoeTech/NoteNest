@@ -259,6 +259,35 @@ export function useNotesStore() {
     return canMoveCategory(state.categories, categoryId, targetParentId);
   }, [state.categories]);
 
+  const reorderCard = useCallback((cardId: string, direction: 'up' | 'down') => {
+    setState(prev => {
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+      
+      // Get cards in same category, sorted by updatedAt descending (newest first)
+      const categoryCards = prev.cards
+        .filter(c => c.categoryId === card.categoryId && !c.isDeleted)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      
+      const currentIndex = categoryCards.findIndex(c => c.id === cardId);
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      
+      if (targetIndex < 0 || targetIndex >= categoryCards.length) return prev;
+      
+      const targetCard = categoryCards[targetIndex];
+      
+      // Swap the updatedAt values to swap positions
+      return {
+        ...prev,
+        cards: prev.cards.map(c => {
+          if (c.id === cardId) return { ...c, updatedAt: targetCard.updatedAt };
+          if (c.id === targetCard.id) return { ...c, updatedAt: card.updatedAt };
+          return c;
+        })
+      };
+    });
+  }, []);
+
   return {
     categories: state.categories,
     cards: state.cards,
@@ -276,6 +305,7 @@ export function useNotesStore() {
     getCardsForCategory,
     getDeletedCards,
     searchCards,
-    canMoveCategoryTo
+    canMoveCategoryTo,
+    reorderCard
   };
 }
