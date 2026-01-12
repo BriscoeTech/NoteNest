@@ -7,6 +7,7 @@ import { RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
 export default function NotesApp() {
   const store = useNotesStore();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const isRecycleBin = selectedCategoryId === RECYCLE_BIN_ID;
@@ -30,8 +31,7 @@ export default function NotesApp() {
       if (searchQuery) {
         const lower = searchQuery.toLowerCase();
         return deleted.filter(c => 
-          c.title.toLowerCase().includes(lower) ||
-          c.content.toLowerCase().includes(lower)
+          c.title.toLowerCase().includes(lower)
         );
       }
       return deleted;
@@ -57,27 +57,41 @@ export default function NotesApp() {
 
   const handleSelectCategory = useCallback((id: string | null) => {
     setSelectedCategoryId(id);
+    setSelectedCardId(null);
+    setSearchQuery('');
+  }, []);
+
+  const handleSelectCard = useCallback((cardId: string, categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+    setSelectedCardId(cardId);
     setSearchQuery('');
   }, []);
 
   const handleAddCard = useCallback(() => {
     if (selectedCategoryId && selectedCategoryId !== RECYCLE_BIN_ID) {
-      store.addCard(selectedCategoryId);
+      const newCardId = store.addCard(selectedCategoryId);
+      setSelectedCardId(newCardId);
+      return newCardId;
     }
+    return undefined;
   }, [selectedCategoryId, store.addCard]);
 
   const handleAddCategory = useCallback((name: string, parentId: string | null) => {
     const newId = store.addCategory(name, parentId);
     setSelectedCategoryId(newId);
+    setSelectedCardId(null);
   }, [store.addCategory]);
 
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
-      <aside className="w-56 border-r border-border bg-sidebar flex-shrink-0">
+      <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
         <CategoryTree
           categories={store.categories}
-          selectedId={selectedCategoryId}
-          onSelect={handleSelectCategory}
+          cards={store.cards}
+          selectedCategoryId={selectedCategoryId}
+          selectedCardId={selectedCardId}
+          onSelectCategory={handleSelectCategory}
+          onSelectCard={handleSelectCard}
           onRenameCategory={store.renameCategory}
           onMoveCategory={store.moveCategory}
           onDeleteCategory={store.deleteCategory}
@@ -94,10 +108,13 @@ export default function NotesApp() {
           hasCategories={hasCategories}
           categories={store.categories}
           currentCategory={currentCategory}
+          selectedCardId={selectedCardId}
           onSelectCategory={handleSelectCategory}
+          onSelectCard={setSelectedCardId}
           onAddCard={handleAddCard}
           onAddCategory={handleAddCategory}
           onUpdateCard={store.updateCard}
+          onUpdateCardBlocks={store.updateCardBlocks}
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}
           onRestoreCard={store.restoreCard}

@@ -11,11 +11,24 @@ export interface BulletItem {
   indent: number;
 }
 
+export interface TextBlock {
+  id: string;
+  type: 'text';
+  content: string;
+}
+
+export interface BulletBlock {
+  id: string;
+  type: 'bullets';
+  items: BulletItem[];
+}
+
+export type ContentBlock = TextBlock | BulletBlock;
+
 export interface Card {
   id: string;
   title: string;
-  content: string;
-  bullets: BulletItem[];
+  blocks: ContentBlock[];
   categoryId: string;
   createdAt: number;
   updatedAt: number;
@@ -117,4 +130,29 @@ export function moveCategoryToParent(categories: Category[], categoryId: string,
   const movedCategory: Category = { ...category, parentId: newParentId };
   
   return addCategoryToParent(withoutCategory, newParentId, movedCategory);
+}
+
+// Migration helper for old card format
+export function migrateCard(card: any): Card {
+  if (card.blocks) return card as Card;
+  
+  const blocks: ContentBlock[] = [];
+  
+  if (card.content && card.content.trim()) {
+    blocks.push({ id: generateId(), type: 'text', content: card.content });
+  }
+  
+  if (card.bullets && card.bullets.length > 0) {
+    blocks.push({ id: generateId(), type: 'bullets', items: card.bullets });
+  }
+  
+  return {
+    id: card.id,
+    title: card.title || '',
+    blocks,
+    categoryId: card.categoryId,
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt,
+    isDeleted: card.isDeleted || false
+  };
 }
