@@ -183,14 +183,18 @@ export function useNotesStore() {
   }, []);
 
   const getCardsForCategory = useCallback((categoryId: string, includeDeleted = false) => {
-    return state.cards.filter(card => {
-      if (!includeDeleted && card.isDeleted) return false;
-      return card.categoryId === categoryId;
-    });
+    return state.cards
+      .filter(card => {
+        if (!includeDeleted && card.isDeleted) return false;
+        return card.categoryId === categoryId;
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [state.cards]);
 
   const getDeletedCards = useCallback(() => {
-    return state.cards.filter(card => card.isDeleted);
+    return state.cards
+      .filter(card => card.isDeleted)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [state.cards]);
 
   const searchCards = useCallback((query: string, categoryId: string) => {
