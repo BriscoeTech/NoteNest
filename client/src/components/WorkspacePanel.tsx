@@ -393,7 +393,11 @@ function InlineCard({
     if (isSelected && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-  }, [isSelected]);
+    // Focus title if this is a newly created card (empty title)
+    if (isSelected && !card.title && titleRef.current) {
+      titleRef.current.focus();
+    }
+  }, [isSelected, card.title]);
 
   const autoResize = (textarea: HTMLTextAreaElement) => {
     textarea.style.height = 'auto';
