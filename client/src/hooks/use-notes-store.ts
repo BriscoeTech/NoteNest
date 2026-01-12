@@ -203,9 +203,10 @@ export function useNotesStore() {
       const matchesBlocks = card.blocks.some(block => {
         if (block.type === 'text') {
           return block.content.toLowerCase().includes(lowerQuery);
-        } else {
+        } else if (block.type === 'bullets') {
           return block.items.some(item => item.content.toLowerCase().includes(lowerQuery));
         }
+        return false;
       });
       
       return matchesTitle || matchesBlocks;
