@@ -288,6 +288,21 @@ export function useNotesStore() {
     });
   }, []);
 
+  const reorderCardsByIndex = useCallback((cardIds: string[]) => {
+    setState(prev => {
+      // Assign new timestamps based on the order (newest first)
+      const baseTime = Date.now();
+      const updatedCards = prev.cards.map(card => {
+        const newIndex = cardIds.indexOf(card.id);
+        if (newIndex !== -1) {
+          return { ...card, updatedAt: baseTime - newIndex };
+        }
+        return card;
+      });
+      return { ...prev, cards: updatedCards };
+    });
+  }, []);
+
   return {
     categories: state.categories,
     cards: state.cards,
@@ -306,6 +321,7 @@ export function useNotesStore() {
     getDeletedCards,
     searchCards,
     canMoveCategoryTo,
-    reorderCard
+    reorderCard,
+    reorderCardsByIndex
   };
 }

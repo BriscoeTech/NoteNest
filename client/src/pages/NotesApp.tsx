@@ -128,6 +128,7 @@ export default function NotesApp() {
           onRestoreCard={store.restoreCard}
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onReorderCard={store.reorderCard}
+          onReorderCardsByIndex={store.reorderCardsByIndex}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
         />
