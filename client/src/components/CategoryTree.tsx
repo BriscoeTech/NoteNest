@@ -311,6 +311,7 @@ function CategoryItem({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
     if (draggedCardId) {
       e.dataTransfer.dropEffect = 'move';
@@ -327,6 +328,7 @@ function CategoryItem({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
     
     if (draggedCardId) {
