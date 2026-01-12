@@ -16,7 +16,7 @@ export interface Card {
   title: string;
   content: string;
   bullets: BulletItem[];
-  categoryId: string | null;
+  categoryId: string;
   createdAt: number;
   updatedAt: number;
   isDeleted: boolean;
@@ -28,7 +28,6 @@ export interface AppState {
 }
 
 export const RECYCLE_BIN_ID = '__recycle_bin__';
-export const ALL_NOTES_ID = '__all_notes__';
 
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);

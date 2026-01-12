@@ -84,8 +84,8 @@ export function useNotesStore() {
       )];
       
       const updatedCards = prev.cards.map(card => {
-        if (card.categoryId && categoryIds.includes(card.categoryId)) {
-          return { ...card, categoryId: null, isDeleted: true };
+        if (categoryIds.includes(card.categoryId)) {
+          return { ...card, isDeleted: true };
         }
         return card;
       });
@@ -97,7 +97,7 @@ export function useNotesStore() {
     });
   }, []);
 
-  const addCard = useCallback((categoryId: string | null) => {
+  const addCard = useCallback((categoryId: string) => {
     const newCard: Card = {
       id: generateId(),
       title: '',
@@ -110,7 +110,7 @@ export function useNotesStore() {
     };
     setState(prev => ({
       ...prev,
-      cards: [...prev.cards, newCard]
+      cards: [newCard, ...prev.cards]
     }));
     return newCard.id;
   }, []);
@@ -126,7 +126,7 @@ export function useNotesStore() {
     }));
   }, []);
 
-  const moveCard = useCallback((cardId: string, categoryId: string | null) => {
+  const moveCard = useCallback((cardId: string, categoryId: string) => {
     setState(prev => ({
       ...prev,
       cards: prev.cards.map(card => 
@@ -148,7 +148,7 @@ export function useNotesStore() {
     }));
   }, []);
 
-  const restoreCard = useCallback((id: string, categoryId: string | null = null) => {
+  const restoreCard = useCallback((id: string, categoryId: string) => {
     setState(prev => ({
       ...prev,
       cards: prev.cards.map(card => 
@@ -166,10 +166,9 @@ export function useNotesStore() {
     }));
   }, []);
 
-  const getCardsForCategory = useCallback((categoryId: string | null, includeDeleted = false) => {
+  const getCardsForCategory = useCallback((categoryId: string, includeDeleted = false) => {
     return state.cards.filter(card => {
       if (!includeDeleted && card.isDeleted) return false;
-      if (categoryId === null) return !card.isDeleted;
       return card.categoryId === categoryId;
     });
   }, [state.cards]);
@@ -178,11 +177,11 @@ export function useNotesStore() {
     return state.cards.filter(card => card.isDeleted);
   }, [state.cards]);
 
-  const searchCards = useCallback((query: string, categoryId: string | null = null) => {
+  const searchCards = useCallback((query: string, categoryId: string) => {
     const lowerQuery = query.toLowerCase();
     return state.cards.filter(card => {
       if (card.isDeleted) return false;
-      if (categoryId !== null && card.categoryId !== categoryId) return false;
+      if (card.categoryId !== categoryId) return false;
       
       const matchesTitle = card.title.toLowerCase().includes(lowerQuery);
       const matchesContent = card.content.toLowerCase().includes(lowerQuery);
