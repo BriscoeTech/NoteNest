@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle } from 'lucide-react';
-import type { Card, Category, BulletItem, ContentBlock, TextBlock, BulletBlock } from '@/lib/types';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle, Image } from 'lucide-react';
+import type { Card, Category, BulletItem, ContentBlock, TextBlock, BulletBlock, ImageBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, generateId, findCategoryById } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,6 +108,56 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
           className="w-full border-none shadow-none focus-visible:ring-0 p-2 resize-none min-h-0 overflow-hidden text-sm bg-muted/30 rounded placeholder:text-muted-foreground/40"
           rows={1}
         />
+        {isSelected && (
+          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
+            {canMoveUp && (
+              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronUp className="w-3 h-3" />
+              </button>
+            )}
+            {canMoveDown && (
+              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            )}
+            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (block.type === 'image') {
+    const imageBlock = block as ImageBlock;
+    return (
+      <div className="group relative">
+        <div 
+          className="bg-muted/30 rounded p-2"
+          style={{ width: `${imageBlock.width}%` }}
+        >
+          <img 
+            src={imageBlock.dataUrl} 
+            alt="Note image" 
+            className="w-full h-auto rounded"
+          />
+          {isSelected && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Size:</span>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={imageBlock.width}
+                onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
+                className="flex-1 h-1 accent-primary"
+              />
+              <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
+            </div>
+          )}
+        </div>
         {isSelected && (
           <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
             {canMoveUp && (
@@ -353,13 +403,36 @@ function InlineCard({
     }
   };
 
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
+      const newBlocks = [...blocks, newBlock];
+      setBlocks(newBlocks);
+      if (!isRecycleBin) {
+        onUpdateBlocks(newBlocks);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const getBlockPreview = (): string => {
     if (blocks.length === 0) return 'Empty note';
     const firstBlock = blocks[0];
     if (firstBlock.type === 'text') {
       return firstBlock.content.slice(0, 60) || 'Empty text';
     }
-    return firstBlock.items.map(b => '• ' + b.content).join(' ').slice(0, 60) || 'Empty bullets';
+    if (firstBlock.type === 'bullets') {
+      return firstBlock.items.map(b => '• ' + b.content).join(' ').slice(0, 60) || 'Empty bullets';
+    }
+    return '[Image]';
   };
 
   return (
@@ -410,7 +483,7 @@ function InlineCard({
               )}
 
               {!isRecycleBin && isSelected && (
-                <div className="flex items-center gap-2 pt-2">
+                <div className="flex items-center gap-2 pt-2 flex-wrap">
                   <button
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
                     onClick={(e) => { e.stopPropagation(); addTextBlock(); }}
@@ -423,6 +496,19 @@ function InlineCard({
                   >
                     <List className="w-3 h-3" /> Add bullets
                   </button>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                    onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+                  >
+                    <Image className="w-3 h-3" /> Add image
+                  </button>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
                 </div>
               )}
 
@@ -744,7 +830,14 @@ export function WorkspacePanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
+      <div 
+        className="flex-1 overflow-y-auto scrollbar-thin p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onSelectCard(null);
+          }
+        }}
+      >
         {subcategories.length === 0 && cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <p className="text-lg font-medium">
@@ -771,7 +864,14 @@ export function WorkspacePanel({
             )}
           </div>
         ) : (
-          <div className="space-y-4 max-w-3xl mx-auto">
+          <div 
+            className="space-y-4 max-w-3xl mx-auto min-h-full"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                onSelectCard(null);
+              }
+            }}
+          >
             {subcategories.length > 0 && !searchQuery && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {subcategories.map(sub => (

@@ -23,7 +23,14 @@ export interface BulletBlock {
   items: BulletItem[];
 }
 
-export type ContentBlock = TextBlock | BulletBlock;
+export interface ImageBlock {
+  id: string;
+  type: 'image';
+  dataUrl: string;
+  width: number; // percentage 10-100
+}
+
+export type ContentBlock = TextBlock | BulletBlock | ImageBlock;
 
 export interface Card {
   id: string;
