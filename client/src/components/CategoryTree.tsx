@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category, Card } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
@@ -87,6 +87,8 @@ interface CategoryItemProps {
   onCardDragStart: (cardId: string) => void;
   onCardDragEnd: () => void;
   onCardDropOnCategory: (categoryId: string) => void;
+  onExpandAll: (categoryId: string) => void;
+  onCollapseAll: (categoryId: string) => void;
 }
 
 function getDescendantIds(categories: Category[], id: string): string[] {
@@ -273,7 +275,9 @@ function CategoryItem({
   onCategoryDrop,
   onCardDragStart,
   onCardDragEnd,
-  onCardDropOnCategory
+  onCardDropOnCategory,
+  onExpandAll,
+  onCollapseAll
 }: CategoryItemProps) {
   const isExpanded = expandedIds.has(category.id);
   const isSelected = selectedCategoryId === category.id;
@@ -406,6 +410,19 @@ function CategoryItem({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
+                {hasChildren && (
+                  <>
+                    <DropdownMenuItem onClick={() => onExpandAll(category.id)}>
+                      <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
+                      Expand All
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onCollapseAll(category.id)}>
+                      <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
+                      Collapse All
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem onClick={() => onRenameCategory(category.id)}>
                   <Pencil className="w-3.5 h-3.5 mr-2" />
                   Rename
@@ -427,6 +444,19 @@ function CategoryItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44">
+          {hasChildren && (
+            <>
+              <ContextMenuItem onClick={() => onExpandAll(category.id)}>
+                <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
+                Expand All
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => onCollapseAll(category.id)}>
+                <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
+                Collapse All
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+            </>
+          )}
           <ContextMenuItem onClick={() => onRenameCategory(category.id)}>
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
@@ -483,6 +513,8 @@ function CategoryItem({
               onCardDragStart={onCardDragStart}
               onCardDragEnd={onCardDragEnd}
               onCardDropOnCategory={onCardDropOnCategory}
+              onExpandAll={onExpandAll}
+              onCollapseAll={onCollapseAll}
             />
           ))}
           
@@ -613,6 +645,24 @@ export function CategoryTree({
     setDraggedCategoryId(null);
   };
 
+  const expandAll = (categoryId: string) => {
+    const idsToExpand = [categoryId, ...getDescendantIds(categories, categoryId)];
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      idsToExpand.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const collapseAll = (categoryId: string) => {
+    const idsToCollapse = [categoryId, ...getDescendantIds(categories, categoryId)];
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      idsToCollapse.forEach(id => next.delete(id));
+      return next;
+    });
+  };
+
   const handleCardDropOnCategory = (categoryId: string) => {
     if (draggedCardId) {
       onMoveCard(draggedCardId, categoryId);
@@ -695,6 +745,8 @@ export function CategoryTree({
               onCardDragStart={setDraggedCardId}
               onCardDragEnd={() => setDraggedCardId(null)}
               onCardDropOnCategory={handleCardDropOnCategory}
+              onExpandAll={expandAll}
+              onCollapseAll={collapseAll}
             />
           ))
         )}
