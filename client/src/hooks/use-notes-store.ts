@@ -18,14 +18,31 @@ const defaultState: AppState = {
   cards: []
 };
 
+function migrateCategories(categories: Category[]): Category[] {
+  return categories.map((cat, index) => ({
+    ...cat,
+    sortOrder: cat.sortOrder ?? (Date.now() - (categories.length - index) * 1000),
+    children: migrateCategories(cat.children)
+  }));
+}
+
+function sortCategoriesBySortOrder(categories: Category[]): Category[] {
+  return [...categories]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(cat => ({
+      ...cat,
+      children: sortCategoriesBySortOrder(cat.children)
+    }));
+}
+
 function loadState(): AppState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migrate old cards to new block-based format
+      // Migrate old cards to new block-based format and categories to have sortOrder
       return {
-        ...parsed,
+        categories: sortCategoriesBySortOrder(migrateCategories(parsed.categories || [])),
         cards: (parsed.cards || []).map(migrateCard)
       };
     }
@@ -55,7 +72,8 @@ export function useNotesStore() {
       id: generateId(),
       name,
       parentId,
-      children: []
+      children: [],
+      sortOrder: Date.now()
     };
     setState(prev => ({
       ...prev,
@@ -99,6 +117,29 @@ export function useNotesStore() {
       return {
         categories: removeCategoryById(prev.categories, id),
         cards: updatedCards
+      };
+    });
+  }, []);
+
+  const reorderSubcategories = useCallback((parentId: string | null, orderedIds: string[]) => {
+    setState(prev => {
+      const updateSortOrders = (categories: Category[]): Category[] => {
+        return categories.map(cat => {
+          // Check if this category is in the ordered list
+          const orderIndex = orderedIds.indexOf(cat.id);
+          const newSortOrder = orderIndex >= 0 ? orderIndex : cat.sortOrder;
+          
+          return {
+            ...cat,
+            sortOrder: newSortOrder,
+            children: updateSortOrders(cat.children)
+          };
+        }).sort((a, b) => a.sortOrder - b.sortOrder);
+      };
+      
+      return {
+        ...prev,
+        categories: updateSortOrders(prev.categories)
       };
     });
   }, []);
@@ -314,6 +355,7 @@ export function useNotesStore() {
     renameCategory,
     moveCategory,
     deleteCategory,
+    reorderSubcategories,
     addCard,
     updateCard,
     updateCardBlocks,
