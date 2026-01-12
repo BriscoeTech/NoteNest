@@ -64,13 +64,13 @@ interface BlockEditorProps {
   isSelected: boolean;
   onUpdate: (block: ContentBlock) => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
+  dragHandleProps?: {
+    attributes: Record<string, any>;
+    listeners: Record<string, any>;
+  };
 }
 
-function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: BlockEditorProps) {
+function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, dragHandleProps }: BlockEditorProps) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
   const focusNextBullet = useRef<string | null>(null);
@@ -100,35 +100,34 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
 
   if (block.type === 'text') {
     return (
-      <div className="group relative">
-        <Textarea
-          ref={textRef}
-          value={block.content}
-          onChange={(e) => {
-            onUpdate({ ...block, content: e.target.value });
-          }}
-          onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
-          disabled={isRecycleBin}
-          placeholder={isSelected ? "Type text here..." : ""}
-          className="w-full border-none shadow-none focus-visible:ring-0 p-2 resize-none min-h-0 overflow-hidden text-sm bg-muted/30 rounded placeholder:text-muted-foreground/40"
-          rows={1}
-        />
-        {isSelected && (
-          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
-            {canMoveUp && (
-              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronUp className="w-3 h-3" />
-              </button>
-            )}
-            {canMoveDown && (
-              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            )}
-            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
-              <Trash2 className="w-3 h-3" />
-            </button>
+      <div className="group relative flex items-start gap-1">
+        {isSelected && dragHandleProps && (
+          <div 
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+            {...dragHandleProps.attributes}
+            {...dragHandleProps.listeners}
+          >
+            <GripVertical className="w-3 h-3" />
           </div>
+        )}
+        <div className="flex-1">
+          <Textarea
+            ref={textRef}
+            value={block.content}
+            onChange={(e) => {
+              onUpdate({ ...block, content: e.target.value });
+            }}
+            onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
+            disabled={isRecycleBin}
+            placeholder={isSelected ? "Type text here..." : ""}
+            className="w-full border-none shadow-none focus-visible:ring-0 p-2 resize-none min-h-0 overflow-hidden text-sm bg-muted/30 rounded placeholder:text-muted-foreground/40"
+            rows={1}
+          />
+        </div>
+        {isSelected && (
+          <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
+            <Trash2 className="w-3 h-3" />
+          </button>
         )}
       </div>
     );
@@ -137,48 +136,47 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
   if (block.type === 'image') {
     const imageBlock = block as ImageBlock;
     return (
-      <div className="group relative">
-        {isSelected && (
-          <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-2">
-            <span className="text-xs text-muted-foreground">Size:</span>
-            <input
-              type="range"
-              min="10"
-              max="100"
-              step="5"
-              value={imageBlock.width}
-              onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
-              className="flex-1 h-1 accent-primary"
-            />
-            <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
+      <div className="group relative flex items-start gap-1">
+        {isSelected && dragHandleProps && (
+          <div 
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+            {...dragHandleProps.attributes}
+            {...dragHandleProps.listeners}
+          >
+            <GripVertical className="w-3 h-3" />
           </div>
         )}
-        <div 
-          className="bg-muted/30 rounded p-2"
-          style={{ width: `${imageBlock.width}%` }}
-        >
-          <img 
-            src={imageBlock.dataUrl} 
-            alt="Note image" 
-            className="w-full h-auto rounded"
-          />
+        <div className="flex-1">
+          {isSelected && (
+            <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-2">
+              <span className="text-xs text-muted-foreground">Size:</span>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={imageBlock.width}
+                onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
+                className="flex-1 h-1 accent-primary"
+              />
+              <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
+            </div>
+          )}
+          <div 
+            className="bg-muted/30 rounded p-2"
+            style={{ width: `${imageBlock.width}%` }}
+          >
+            <img 
+              src={imageBlock.dataUrl} 
+              alt="Note image" 
+              className="w-full h-auto rounded"
+            />
+          </div>
         </div>
         {isSelected && (
-          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
-            {canMoveUp && (
-              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronUp className="w-3 h-3" />
-              </button>
-            )}
-            {canMoveDown && (
-              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            )}
-            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
+          <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
+            <Trash2 className="w-3 h-3" />
+          </button>
         )}
       </div>
     );
@@ -239,43 +237,52 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
   };
 
   return (
-    <div className="group relative bg-muted/30 rounded p-2">
-      <div className="space-y-0.5">
-        {bulletBlock.items.map((bullet, index) => (
-          <div
-            key={bullet.id}
-            className="flex items-start gap-1 group/bullet"
-            style={{ paddingLeft: `${bullet.indent * 14}px` }}
-          >
-            <span className="text-muted-foreground font-bold mt-0.5 select-none text-xs">•</span>
-            <Textarea
-              ref={(el) => {
-                if (el) bulletRefs.current.set(bullet.id, el);
-                else bulletRefs.current.delete(bullet.id);
-              }}
-              value={bullet.content}
-              onChange={(e) => updateBullet(bullet.id, e.target.value)}
-              onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)}
-              onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
-              disabled={isRecycleBin}
-              placeholder={isSelected ? "..." : ""}
-              className="flex-1 min-h-0 py-0 px-0.5 border-none shadow-none focus-visible:ring-0 resize-none text-xs bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
-              rows={1}
-            />
-            {isSelected && (
-              <button
-                className="opacity-0 group-hover/bullet:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
-                onClick={() => removeBullet(bullet.id)}
+    <div className="group relative flex items-start gap-1">
+      {isSelected && dragHandleProps && (
+        <div 
+          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+          {...dragHandleProps.attributes}
+          {...dragHandleProps.listeners}
+        >
+          <GripVertical className="w-3 h-3" />
+        </div>
+      )}
+      <div className="flex-1 bg-muted/30 rounded p-2">
+        <div className="space-y-0.5">
+          {bulletBlock.items.map((bullet, index) => (
+            <div
+              key={bullet.id}
+              className="flex items-start gap-1 group/bullet"
+              style={{ paddingLeft: `${bullet.indent * 14}px` }}
+            >
+              <span className="text-muted-foreground font-bold mt-0.5 select-none text-xs">•</span>
+              <Textarea
+                ref={(el) => {
+                  if (el) bulletRefs.current.set(bullet.id, el);
+                  else bulletRefs.current.delete(bullet.id);
+                }}
+                value={bullet.content}
+                onChange={(e) => updateBullet(bullet.id, e.target.value)}
+                onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)}
+                onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
                 disabled={isRecycleBin}
-              >
-                <Trash2 className="w-2.5 h-2.5" />
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      {isSelected && (
-        <>
+                placeholder={isSelected ? "..." : ""}
+                className="flex-1 min-h-0 py-0 px-0.5 border-none shadow-none focus-visible:ring-0 resize-none text-xs bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
+                rows={1}
+              />
+              {isSelected && (
+                <button
+                  className="opacity-0 group-hover/bullet:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                  onClick={() => removeBullet(bullet.id)}
+                  disabled={isRecycleBin}
+                >
+                  <Trash2 className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {isSelected && (
           <button
             className="text-xs text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
             onClick={() => addBullet(bulletBlock.items.length - 1, 0)}
@@ -283,23 +290,52 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
           >
             <Plus className="w-3 h-3" /> bullet
           </button>
-          <div className="absolute -right-8 top-1 opacity-0 group-hover:opacity-100 flex flex-col gap-0.5">
-            {canMoveUp && (
-              <button onClick={onMoveUp} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronUp className="w-3 h-3" />
-              </button>
-            )}
-            {canMoveDown && (
-              <button onClick={onMoveDown} className="p-0.5 text-muted-foreground hover:text-foreground">
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            )}
-            <button onClick={onDelete} className="p-0.5 text-muted-foreground hover:text-destructive">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
-        </>
+        )}
+      </div>
+      {isSelected && (
+        <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
+          <Trash2 className="w-3 h-3" />
+        </button>
       )}
+    </div>
+  );
+}
+
+interface SortableBlockProps {
+  id: string;
+  block: ContentBlock;
+  isRecycleBin: boolean;
+  isSelected: boolean;
+  onUpdate: (block: ContentBlock) => void;
+  onDelete: () => void;
+}
+
+function SortableBlock({ id, block, isRecycleBin, isSelected, onUpdate, onDelete }: SortableBlockProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <BlockEditor
+        block={block}
+        isRecycleBin={isRecycleBin}
+        isSelected={isSelected}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        dragHandleProps={{ attributes, listeners: listeners || {} }}
+      />
     </div>
   );
 }
@@ -392,14 +428,27 @@ function InlineCard({
     }
   };
 
-  const moveBlock = (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= blocks.length) return;
-    const newBlocks = [...blocks];
-    [newBlocks[index], newBlocks[newIndex]] = [newBlocks[newIndex], newBlocks[index]];
-    setBlocks(newBlocks);
-    if (!isRecycleBin) {
-      onUpdateBlocks(newBlocks);
+  const blockSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleBlockDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = blocks.findIndex(b => b.id === active.id);
+      const newIndex = blocks.findIndex(b => b.id === over.id);
+      const newBlocks = arrayMove(blocks, oldIndex, newIndex);
+      setBlocks(newBlocks);
+      if (!isRecycleBin) {
+        onUpdateBlocks(newBlocks);
+      }
     }
   };
 
@@ -465,7 +514,7 @@ function InlineCard({
             isSelected ? "ring-2 ring-primary/40 border-primary/40" : "hover:border-primary/30"
           )}
         >
-          {!isRecycleBin && dragHandleProps && (
+          {!isRecycleBin && isSelected && dragHandleProps && (
             <div 
               className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 text-muted-foreground/50 hover:text-muted-foreground"
               {...dragHandleProps.attributes}
@@ -489,22 +538,45 @@ function InlineCard({
               />
 
               {blocks.length > 0 ? (
-                <div className="space-y-2">
-                  {blocks.map((block, index) => (
-                    <BlockEditor
-                      key={block.id}
-                      block={block}
-                      isRecycleBin={isRecycleBin}
-                      isSelected={isSelected}
-                      onUpdate={(b) => updateBlock(index, b)}
-                      onDelete={() => deleteBlock(index)}
-                      onMoveUp={() => moveBlock(index, -1)}
-                      onMoveDown={() => moveBlock(index, 1)}
-                      canMoveUp={index > 0}
-                      canMoveDown={index < blocks.length - 1}
-                    />
-                  ))}
-                </div>
+                isSelected && !isRecycleBin ? (
+                  <DndContext
+                    sensors={blockSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleBlockDragEnd}
+                  >
+                    <SortableContext
+                      items={blocks.map(b => b.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {blocks.map((block, index) => (
+                          <SortableBlock
+                            key={block.id}
+                            id={block.id}
+                            block={block}
+                            isRecycleBin={isRecycleBin}
+                            isSelected={isSelected}
+                            onUpdate={(b) => updateBlock(index, b)}
+                            onDelete={() => deleteBlock(index)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  <div className="space-y-2">
+                    {blocks.map((block, index) => (
+                      <BlockEditor
+                        key={block.id}
+                        block={block}
+                        isRecycleBin={isRecycleBin}
+                        isSelected={isSelected}
+                        onUpdate={(b) => updateBlock(index, b)}
+                        onDelete={() => deleteBlock(index)}
+                      />
+                    ))}
+                  </div>
+                )
               ) : (
                 isSelected ? null : <p className="text-xs text-muted-foreground/60 italic">Empty note</p>
               )}
