@@ -195,9 +195,36 @@ export function useNotesStore() {
 
   const searchCards = useCallback((query: string, categoryId: string) => {
     const lowerQuery = query.toLowerCase();
+    
+    // Get all category IDs to search (current + all descendants)
+    const categoryIdsToSearch = new Set<string>([categoryId]);
+    const addDescendants = (cats: Category[]) => {
+      for (const cat of cats) {
+        if (categoryIdsToSearch.has(cat.parentId || '')) {
+          categoryIdsToSearch.add(cat.id);
+        }
+        addDescendants(cat.children);
+      }
+    };
+    // Find category and add all its descendants
+    const findAndAddDescendants = (cats: Category[]) => {
+      for (const cat of cats) {
+        if (cat.id === categoryId) {
+          const addAllChildren = (c: Category) => {
+            categoryIdsToSearch.add(c.id);
+            c.children.forEach(addAllChildren);
+          };
+          cat.children.forEach(addAllChildren);
+        } else {
+          findAndAddDescendants(cat.children);
+        }
+      }
+    };
+    findAndAddDescendants(state.categories);
+    
     return state.cards.filter(card => {
       if (card.isDeleted) return false;
-      if (card.categoryId !== categoryId) return false;
+      if (!categoryIdsToSearch.has(card.categoryId)) return false;
       
       const matchesTitle = card.title.toLowerCase().includes(lowerQuery);
       const matchesBlocks = card.blocks.some(block => {
@@ -211,7 +238,7 @@ export function useNotesStore() {
       
       return matchesTitle || matchesBlocks;
     });
-  }, [state.cards]);
+  }, [state.cards, state.categories]);
 
   const canMoveCategoryTo = useCallback((categoryId: string, targetParentId: string | null) => {
     return canMoveCategory(state.categories, categoryId, targetParentId);
