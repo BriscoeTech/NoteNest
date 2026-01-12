@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle, Image, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, Category, BulletItem, ContentBlock, TextBlock, BulletBlock, ImageBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, generateId, findCategoryById } from '@/lib/types';
@@ -54,6 +54,7 @@ interface WorkspacePanelProps {
   onPermanentlyDeleteCard: (id: string) => void;
   onReorderCard: (cardId: string, direction: 'up' | 'down') => void;
   onReorderCardsByIndex: (cardIds: string[]) => void;
+  onReorderSubcategories: (parentId: string | null, orderedIds: string[]) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
 }
@@ -725,6 +726,59 @@ function SortableCard({ id, ...props }: SortableCardProps) {
   );
 }
 
+interface SortableSubcategoryProps {
+  subcategory: Category;
+  allCards: Card[];
+  onSelectCategory: (id: string) => void;
+}
+
+function SortableSubcategory({ subcategory, allCards, onSelectCategory }: SortableSubcategoryProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: subcategory.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const folderCount = subcategory.children.length;
+  const cardCount = allCards.filter(c => c.categoryId === subcategory.id && !c.isDeleted).length;
+  const parts = [];
+  if (folderCount > 0) parts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
+  if (cardCount > 0) parts.push(`${cardCount} note${cardCount !== 1 ? 's' : ''}`);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-testid={`subcategory-${subcategory.id}`}
+      className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors relative group"
+      onClick={() => onSelectCategory(subcategory.id)}
+    >
+      <div 
+        className="absolute top-2 left-2 cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      <FolderOpen className="w-10 h-10 text-primary/70" />
+      <span className="text-sm font-medium text-center truncate w-full">{subcategory.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {parts.join(', ')}
+      </span>
+    </div>
+  );
+}
+
 export function WorkspacePanel({
   cards,
   allCards,
@@ -747,6 +801,7 @@ export function WorkspacePanel({
   onPermanentlyDeleteCard,
   onReorderCard,
   onReorderCardsByIndex,
+  onReorderSubcategories,
   onSearch,
   searchQuery
 }: WorkspacePanelProps) {
@@ -856,6 +911,16 @@ export function WorkspacePanel({
       const newIndex = cards.findIndex(c => c.id === over.id);
       const newOrder = arrayMove(cards, oldIndex, newIndex);
       onReorderCardsByIndex(newOrder.map(c => c.id));
+    }
+  };
+
+  const handleSubcategoryDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = subcategories.findIndex(c => c.id === active.id);
+      const newIndex = subcategories.findIndex(c => c.id === over.id);
+      const newOrder = arrayMove(subcategories, oldIndex, newIndex);
+      onReorderSubcategories(categoryId, newOrder.map(c => c.id));
     }
   };
 
@@ -1040,29 +1105,27 @@ export function WorkspacePanel({
             }}
           >
             {subcategories.length > 0 && !searchQuery && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {subcategories.map(sub => (
-                  <div
-                    key={sub.id}
-                    data-testid={`subcategory-${sub.id}`}
-                    className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors"
-                    onClick={() => onSelectCategory(sub.id)}
-                  >
-                    <FolderOpen className="w-10 h-10 text-primary/70" />
-                    <span className="text-sm font-medium text-center truncate w-full">{sub.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {(() => {
-                        const folderCount = sub.children.length;
-                        const cardCount = allCards.filter(c => c.categoryId === sub.id && !c.isDeleted).length;
-                        const parts = [];
-                        if (folderCount > 0) parts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
-                        if (cardCount > 0) parts.push(`${cardCount} note${cardCount !== 1 ? 's' : ''}`);
-                        return parts.join(', ');
-                      })()}
-                    </span>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleSubcategoryDragEnd}
+              >
+                <SortableContext
+                  items={subcategories.map(s => s.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {subcategories.map(sub => (
+                      <SortableSubcategory
+                        key={sub.id}
+                        subcategory={sub}
+                        allCards={allCards}
+                        onSelectCategory={onSelectCategory}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             )}
 
             {matchingCategories.length > 0 && searchQuery && (

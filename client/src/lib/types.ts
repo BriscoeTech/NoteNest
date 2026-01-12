@@ -3,6 +3,7 @@ export interface Category {
   name: string;
   parentId: string | null;
   children: Category[];
+  sortOrder: number;
 }
 
 export interface BulletItem {
