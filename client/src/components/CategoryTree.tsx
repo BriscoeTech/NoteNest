@@ -30,7 +30,25 @@ interface CategoryTreeProps {
   onRenameCategory: (id: string, name: string) => void;
   onMoveCategory: (id: string, newParentId: string | null) => void;
   onDeleteCategory: (id: string) => void;
+  onRenameCard: (id: string, title: string) => void;
+  onMoveCard: (cardId: string, categoryId: string) => void;
+  onDeleteCard: (id: string) => void;
   deletedCount: number;
+}
+
+interface CardItemProps {
+  card: Card;
+  depth: number;
+  selectedCardId: string | null;
+  categoryId: string;
+  editingCardId: string | null;
+  editingCardTitle: string;
+  onSelectCard: (cardId: string, categoryId: string) => void;
+  onRenameCard: (cardId: string) => void;
+  onMoveCard: (cardId: string) => void;
+  onDeleteCard: (cardId: string) => void;
+  onEditingCardTitleChange: (title: string) => void;
+  onFinishEditingCard: () => void;
 }
 
 interface CategoryItemProps {
@@ -44,13 +62,20 @@ interface CategoryItemProps {
   onToggleExpand: (id: string) => void;
   onSelectCategory: (id: string) => void;
   onSelectCard: (cardId: string, categoryId: string) => void;
-  onRename: (id: string) => void;
-  onMove: (id: string) => void;
-  onDelete: (id: string) => void;
-  editingId: string | null;
-  editingName: string;
-  onEditingNameChange: (name: string) => void;
-  onFinishEditing: () => void;
+  onRenameCategory: (id: string) => void;
+  onMoveCategory: (id: string) => void;
+  onDeleteCategory: (id: string) => void;
+  onRenameCard: (cardId: string) => void;
+  onMoveCard: (cardId: string) => void;
+  onDeleteCard: (cardId: string) => void;
+  editingCategoryId: string | null;
+  editingCategoryName: string;
+  onEditingCategoryNameChange: (name: string) => void;
+  onFinishEditingCategory: () => void;
+  editingCardId: string | null;
+  editingCardTitle: string;
+  onEditingCardTitleChange: (title: string) => void;
+  onFinishEditingCard: () => void;
   draggedId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -80,6 +105,121 @@ function findCategory(categories: Category[], id: string): Category | null {
   return null;
 }
 
+function CardItem({
+  card,
+  depth,
+  selectedCardId,
+  categoryId,
+  editingCardId,
+  editingCardTitle,
+  onSelectCard,
+  onRenameCard,
+  onMoveCard,
+  onDeleteCard,
+  onEditingCardTitleChange,
+  onFinishEditingCard
+}: CardItemProps) {
+  const isSelected = selectedCardId === card.id;
+  const isEditing = editingCardId === card.id;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      onFinishEditingCard();
+    } else if (e.key === 'Escape') {
+      onFinishEditingCard();
+    }
+  };
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          data-testid={`tree-card-${card.id}`}
+          className={cn(
+            "flex items-center gap-1.5 py-1 px-2 rounded-md cursor-pointer transition-colors group",
+            isSelected
+              ? "bg-primary/10 text-primary"
+              : "hover:bg-accent text-muted-foreground hover:text-foreground"
+          )}
+          style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
+          onClick={() => onSelectCard(card.id, categoryId)}
+        >
+          <FileText className="w-3.5 h-3.5 shrink-0" />
+          {isEditing ? (
+            <Input
+              ref={inputRef}
+              value={editingCardTitle}
+              onChange={(e) => onEditingCardTitleChange(e.target.value)}
+              onBlur={onFinishEditingCard}
+              onKeyDown={handleKeyDown}
+              className="h-5 py-0 px-1 text-xs flex-1"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="text-xs truncate flex-1">{card.title || 'Untitled'}</span>
+          )}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                data-testid={`card-tree-menu-${card.id}`}
+                className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => onRenameCard(card.id)}>
+                <Pencil className="w-3.5 h-3.5 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
+                <FolderInput className="w-3.5 h-3.5 mr-2" />
+                Move to...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => onDeleteCard(card.id)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44">
+        <ContextMenuItem onClick={() => onRenameCard(card.id)}>
+          <Pencil className="w-3.5 h-3.5 mr-2" />
+          Rename
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onMoveCard(card.id)}>
+          <FolderInput className="w-3.5 h-3.5 mr-2" />
+          Move to...
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem 
+          onClick={() => onDeleteCard(card.id)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-2" />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 function CategoryItem({
   category,
   cards,
@@ -91,13 +231,20 @@ function CategoryItem({
   onToggleExpand,
   onSelectCategory,
   onSelectCard,
-  onRename,
-  onMove,
-  onDelete,
-  editingId,
-  editingName,
-  onEditingNameChange,
-  onFinishEditing,
+  onRenameCategory,
+  onMoveCategory,
+  onDeleteCategory,
+  onRenameCard,
+  onMoveCard,
+  onDeleteCard,
+  editingCategoryId,
+  editingCategoryName,
+  onEditingCategoryNameChange,
+  onFinishEditingCategory,
+  editingCardId,
+  editingCardTitle,
+  onEditingCardTitleChange,
+  onFinishEditingCard,
   draggedId,
   onDragStart,
   onDragEnd,
@@ -105,7 +252,7 @@ function CategoryItem({
 }: CategoryItemProps) {
   const isExpanded = expandedIds.has(category.id);
   const isSelected = selectedCategoryId === category.id;
-  const isEditing = editingId === category.id;
+  const isEditing = editingCategoryId === category.id;
   const hasChildren = category.children.length > 0;
   const categoryCards = cards.filter(c => c.categoryId === category.id && !c.isDeleted);
   const hasContent = hasChildren || categoryCards.length > 0;
@@ -125,9 +272,9 @@ function CategoryItem({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      onFinishEditing();
+      onFinishEditingCategory();
     } else if (e.key === 'Escape') {
-      onFinishEditing();
+      onFinishEditingCategory();
     }
   };
 
@@ -203,9 +350,9 @@ function CategoryItem({
             {isEditing ? (
               <Input
                 ref={inputRef}
-                value={editingName}
-                onChange={(e) => onEditingNameChange(e.target.value)}
-                onBlur={onFinishEditing}
+                value={editingCategoryName}
+                onChange={(e) => onEditingCategoryNameChange(e.target.value)}
+                onBlur={onFinishEditingCategory}
                 onKeyDown={handleKeyDown}
                 className="h-5 py-0 px-1 text-xs"
                 onClick={(e) => e.stopPropagation()}
@@ -225,17 +372,17 @@ function CategoryItem({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={() => onRename(category.id)}>
+                <DropdownMenuItem onClick={() => onRenameCategory(category.id)}>
                   <Pencil className="w-3.5 h-3.5 mr-2" />
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onMove(category.id)}>
+                <DropdownMenuItem onClick={() => onMoveCategory(category.id)}>
                   <FolderInput className="w-3.5 h-3.5 mr-2" />
                   Move to...
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
-                  onClick={() => onDelete(category.id)}
+                  onClick={() => onDeleteCategory(category.id)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-2" />
@@ -246,17 +393,17 @@ function CategoryItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44">
-          <ContextMenuItem onClick={() => onRename(category.id)}>
+          <ContextMenuItem onClick={() => onRenameCategory(category.id)}>
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => onMove(category.id)}>
+          <ContextMenuItem onClick={() => onMoveCategory(category.id)}>
             <FolderInput className="w-3.5 h-3.5 mr-2" />
             Move to...
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem 
-            onClick={() => onDelete(category.id)}
+            onClick={() => onDeleteCategory(category.id)}
             className="text-destructive focus:text-destructive"
           >
             <Trash2 className="w-3.5 h-3.5 mr-2" />
@@ -280,13 +427,20 @@ function CategoryItem({
               onToggleExpand={onToggleExpand}
               onSelectCategory={onSelectCategory}
               onSelectCard={onSelectCard}
-              onRename={onRename}
-              onMove={onMove}
-              onDelete={onDelete}
-              editingId={editingId}
-              editingName={editingName}
-              onEditingNameChange={onEditingNameChange}
-              onFinishEditing={onFinishEditing}
+              onRenameCategory={onRenameCategory}
+              onMoveCategory={onMoveCategory}
+              onDeleteCategory={onDeleteCategory}
+              onRenameCard={onRenameCard}
+              onMoveCard={onMoveCard}
+              onDeleteCard={onDeleteCard}
+              editingCategoryId={editingCategoryId}
+              editingCategoryName={editingCategoryName}
+              onEditingCategoryNameChange={onEditingCategoryNameChange}
+              onFinishEditingCategory={onFinishEditingCategory}
+              editingCardId={editingCardId}
+              editingCardTitle={editingCardTitle}
+              onEditingCardTitleChange={onEditingCardTitleChange}
+              onFinishEditingCard={onFinishEditingCard}
               draggedId={draggedId}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -295,21 +449,21 @@ function CategoryItem({
           ))}
           
           {categoryCards.map(card => (
-            <div
+            <CardItem
               key={card.id}
-              data-testid={`tree-card-${card.id}`}
-              className={cn(
-                "flex items-center gap-1.5 py-1 px-2 rounded-md cursor-pointer transition-colors",
-                selectedCardId === card.id
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-accent text-muted-foreground hover:text-foreground"
-              )}
-              style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
-              onClick={() => onSelectCard(card.id, category.id)}
-            >
-              <FileText className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs truncate">{card.title || 'Untitled'}</span>
-            </div>
+              card={card}
+              depth={depth}
+              selectedCardId={selectedCardId}
+              categoryId={category.id}
+              editingCardId={editingCardId}
+              editingCardTitle={editingCardTitle}
+              onSelectCard={onSelectCard}
+              onRenameCard={onRenameCard}
+              onMoveCard={onMoveCard}
+              onDeleteCard={onDeleteCard}
+              onEditingCardTitleChange={onEditingCardTitleChange}
+              onFinishEditingCard={onFinishEditingCard}
+            />
           ))}
         </div>
       )}
@@ -327,14 +481,20 @@ export function CategoryTree({
   onRenameCategory,
   onMoveCategory,
   onDeleteCategory,
+  onRenameCard,
+  onMoveCard,
+  onDeleteCard,
   deletedCount
 }: CategoryTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardTitle, setEditingCardTitle] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
+  const [cardToMove, setCardToMove] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
 
   const toggleExpand = (id: string) => {
@@ -349,32 +509,58 @@ export function CategoryTree({
     });
   };
 
-  const startRename = (id: string) => {
+  const startRenameCategory = (id: string) => {
     const category = findCategory(categories, id);
     if (category) {
-      setEditingId(id);
-      setEditingName(category.name);
+      setEditingCategoryId(id);
+      setEditingCategoryName(category.name);
     }
   };
 
-  const finishEditing = () => {
-    if (editingId && editingName.trim()) {
-      onRenameCategory(editingId, editingName.trim());
+  const finishEditingCategory = () => {
+    if (editingCategoryId && editingCategoryName.trim()) {
+      onRenameCategory(editingCategoryId, editingCategoryName.trim());
     }
-    setEditingId(null);
-    setEditingName('');
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
   };
 
-  const handleMove = (id: string) => {
+  const startRenameCard = (id: string) => {
+    const card = cards.find(c => c.id === id);
+    if (card) {
+      setEditingCardId(id);
+      setEditingCardTitle(card.title);
+    }
+  };
+
+  const finishEditingCard = () => {
+    if (editingCardId) {
+      onRenameCard(editingCardId, editingCardTitle.trim());
+    }
+    setEditingCardId(null);
+    setEditingCardTitle('');
+  };
+
+  const handleMoveCategory = (id: string) => {
     setCategoryToMove(id);
+    setCardToMove(null);
+    setMoveDialogOpen(true);
+  };
+
+  const handleMoveCard = (id: string) => {
+    setCardToMove(id);
+    setCategoryToMove(null);
     setMoveDialogOpen(true);
   };
 
   const handleMoveSelect = (targetId: string | null) => {
     if (categoryToMove) {
       onMoveCategory(categoryToMove, targetId);
+    } else if (cardToMove && targetId) {
+      onMoveCard(cardToMove, targetId);
     }
     setCategoryToMove(null);
+    setCardToMove(null);
     setMoveDialogOpen(false);
   };
 
@@ -438,13 +624,20 @@ export function CategoryTree({
               onToggleExpand={toggleExpand}
               onSelectCategory={onSelectCategory}
               onSelectCard={onSelectCard}
-              onRename={startRename}
-              onMove={handleMove}
-              onDelete={onDeleteCategory}
-              editingId={editingId}
-              editingName={editingName}
-              onEditingNameChange={setEditingName}
-              onFinishEditing={finishEditing}
+              onRenameCategory={startRenameCategory}
+              onMoveCategory={handleMoveCategory}
+              onDeleteCategory={onDeleteCategory}
+              onRenameCard={startRenameCard}
+              onMoveCard={handleMoveCard}
+              onDeleteCard={onDeleteCard}
+              editingCategoryId={editingCategoryId}
+              editingCategoryName={editingCategoryName}
+              onEditingCategoryNameChange={setEditingCategoryName}
+              onFinishEditingCategory={finishEditingCategory}
+              editingCardId={editingCardId}
+              editingCardTitle={editingCardTitle}
+              onEditingCardTitleChange={setEditingCardTitle}
+              onFinishEditingCard={finishEditingCard}
               draggedId={draggedId}
               onDragStart={setDraggedId}
               onDragEnd={() => setDraggedId(null)}
@@ -480,9 +673,9 @@ export function CategoryTree({
         onOpenChange={setMoveDialogOpen}
         categories={categories}
         onSelect={handleMoveSelect}
-        title="Move Category To"
+        title={cardToMove ? "Move Note To" : "Move Category To"}
         excludeIds={excludeIdsForMove}
-        showRoot={true}
+        showRoot={!cardToMove}
         rootLabel="Root (Top Level)"
       />
     </div>
