@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Trash2, MoreHorizontal, Pencil, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Trash2, MoreHorizontal, Pencil, FileText, FolderInput, FolderPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category } from '@/lib/types';
 import { ALL_NOTES_ID, RECYCLE_BIN_ID } from '@/lib/types';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CategoryPickerDialog } from './CategoryPickerDialog';
 
 interface CategoryTreeProps {
   categories: Category[];
@@ -26,6 +27,7 @@ interface CategoryTreeProps {
   onSelect: (id: string | null) => void;
   onAddCategory: (name: string, parentId: string | null) => void;
   onRenameCategory: (id: string, name: string) => void;
+  onMoveCategory: (id: string, newParentId: string | null) => void;
   onDeleteCategory: (id: string) => void;
   deletedCount: number;
 }
@@ -35,15 +37,21 @@ interface CategoryItemProps {
   depth: number;
   selectedId: string | null;
   expandedIds: Set<string>;
+  allCategories: Category[];
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
   onAddChild: (parentId: string) => void;
   onRename: (id: string) => void;
+  onMove: (id: string) => void;
   onDelete: (id: string) => void;
   editingId: string | null;
   editingName: string;
   onEditingNameChange: (name: string) => void;
   onFinishEditing: () => void;
+  draggedId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDrop: (targetId: string | null) => void;
 }
 
 function CategoryItem({
@@ -51,21 +59,32 @@ function CategoryItem({
   depth,
   selectedId,
   expandedIds,
+  allCategories,
   onToggleExpand,
   onSelect,
   onAddChild,
   onRename,
+  onMove,
   onDelete,
   editingId,
   editingName,
   onEditingNameChange,
-  onFinishEditing
+  onFinishEditing,
+  draggedId,
+  onDragStart,
+  onDragEnd,
+  onDrop
 }: CategoryItemProps) {
   const isExpanded = expandedIds.has(category.id);
   const isSelected = selectedId === category.id;
   const isEditing = editingId === category.id;
   const hasChildren = category.children.length > 0;
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const isDragging = draggedId === category.id;
+  const descendantIds = draggedId ? getDescendantIds(allCategories, draggedId) : [];
+  const isInvalidDropTarget = draggedId === category.id || descendantIds.includes(category.id);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -82,17 +101,51 @@ function CategoryItem({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', category.id);
+    onDragStart(category.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!isInvalidDropTarget && draggedId) {
+      e.dataTransfer.dropEffect = 'move';
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!isInvalidDropTarget && draggedId) {
+      onDrop(category.id);
+    }
+  };
+
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
             data-testid={`category-item-${category.id}`}
+            draggable={!isEditing}
+            onDragStart={handleDragStart}
+            onDragEnd={onDragEnd}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             className={cn(
               "flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
               isSelected 
                 ? "bg-primary/10 text-primary" 
-                : "hover:bg-accent text-foreground"
+                : "hover:bg-accent text-foreground",
+              isDragging && "opacity-50",
+              isDragOver && !isInvalidDropTarget && "bg-primary/20 ring-2 ring-primary/50"
             )}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
             onClick={() => onSelect(category.id)}
@@ -141,14 +194,18 @@ function CategoryItem({
                   <MoreHorizontal className="w-3.5 h-3.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => onAddChild(category.id)}>
-                  <Plus className="w-4 h-4 mr-2" />
+                  <FolderPlus className="w-4 h-4 mr-2" />
                   Add Subcategory
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onRename(category.id)}>
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onMove(category.id)}>
+                  <FolderInput className="w-4 h-4 mr-2" />
+                  Move to...
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
@@ -162,14 +219,18 @@ function CategoryItem({
             </DropdownMenu>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-40">
+        <ContextMenuContent className="w-48">
           <ContextMenuItem onClick={() => onAddChild(category.id)}>
-            <Plus className="w-4 h-4 mr-2" />
+            <FolderPlus className="w-4 h-4 mr-2" />
             Add Subcategory
           </ContextMenuItem>
           <ContextMenuItem onClick={() => onRename(category.id)}>
             <Pencil className="w-4 h-4 mr-2" />
             Rename
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => onMove(category.id)}>
+            <FolderInput className="w-4 h-4 mr-2" />
+            Move to...
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem 
@@ -191,15 +252,21 @@ function CategoryItem({
               depth={depth + 1}
               selectedId={selectedId}
               expandedIds={expandedIds}
+              allCategories={allCategories}
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
               onAddChild={onAddChild}
               onRename={onRename}
+              onMove={onMove}
               onDelete={onDelete}
               editingId={editingId}
               editingName={editingName}
               onEditingNameChange={onEditingNameChange}
               onFinishEditing={onFinishEditing}
+              draggedId={draggedId}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
             />
           ))}
         </div>
@@ -214,6 +281,7 @@ export function CategoryTree({
   onSelect,
   onAddCategory,
   onRenameCategory,
+  onMoveCategory,
   onDeleteCategory,
   deletedCount
 }: CategoryTreeProps) {
@@ -223,10 +291,14 @@ export function CategoryTree({
   const [isAddingRoot, setIsAddingRoot] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingToParent, setAddingToParent] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
+  const [rootDragOver, setRootDragOver] = useState(false);
   const newInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if ((isAddingRoot || addingToParent) && newInputRef.current) {
+    if ((isAddingRoot || addingToParent !== null) && newInputRef.current) {
       newInputRef.current.focus();
     }
   }, [isAddingRoot, addingToParent]);
@@ -284,13 +356,75 @@ export function CategoryTree({
     }
   };
 
+  const handleMove = (id: string) => {
+    setCategoryToMove(id);
+    setMoveDialogOpen(true);
+  };
+
+  const handleMoveSelect = (targetId: string | null) => {
+    if (categoryToMove) {
+      onMoveCategory(categoryToMove, targetId);
+    }
+    setCategoryToMove(null);
+    setMoveDialogOpen(false);
+  };
+
+  const handleDrop = (targetId: string | null) => {
+    if (draggedId && draggedId !== targetId) {
+      onMoveCategory(draggedId, targetId);
+    }
+    setDraggedId(null);
+  };
+
+  const handleRootDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedId) {
+      setRootDragOver(true);
+    }
+  };
+
+  const handleRootDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setRootDragOver(false);
+    if (draggedId) {
+      handleDrop(null);
+    }
+  };
+
+  const excludeIdsForMove = categoryToMove 
+    ? [categoryToMove, ...getDescendantIds(categories, categoryToMove)]
+    : [];
+
+  const isValidCategory = selectedId && selectedId !== ALL_NOTES_ID && selectedId !== RECYCLE_BIN_ID;
+
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border">
+      <div className="p-3 border-b border-border flex items-center justify-between">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categories</h2>
+        {isValidCategory && (
+          <Button
+            data-testid="button-add-subcategory"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => startAddChild(selectedId)}
+            title="Add subcategory to selected"
+          >
+            <FolderPlus className="w-3 h-3 mr-1" />
+            Subcategory
+          </Button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+      <div 
+        className={cn(
+          "flex-1 overflow-y-auto scrollbar-thin p-2",
+          rootDragOver && "bg-primary/5"
+        )}
+        onDragOver={handleRootDragOver}
+        onDragLeave={() => setRootDragOver(false)}
+        onDrop={handleRootDrop}
+      >
         <div
           data-testid="category-all-notes"
           className={cn(
@@ -314,20 +448,29 @@ export function CategoryTree({
             depth={0}
             selectedId={selectedId}
             expandedIds={expandedIds}
+            allCategories={categories}
             onToggleExpand={toggleExpand}
             onSelect={onSelect}
             onAddChild={startAddChild}
             onRename={startRename}
+            onMove={handleMove}
             onDelete={onDeleteCategory}
             editingId={editingId}
             editingName={editingName}
             onEditingNameChange={setEditingName}
             onFinishEditing={finishEditing}
+            draggedId={draggedId}
+            onDragStart={setDraggedId}
+            onDragEnd={() => setDraggedId(null)}
+            onDrop={handleDrop}
           />
         ))}
 
-        {(isAddingRoot || addingToParent) && !addingToParent && (
-          <div className="flex items-center gap-1 py-1 px-2" style={{ paddingLeft: '8px' }}>
+        {(isAddingRoot || addingToParent !== null) && (
+          <div 
+            className="flex items-center gap-1 py-1 px-2" 
+            style={{ paddingLeft: addingToParent ? '24px' : '8px' }}
+          >
             <Folder className="w-4 h-4 text-muted-foreground ml-4" />
             <Input
               ref={newInputRef}
@@ -377,6 +520,17 @@ export function CategoryTree({
           )}
         </div>
       </div>
+
+      <CategoryPickerDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        categories={categories}
+        onSelect={handleMoveSelect}
+        title="Move Category To"
+        excludeIds={excludeIdsForMove}
+        showRoot={true}
+        rootLabel="Root (Top Level)"
+      />
     </div>
   );
 }
@@ -388,4 +542,18 @@ function findCategory(categories: Category[], id: string): Category | null {
     if (found) return found;
   }
   return null;
+}
+
+function getDescendantIds(categories: Category[], id: string): string[] {
+  const category = findCategory(categories, id);
+  if (!category) return [];
+  const ids: string[] = [];
+  function traverse(cats: Category[]) {
+    for (const cat of cats) {
+      ids.push(cat.id);
+      traverse(cat.children);
+    }
+  }
+  traverse(category.children);
+  return ids;
 }

@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Category, Card, AppState, BulletItem } from '@/lib/types';
+import type { Category, Card, AppState } from '@/lib/types';
 import { 
   generateId, 
   removeCategoryById, 
   addCategoryToParent, 
   updateCategoryInTree,
-  getAllCategoryIds 
+  getAllCategoryIds,
+  canMoveCategory,
+  moveCategoryToParent
 } from '@/lib/types';
 
 const STORAGE_KEY = 'notecards_data';
@@ -61,6 +63,18 @@ export function useNotesStore() {
       ...prev,
       categories: updateCategoryInTree(prev.categories, id, { name })
     }));
+  }, []);
+
+  const moveCategory = useCallback((categoryId: string, newParentId: string | null) => {
+    setState(prev => {
+      if (!canMoveCategory(prev.categories, categoryId, newParentId)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        categories: moveCategoryToParent(prev.categories, categoryId, newParentId)
+      };
+    });
   }, []);
 
   const deleteCategory = useCallback((id: string) => {
@@ -180,11 +194,16 @@ export function useNotesStore() {
     });
   }, [state.cards]);
 
+  const canMoveCategoryTo = useCallback((categoryId: string, targetParentId: string | null) => {
+    return canMoveCategory(state.categories, categoryId, targetParentId);
+  }, [state.categories]);
+
   return {
     categories: state.categories,
     cards: state.cards,
     addCategory,
     renameCategory,
+    moveCategory,
     deleteCategory,
     addCard,
     updateCard,
@@ -194,6 +213,7 @@ export function useNotesStore() {
     permanentlyDeleteCard,
     getCardsForCategory,
     getDeletedCards,
-    searchCards
+    searchCards,
+    canMoveCategoryTo
   };
 }

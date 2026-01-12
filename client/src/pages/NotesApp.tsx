@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNotesStore } from '@/hooks/use-notes-store';
 import { CategoryTree } from '@/components/CategoryTree';
-import { CardList } from '@/components/CardList';
-import { CardEditor } from '@/components/CardEditor';
+import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { ALL_NOTES_ID, RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
 
 export default function NotesApp() {
@@ -57,11 +56,6 @@ export default function NotesApp() {
     store.getCardsForCategory
   ]);
 
-  const selectedCard = useMemo(() => {
-    if (!selectedCardId) return null;
-    return store.cards.find(c => c.id === selectedCardId) || null;
-  }, [selectedCardId, store.cards]);
-
   const deletedCount = store.getDeletedCards().length;
 
   const handleSelectCategory = (id: string | null) => {
@@ -71,31 +65,32 @@ export default function NotesApp() {
   };
 
   const handleAddCard = () => {
-    const categoryId = isAllNotes ? null : selectedCategoryId;
+    const categoryId = isAllNotes || isRecycleBin ? null : selectedCategoryId;
     const newCardId = store.addCard(categoryId);
     setSelectedCardId(newCardId);
   };
 
-  const handleSelectCard = (id: string) => {
+  const handleSelectCard = (id: string | null) => {
     setSelectedCardId(id);
   };
 
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
-      <aside className="w-60 border-r border-border bg-sidebar flex-shrink-0">
+      <aside className="w-64 border-r border-border bg-sidebar flex-shrink-0">
         <CategoryTree
           categories={store.categories}
           selectedId={selectedCategoryId}
           onSelect={handleSelectCategory}
           onAddCategory={store.addCategory}
           onRenameCategory={store.renameCategory}
+          onMoveCategory={store.moveCategory}
           onDeleteCategory={store.deleteCategory}
           deletedCount={deletedCount}
         />
       </aside>
 
-      <div className="w-72 flex-shrink-0">
-        <CardList
+      <main className="flex-1 min-w-0">
+        <WorkspacePanel
           cards={displayedCards}
           selectedCardId={selectedCardId}
           categoryId={selectedCategoryId}
@@ -104,6 +99,7 @@ export default function NotesApp() {
           categories={store.categories}
           onSelectCard={handleSelectCard}
           onAddCard={handleAddCard}
+          onUpdateCard={store.updateCard}
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}
           onRestoreCard={store.restoreCard}
@@ -111,13 +107,7 @@ export default function NotesApp() {
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
         />
-      </div>
-
-      <CardEditor
-        card={selectedCard}
-        onUpdateCard={store.updateCard}
-        isRecycleBin={isRecycleBin}
-      />
+      </main>
     </div>
   );
 }
