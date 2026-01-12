@@ -35,6 +35,15 @@ function sortCategoriesBySortOrder(categories: Category[]): Category[] {
     }));
 }
 
+function filterNewCategories(categories: Category[], existingIds: Set<string>): Category[] {
+  return categories
+    .filter(cat => !existingIds.has(cat.id))
+    .map(cat => ({
+      ...cat,
+      children: filterNewCategories(cat.children, existingIds)
+    }));
+}
+
 function loadState(): AppState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -348,6 +357,59 @@ export function useNotesStore() {
     });
   }, []);
 
+  const exportData = useCallback(() => {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      categories: state.categories,
+      cards: state.cards
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `notes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [state]);
+
+  const importData = useCallback((data: any, mode: 'merge' | 'override') => {
+    if (!data || !data.categories || !data.cards) {
+      alert('Invalid backup file format.');
+      return;
+    }
+
+    // Migrate imported data
+    const importedCategories = migrateCategories(data.categories || []);
+    const importedCards = (data.cards || []).map(migrateCard);
+
+    if (mode === 'override') {
+      setState({
+        categories: sortCategoriesBySortOrder(importedCategories),
+        cards: importedCards
+      });
+    } else {
+      // Merge mode: add imported data without duplicates
+      setState(prev => {
+        const existingCategoryIds = new Set(getAllCategoryIds(prev.categories));
+        const existingCardIds = new Set(prev.cards.map(c => c.id));
+        
+        // Add new categories that don't exist
+        const newCategories = filterNewCategories(importedCategories, existingCategoryIds);
+        
+        // Add new cards that don't exist
+        const newCards = importedCards.filter((c: Card) => !existingCardIds.has(c.id));
+        
+        return {
+          categories: sortCategoriesBySortOrder([...prev.categories, ...newCategories]),
+          cards: [...prev.cards, ...newCards]
+        };
+      });
+    }
+  }, []);
+
   return {
     categories: state.categories,
     cards: state.cards,
@@ -368,6 +430,8 @@ export function useNotesStore() {
     searchCards,
     canMoveCategoryTo,
     reorderCard,
-    reorderCardsByIndex
+    reorderCardsByIndex,
+    exportData,
+    importData
   };
 }

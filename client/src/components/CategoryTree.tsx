@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, Download, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Category, Card } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
@@ -19,6 +19,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 
 interface CategoryTreeProps {
   categories: Category[];
@@ -34,6 +45,8 @@ interface CategoryTreeProps {
   onMoveCard: (cardId: string, categoryId: string) => void;
   onDeleteCard: (id: string) => void;
   deletedCount: number;
+  onExport: () => void;
+  onImport: (data: any, mode: 'merge' | 'override') => void;
 }
 
 interface CardItemProps {
@@ -557,7 +570,9 @@ export function CategoryTree({
   onRenameCard,
   onMoveCard,
   onDeleteCard,
-  deletedCount
+  deletedCount,
+  onExport,
+  onImport
 }: CategoryTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -570,6 +585,9 @@ export function CategoryTree({
   const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<any>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -689,6 +707,32 @@ export function CategoryTree({
     ? [categoryToMove, ...getDescendantIds(categories, categoryToMove)]
     : [];
 
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        setPendingImportData(data);
+        setImportDialogOpen(true);
+      } catch (error) {
+        alert('Invalid file format. Please select a valid backup file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImportConfirm = (mode: 'merge' | 'override') => {
+    if (pendingImportData) {
+      onImport(pendingImportData, mode);
+    }
+    setImportDialogOpen(false);
+    setPendingImportData(null);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 border-b border-border">
@@ -752,7 +796,32 @@ export function CategoryTree({
         )}
       </div>
 
-      <div className="p-1.5 border-t border-border">
+      <div className="p-1.5 border-t border-border space-y-1">
+        <div className="flex gap-1">
+          <button
+            data-testid="export-button"
+            onClick={onExport}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </button>
+          <button
+            data-testid="import-button"
+            onClick={() => importInputRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Import
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+        </div>
         <div
           data-testid="category-recycle-bin"
           className={cn(
@@ -772,6 +841,42 @@ export function CategoryTree({
           )}
         </div>
       </div>
+
+      <AlertDialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Import Backup</AlertDialogTitle>
+            <AlertDialogDescription>
+              How would you like to import this backup?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-4">
+            <Button
+              variant="outline"
+              onClick={() => handleImportConfirm('merge')}
+              className="justify-start"
+            >
+              <span className="font-medium">Merge</span>
+              <span className="ml-2 text-muted-foreground text-xs">Add imported data to existing notes</span>
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirm('Warning: This will permanently delete all your current categories and notes. Are you sure you want to continue?')) {
+                  handleImportConfirm('override');
+                }
+              }}
+              className="justify-start"
+            >
+              <span className="font-medium">Override</span>
+              <span className="ml-2 text-destructive-foreground/70 text-xs">Replace all data with imported backup</span>
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CategoryPickerDialog
         open={moveDialogOpen}

@@ -103,6 +103,8 @@ export default function NotesApp() {
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}
           deletedCount={deletedCount}
+          onExport={store.exportData}
+          onImport={store.importData}
         />
       </aside>
 
