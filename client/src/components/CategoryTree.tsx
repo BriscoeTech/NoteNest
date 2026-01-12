@@ -43,12 +43,15 @@ interface CardItemProps {
   categoryId: string;
   editingCardId: string | null;
   editingCardTitle: string;
+  draggedCardId: string | null;
   onSelectCard: (cardId: string, categoryId: string) => void;
   onRenameCard: (cardId: string) => void;
   onMoveCard: (cardId: string) => void;
   onDeleteCard: (cardId: string) => void;
   onEditingCardTitleChange: (title: string) => void;
   onFinishEditingCard: () => void;
+  onCardDragStart: (cardId: string) => void;
+  onCardDragEnd: () => void;
 }
 
 interface CategoryItemProps {
@@ -76,10 +79,14 @@ interface CategoryItemProps {
   editingCardTitle: string;
   onEditingCardTitleChange: (title: string) => void;
   onFinishEditingCard: () => void;
-  draggedId: string | null;
-  onDragStart: (id: string) => void;
-  onDragEnd: () => void;
-  onDrop: (targetId: string | null) => void;
+  draggedCategoryId: string | null;
+  draggedCardId: string | null;
+  onCategoryDragStart: (id: string) => void;
+  onCategoryDragEnd: () => void;
+  onCategoryDrop: (targetId: string | null) => void;
+  onCardDragStart: (cardId: string) => void;
+  onCardDragEnd: () => void;
+  onCardDropOnCategory: (categoryId: string) => void;
 }
 
 function getDescendantIds(categories: Category[], id: string): string[] {
@@ -112,15 +119,19 @@ function CardItem({
   categoryId,
   editingCardId,
   editingCardTitle,
+  draggedCardId,
   onSelectCard,
   onRenameCard,
   onMoveCard,
   onDeleteCard,
   onEditingCardTitleChange,
-  onFinishEditingCard
+  onFinishEditingCard,
+  onCardDragStart,
+  onCardDragEnd
 }: CardItemProps) {
   const isSelected = selectedCardId === card.id;
   const isEditing = editingCardId === card.id;
+  const isDragging = draggedCardId === card.id;
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -138,16 +149,26 @@ function CardItem({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `card:${card.id}`);
+    onCardDragStart(card.id);
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           data-testid={`tree-card-${card.id}`}
+          draggable={!isEditing}
+          onDragStart={handleDragStart}
+          onDragEnd={onCardDragEnd}
           className={cn(
             "flex items-center gap-1.5 py-1 px-2 rounded-md cursor-pointer transition-colors group",
             isSelected
               ? "bg-primary/10 text-primary"
-              : "hover:bg-accent text-muted-foreground hover:text-foreground"
+              : "hover:bg-accent text-muted-foreground hover:text-foreground",
+            isDragging && "opacity-50"
           )}
           style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
           onClick={() => onSelectCard(card.id, categoryId)}
@@ -245,10 +266,14 @@ function CategoryItem({
   editingCardTitle,
   onEditingCardTitleChange,
   onFinishEditingCard,
-  draggedId,
-  onDragStart,
-  onDragEnd,
-  onDrop
+  draggedCategoryId,
+  draggedCardId,
+  onCategoryDragStart,
+  onCategoryDragEnd,
+  onCategoryDrop,
+  onCardDragStart,
+  onCardDragEnd,
+  onCardDropOnCategory
 }: CategoryItemProps) {
   const isExpanded = expandedIds.has(category.id);
   const isSelected = selectedCategoryId === category.id;
@@ -259,9 +284,9 @@ function CategoryItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const isDragging = draggedId === category.id;
-  const descendantIds = draggedId ? getDescendantIds(allCategories, draggedId) : [];
-  const isInvalidDropTarget = draggedId === category.id || descendantIds.includes(category.id);
+  const isDragging = draggedCategoryId === category.id;
+  const descendantIds = draggedCategoryId ? getDescendantIds(allCategories, draggedCategoryId) : [];
+  const isInvalidCategoryDropTarget = draggedCategoryId === category.id || descendantIds.includes(category.id);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -280,13 +305,17 @@ function CategoryItem({
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', category.id);
-    onDragStart(category.id);
+    e.dataTransfer.setData('text/plain', `category:${category.id}`);
+    onCategoryDragStart(category.id);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!isInvalidDropTarget && draggedId) {
+    
+    if (draggedCardId) {
+      e.dataTransfer.dropEffect = 'move';
+      setIsDragOver(true);
+    } else if (draggedCategoryId && !isInvalidCategoryDropTarget) {
       e.dataTransfer.dropEffect = 'move';
       setIsDragOver(true);
     }
@@ -299,8 +328,11 @@ function CategoryItem({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (!isInvalidDropTarget && draggedId) {
-      onDrop(category.id);
+    
+    if (draggedCardId) {
+      onCardDropOnCategory(category.id);
+    } else if (draggedCategoryId && !isInvalidCategoryDropTarget) {
+      onCategoryDrop(category.id);
     }
   };
 
@@ -312,7 +344,7 @@ function CategoryItem({
             data-testid={`category-item-${category.id}`}
             draggable={!isEditing}
             onDragStart={handleDragStart}
-            onDragEnd={onDragEnd}
+            onDragEnd={onCategoryDragEnd}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -322,7 +354,7 @@ function CategoryItem({
                 ? "bg-primary/10 text-primary" 
                 : "hover:bg-accent text-foreground",
               isDragging && "opacity-50",
-              isDragOver && !isInvalidDropTarget && "bg-primary/20 ring-2 ring-primary/50"
+              isDragOver && "bg-primary/20 ring-2 ring-primary/50"
             )}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
             onClick={() => onSelectCategory(category.id)}
@@ -441,10 +473,14 @@ function CategoryItem({
               editingCardTitle={editingCardTitle}
               onEditingCardTitleChange={onEditingCardTitleChange}
               onFinishEditingCard={onFinishEditingCard}
-              draggedId={draggedId}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onDrop={onDrop}
+              draggedCategoryId={draggedCategoryId}
+              draggedCardId={draggedCardId}
+              onCategoryDragStart={onCategoryDragStart}
+              onCategoryDragEnd={onCategoryDragEnd}
+              onCategoryDrop={onCategoryDrop}
+              onCardDragStart={onCardDragStart}
+              onCardDragEnd={onCardDragEnd}
+              onCardDropOnCategory={onCardDropOnCategory}
             />
           ))}
           
@@ -457,12 +493,15 @@ function CategoryItem({
               categoryId={category.id}
               editingCardId={editingCardId}
               editingCardTitle={editingCardTitle}
+              draggedCardId={draggedCardId}
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={onMoveCard}
               onDeleteCard={onDeleteCard}
               onEditingCardTitleChange={onEditingCardTitleChange}
               onFinishEditingCard={onFinishEditingCard}
+              onCardDragStart={onCardDragStart}
+              onCardDragEnd={onCardDragEnd}
             />
           ))}
         </div>
@@ -491,7 +530,8 @@ export function CategoryTree({
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editingCardTitle, setEditingCardTitle] = useState('');
-  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [categoryToMove, setCategoryToMove] = useState<string | null>(null);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
@@ -564,16 +604,23 @@ export function CategoryTree({
     setMoveDialogOpen(false);
   };
 
-  const handleDrop = (targetId: string | null) => {
-    if (draggedId && draggedId !== targetId) {
-      onMoveCategory(draggedId, targetId);
+  const handleCategoryDrop = (targetId: string | null) => {
+    if (draggedCategoryId && draggedCategoryId !== targetId) {
+      onMoveCategory(draggedCategoryId, targetId);
     }
-    setDraggedId(null);
+    setDraggedCategoryId(null);
+  };
+
+  const handleCardDropOnCategory = (categoryId: string) => {
+    if (draggedCardId) {
+      onMoveCard(draggedCardId, categoryId);
+    }
+    setDraggedCardId(null);
   };
 
   const handleRootDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedId) {
+    if (draggedCategoryId) {
       setRootDragOver(true);
     }
   };
@@ -581,8 +628,8 @@ export function CategoryTree({
   const handleRootDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setRootDragOver(false);
-    if (draggedId) {
-      handleDrop(null);
+    if (draggedCategoryId) {
+      handleCategoryDrop(null);
     }
   };
 
@@ -638,10 +685,14 @@ export function CategoryTree({
               editingCardTitle={editingCardTitle}
               onEditingCardTitleChange={setEditingCardTitle}
               onFinishEditingCard={finishEditingCard}
-              draggedId={draggedId}
-              onDragStart={setDraggedId}
-              onDragEnd={() => setDraggedId(null)}
-              onDrop={handleDrop}
+              draggedCategoryId={draggedCategoryId}
+              draggedCardId={draggedCardId}
+              onCategoryDragStart={setDraggedCategoryId}
+              onCategoryDragEnd={() => setDraggedCategoryId(null)}
+              onCategoryDrop={handleCategoryDrop}
+              onCardDragStart={setDraggedCardId}
+              onCardDragEnd={() => setDraggedCardId(null)}
+              onCardDropOnCategory={handleCardDropOnCategory}
             />
           ))
         )}
