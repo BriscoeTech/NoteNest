@@ -3,12 +3,15 @@ import { useNotesStore } from '@/hooks/use-notes-store';
 import { CategoryTree } from '@/components/CategoryTree';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { PanelLeftClose, PanelLeft } from 'lucide-react';
 
 export default function NotesApp() {
   const store = useNotesStore();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const isRecycleBin = selectedCategoryId === RECYCLE_BIN_ID;
 
@@ -88,25 +91,37 @@ export default function NotesApp() {
 
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
-      <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
-        <CategoryTree
-          categories={store.categories}
-          cards={store.cards}
-          selectedCategoryId={selectedCategoryId}
-          selectedCardId={selectedCardId}
-          onSelectCategory={handleSelectCategory}
-          onSelectCard={handleSelectCard}
-          onRenameCategory={store.renameCategory}
-          onMoveCategory={store.moveCategory}
-          onDeleteCategory={store.deleteCategory}
-          onRenameCard={handleRenameCard}
-          onMoveCard={store.moveCard}
-          onDeleteCard={store.deleteCard}
-          deletedCount={deletedCount}
-          onExport={store.exportData}
-          onImport={store.importData}
-        />
-      </aside>
+      {sidebarOpen && (
+        <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
+          <CategoryTree
+            categories={store.categories}
+            cards={store.cards}
+            selectedCategoryId={selectedCategoryId}
+            selectedCardId={selectedCardId}
+            onSelectCategory={handleSelectCategory}
+            onSelectCard={handleSelectCard}
+            onRenameCategory={store.renameCategory}
+            onMoveCategory={store.moveCategory}
+            onDeleteCategory={store.deleteCategory}
+            onRenameCard={handleRenameCard}
+            onMoveCard={store.moveCard}
+            onDeleteCard={store.deleteCard}
+            deletedCount={deletedCount}
+            onExport={store.exportData}
+            onImport={store.importData}
+          />
+        </aside>
+      )}
+
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="absolute top-2 left-2 z-10 h-8 w-8"
+        data-testid="toggle-sidebar"
+      >
+        {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+      </Button>
 
       <main className="flex-1 min-w-0">
         <WorkspacePanel
