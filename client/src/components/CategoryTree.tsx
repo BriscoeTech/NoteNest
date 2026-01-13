@@ -589,6 +589,8 @@ export function CategoryTree({
   const [rootDragOver, setRootDragOver] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportData, setExportData] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
@@ -805,7 +807,16 @@ export function CategoryTree({
         <div className="flex gap-1">
           <button
             data-testid="export-button"
-            onClick={onExport}
+            onClick={() => {
+              const data = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                categories,
+                cards
+              };
+              setExportData(JSON.stringify(data, null, 2));
+              setExportDialogOpen(true);
+            }}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent transition-colors min-h-[44px]"
           >
             <Download className="w-4 h-4" />
@@ -879,6 +890,48 @@ export function CategoryTree({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Export Backup</AlertDialogTitle>
+            <AlertDialogDescription>
+              Copy the backup data or try downloading directly.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-4">
+            <Button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(exportData);
+                  alert('Copied to clipboard! Paste into a text file and save as .json');
+                  setExportDialogOpen(false);
+                } catch (err) {
+                  alert('Failed to copy. Please select and copy manually.');
+                }
+              }}
+              className="w-full"
+            >
+              Copy to Clipboard
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                onExport();
+                setExportDialogOpen(false);
+              }}
+            >
+              Try Download
+            </Button>
+            <div className="mt-2 max-h-32 overflow-auto rounded border bg-muted p-2">
+              <pre className="text-xs whitespace-pre-wrap break-all select-all">{exportData.slice(0, 500)}...</pre>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
