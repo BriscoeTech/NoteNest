@@ -425,7 +425,7 @@ function CategoryItem({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                {hasChildren && (
+                {hasContent && (
                   <>
                     <DropdownMenuItem onClick={() => onExpandAll(category.id)}>
                       <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
@@ -459,7 +459,7 @@ function CategoryItem({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44">
-          {hasChildren && (
+          {hasContent && (
             <>
               <ContextMenuItem onClick={() => onExpandAll(category.id)}>
                 <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
