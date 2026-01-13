@@ -370,22 +370,45 @@ export function useNotesStore() {
     });
   }, []);
 
-  const exportData = useCallback(() => {
+  const exportData = useCallback(async () => {
     const data = {
       version: 1,
       exportedAt: new Date().toISOString(),
       categories: state.categories,
       cards: state.cards
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const filename = `notes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    
+    // Try Web Share API first (works well on mobile)
+    if (navigator.share && navigator.canShare) {
+      const file = new File([blob], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Notes Backup',
+          });
+          return;
+        } catch (err) {
+          // User cancelled or share failed, fall through to download
+        }
+      }
+    }
+    
+    // Fallback: traditional download
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `notes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = filename;
+    a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
   }, [state]);
 
   const importData = useCallback((data: any, mode: 'merge' | 'override') => {
