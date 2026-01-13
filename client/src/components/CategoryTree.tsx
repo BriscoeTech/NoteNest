@@ -737,7 +737,7 @@ export function CategoryTree({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-border">
+      <div className="p-3 pl-10 border-b border-border">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categories</h2>
       </div>
 
