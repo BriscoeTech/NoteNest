@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, Type, List, ChevronUp, AlertCircle, Image, GripVertical } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, AlertCircle, Image, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -65,13 +65,17 @@ interface BlockEditorProps {
   isSelected: boolean;
   onUpdate: (block: ContentBlock) => void;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   dragHandleProps?: {
     attributes: Record<string, any>;
     listeners: Record<string, any>;
   };
 }
 
-function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, dragHandleProps }: BlockEditorProps) {
+function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dragHandleProps }: BlockEditorProps) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
   const focusNextBullet = useRef<string | null>(null);
@@ -104,7 +108,7 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
       <div className="group relative flex items-start gap-1">
         {isSelected && dragHandleProps && (
           <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
             {...dragHandleProps.attributes}
             {...dragHandleProps.listeners}
           >
@@ -121,14 +125,33 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
             onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
             disabled={isRecycleBin}
             placeholder={isSelected ? "Type text here..." : ""}
-            className="w-full border-none shadow-none focus-visible:ring-0 p-2 resize-none min-h-0 overflow-hidden text-sm bg-muted/30 rounded placeholder:text-muted-foreground/40"
+            className="w-full border-none shadow-none focus-visible:ring-0 p-3 resize-none min-h-[44px] overflow-hidden text-base bg-muted/30 rounded placeholder:text-muted-foreground/40"
             rows={1}
           />
         </div>
         {isSelected && (
-          <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
-            <Trash2 className="w-3 h-3" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Move Up
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+                <ChevronDown className="w-4 h-4 mr-2" />
+                Move Down
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     );
@@ -140,7 +163,7 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
       <div className="group relative flex items-start gap-1">
         {isSelected && dragHandleProps && (
           <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
             {...dragHandleProps.attributes}
             {...dragHandleProps.listeners}
           >
@@ -149,8 +172,8 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
         )}
         <div className="flex-1">
           {isSelected && (
-            <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-2">
-              <span className="text-xs text-muted-foreground">Size:</span>
+            <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-3">
+              <span className="text-sm text-muted-foreground">Size:</span>
               <input
                 type="range"
                 min="10"
@@ -158,9 +181,9 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
                 step="5"
                 value={imageBlock.width}
                 onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
-                className="flex-1 h-1 accent-primary"
+                className="flex-1 h-2 accent-primary"
               />
-              <span className="text-xs text-muted-foreground w-8">{imageBlock.width}%</span>
+              <span className="text-sm text-muted-foreground w-10">{imageBlock.width}%</span>
             </div>
           )}
           <div 
@@ -175,9 +198,28 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
           </div>
         </div>
         {isSelected && (
-          <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
-            <Trash2 className="w-3 h-3" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Move Up
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+                <ChevronDown className="w-4 h-4 mr-2" />
+                Move Down
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     );
@@ -241,22 +283,22 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
     <div className="group relative flex items-start gap-1">
       {isSelected && dragHandleProps && (
         <div 
-          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1"
+          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
           {...dragHandleProps.attributes}
           {...dragHandleProps.listeners}
         >
           <GripVertical className="w-3 h-3" />
         </div>
       )}
-      <div className="flex-1 bg-muted/30 rounded p-2">
-        <div className="space-y-0.5">
+      <div className="flex-1 bg-muted/30 rounded p-3">
+        <div className="space-y-1">
           {bulletBlock.items.map((bullet, index) => (
             <div
               key={bullet.id}
-              className="flex items-start gap-1 group/bullet"
-              style={{ paddingLeft: `${bullet.indent * 14}px` }}
+              className="flex items-start gap-2 group/bullet"
+              style={{ paddingLeft: `${bullet.indent * 16}px` }}
             >
-              <span className="text-muted-foreground font-bold mt-0.5 select-none text-xs">•</span>
+              <span className="text-muted-foreground font-bold mt-1 select-none text-sm">•</span>
               <Textarea
                 ref={(el) => {
                   if (el) bulletRefs.current.set(bullet.id, el);
@@ -268,16 +310,16 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
                 onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
                 disabled={isRecycleBin}
                 placeholder={isSelected ? "..." : ""}
-                className="flex-1 min-h-0 py-0 px-0.5 border-none shadow-none focus-visible:ring-0 resize-none text-xs bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
+                className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
                 rows={1}
               />
               {isSelected && (
                 <button
-                  className="opacity-0 group-hover/bullet:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
+                  className="p-2 text-muted-foreground hover:text-destructive min-h-[36px] min-w-[36px] flex items-center justify-center"
                   onClick={() => removeBullet(bullet.id)}
                   disabled={isRecycleBin}
                 >
-                  <Trash2 className="w-2.5 h-2.5" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -285,18 +327,37 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, drag
         </div>
         {isSelected && (
           <button
-            className="text-xs text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
+            className="text-sm text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 py-2"
             onClick={() => addBullet(bulletBlock.items.length - 1, 0)}
             disabled={isRecycleBin}
           >
-            <Plus className="w-3 h-3" /> bullet
+            <Plus className="w-4 h-4" /> Add bullet
           </button>
         )}
       </div>
       {isSelected && (
-        <button onClick={onDelete} className="p-1 text-muted-foreground/40 hover:text-destructive mt-1">
-          <Trash2 className="w-3 h-3" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+              <ChevronUp className="w-4 h-4 mr-2" />
+              Move Up
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Move Down
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
@@ -309,9 +370,13 @@ interface SortableBlockProps {
   isSelected: boolean;
   onUpdate: (block: ContentBlock) => void;
   onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }
 
-function SortableBlock({ id, block, isRecycleBin, isSelected, onUpdate, onDelete }: SortableBlockProps) {
+function SortableBlock({ id, block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: SortableBlockProps) {
   const {
     attributes,
     listeners,
@@ -335,6 +400,10 @@ function SortableBlock({ id, block, isRecycleBin, isSelected, onUpdate, onDelete
         isSelected={isSelected}
         onUpdate={onUpdate}
         onDelete={onDelete}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        canMoveUp={canMoveUp}
+        canMoveDown={canMoveDown}
         dragHandleProps={{ attributes, listeners: listeners || {} }}
       />
     </div>
@@ -427,6 +496,16 @@ function InlineCard({
 
   const deleteBlock = (index: number) => {
     const newBlocks = blocks.filter((_, i) => i !== index);
+    setBlocks(newBlocks);
+    if (!isRecycleBin) {
+      onUpdateBlocks(newBlocks);
+    }
+  };
+
+  const moveBlock = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= blocks.length) return;
+    const newBlocks = arrayMove(blocks, index, newIndex);
     setBlocks(newBlocks);
     if (!isRecycleBin) {
       onUpdateBlocks(newBlocks);
@@ -538,7 +617,7 @@ function InlineCard({
                 onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
                 placeholder="Untitled"
                 disabled={isRecycleBin}
-                className="text-base font-semibold border-none shadow-none focus-visible:ring-0 p-0 resize-none min-h-0 overflow-hidden placeholder:text-muted-foreground/50 bg-transparent"
+                className="text-lg font-semibold border-none shadow-none focus-visible:ring-0 p-1 resize-none min-h-[44px] overflow-hidden placeholder:text-muted-foreground/50 bg-transparent"
                 rows={1}
               />
 
@@ -563,6 +642,10 @@ function InlineCard({
                             isSelected={isSelected}
                             onUpdate={(b) => updateBlock(index, b)}
                             onDelete={() => deleteBlock(index)}
+                            onMoveUp={() => moveBlock(index, 'up')}
+                            onMoveDown={() => moveBlock(index, 'down')}
+                            canMoveUp={index > 0}
+                            canMoveDown={index < blocks.length - 1}
                           />
                         ))}
                       </div>
@@ -578,6 +661,10 @@ function InlineCard({
                         isSelected={isSelected}
                         onUpdate={(b) => updateBlock(index, b)}
                         onDelete={() => deleteBlock(index)}
+                        onMoveUp={() => moveBlock(index, 'up')}
+                        onMoveDown={() => moveBlock(index, 'down')}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < blocks.length - 1}
                       />
                     ))}
                   </div>
