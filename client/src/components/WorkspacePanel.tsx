@@ -16,13 +16,6 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuSeparator,
-} from '@/components/ui/context-menu';
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -587,75 +580,54 @@ function InlineCard({
   };
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          ref={cardRef}
-          data-testid={`card-item-${card.id}`}
-          onClick={onSelect}
-          className={cn(
-            "border rounded-lg bg-card p-4 transition-colors relative",
-            isSelected ? "ring-2 ring-primary/40 border-primary/40" : "hover:border-primary/30"
-          )}
+    <div
+      ref={cardRef}
+      data-testid={`card-item-${card.id}`}
+      onClick={onSelect}
+      className={cn(
+        "border rounded-lg bg-card p-4 transition-colors relative",
+        isSelected ? "ring-2 ring-primary/40 border-primary/40" : "hover:border-primary/30"
+      )}
+    >
+      {!isRecycleBin && isSelected && dragHandleProps && (
+        <div 
+          className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 text-muted-foreground/50 hover:text-muted-foreground"
+          {...dragHandleProps.attributes}
+          {...dragHandleProps.listeners}
         >
-          {!isRecycleBin && isSelected && dragHandleProps && (
-            <div 
-              className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 text-muted-foreground/50 hover:text-muted-foreground"
-              {...dragHandleProps.attributes}
-              {...dragHandleProps.listeners}
-            >
-              <GripVertical className="w-4 h-4" />
-            </div>
-          )}
-          <div className="flex items-start gap-2">
-            <div className="flex-1 min-w-0 space-y-2 pr-6">
-              <Textarea
-                ref={titleRef}
-                data-testid={`card-title-${card.id}`}
-                value={title}
-                onChange={handleTitleChange}
-                onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
-                placeholder="Untitled"
-                disabled={isRecycleBin}
-                className="text-lg font-semibold border-none shadow-none focus-visible:ring-0 p-1 resize-none min-h-[44px] overflow-hidden placeholder:text-muted-foreground/50 bg-transparent"
-                rows={1}
-              />
+          <GripVertical className="w-4 h-4" />
+        </div>
+      )}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0 space-y-2 pr-6">
+          <Textarea
+            ref={titleRef}
+            data-testid={`card-title-${card.id}`}
+            value={title}
+            onChange={handleTitleChange}
+            onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
+            placeholder="Untitled"
+            disabled={isRecycleBin}
+            className="text-lg font-semibold border-none shadow-none focus-visible:ring-0 p-1 resize-none min-h-[44px] overflow-hidden placeholder:text-muted-foreground/50 bg-transparent"
+            rows={1}
+          />
 
-              {blocks.length > 0 ? (
-                isSelected && !isRecycleBin ? (
-                  <DndContext
-                    sensors={blockSensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleBlockDragEnd}
-                  >
-                    <SortableContext
-                      items={blocks.map(b => b.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="space-y-2">
-                        {blocks.map((block, index) => (
-                          <SortableBlock
-                            key={block.id}
-                            id={block.id}
-                            block={block}
-                            isRecycleBin={isRecycleBin}
-                            isSelected={isSelected}
-                            onUpdate={(b) => updateBlock(index, b)}
-                            onDelete={() => deleteBlock(index)}
-                            onMoveUp={() => moveBlock(index, 'up')}
-                            onMoveDown={() => moveBlock(index, 'down')}
-                            canMoveUp={index > 0}
-                            canMoveDown={index < blocks.length - 1}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
+          {blocks.length > 0 ? (
+            isSelected && !isRecycleBin ? (
+              <DndContext
+                sensors={blockSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleBlockDragEnd}
+              >
+                <SortableContext
+                  items={blocks.map(b => b.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div className="space-y-2">
                     {blocks.map((block, index) => (
-                      <BlockEditor
+                      <SortableBlock
                         key={block.id}
+                        id={block.id}
                         block={block}
                         isRecycleBin={isRecycleBin}
                         isSelected={isSelected}
@@ -668,125 +640,110 @@ function InlineCard({
                       />
                     ))}
                   </div>
-                )
-              ) : (
-                isSelected ? null : <p className="text-xs text-muted-foreground/60 italic">Empty note</p>
-              )}
-
-              {!isRecycleBin && isSelected && (
-                <div className="flex items-center gap-2 pt-2 flex-wrap">
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                    onClick={(e) => { e.stopPropagation(); addTextBlock(); }}
-                  >
-                    <Type className="w-3 h-3" /> Add text
-                  </button>
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                    onClick={(e) => { e.stopPropagation(); addBulletBlock(); }}
-                  >
-                    <List className="w-3 h-3" /> Add bullets
-                  </button>
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                    onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
-                  >
-                    <Image className="w-3 h-3" /> Add image
-                  </button>
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <div className="space-y-2">
+                {blocks.map((block, index) => (
+                  <BlockEditor
+                    key={block.id}
+                    block={block}
+                    isRecycleBin={isRecycleBin}
+                    isSelected={isSelected}
+                    onUpdate={(b) => updateBlock(index, b)}
+                    onDelete={() => deleteBlock(index)}
+                    onMoveUp={() => moveBlock(index, 'up')}
+                    onMoveDown={() => moveBlock(index, 'down')}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < blocks.length - 1}
                   />
-                </div>
-              )}
+                ))}
+              </div>
+            )
+          ) : (
+            isSelected ? null : <p className="text-xs text-muted-foreground/60 italic">Empty note</p>
+          )}
 
-              <p className="text-xs text-muted-foreground/50 pt-1">
-                {formatDistanceToNow(card.updatedAt, { addSuffix: true })}
-              </p>
+          {!isRecycleBin && isSelected && (
+            <div className="flex items-center gap-2 pt-2 flex-wrap">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                onClick={(e) => { e.stopPropagation(); addTextBlock(); }}
+              >
+                <Type className="w-3 h-3" /> Add text
+              </button>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                onClick={(e) => { e.stopPropagation(); addBulletBlock(); }}
+              >
+                <List className="w-3 h-3" /> Add bullets
+              </button>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+              >
+                <Image className="w-3 h-3" /> Add image
+              </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
             </div>
+          )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  data-testid={`card-menu-${card.id}`}
-                  className="p-1 text-muted-foreground hover:text-foreground shrink-0 absolute top-3 right-3"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {isRecycleBin ? (
-                  <>
-                    <DropdownMenuItem onClick={() => onRestoreCard(card.id)}>
-                      Restore to...
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => onPermanentlyDeleteCard(card.id)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-2" />
-                      Delete Permanently
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
-                      <FolderInput className="w-3.5 h-3.5 mr-2" />
-                      Move to...
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => onDeleteCard(card.id)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <p className="text-xs text-muted-foreground/50 pt-1">
+            {formatDistanceToNow(card.updatedAt, { addSuffix: true })}
+          </p>
         </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
-        {isRecycleBin ? (
-          <>
-            <ContextMenuItem onClick={() => onRestoreCard(card.id)}>
-              Restore to...
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem 
-              onClick={() => onPermanentlyDeleteCard(card.id)}
-              className="text-destructive focus:text-destructive"
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              data-testid={`card-menu-${card.id}`}
+              className="p-1 text-muted-foreground hover:text-foreground shrink-0 absolute top-3 right-3"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Trash2 className="w-3.5 h-3.5 mr-2" />
-              Delete Permanently
-            </ContextMenuItem>
-          </>
-        ) : (
-          <>
-            <ContextMenuItem onClick={() => onMoveCard(card.id)}>
-              <FolderInput className="w-3.5 h-3.5 mr-2" />
-              Move to...
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem 
-              onClick={() => onDeleteCard(card.id)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-2" />
-              Delete
-            </ContextMenuItem>
-          </>
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {isRecycleBin ? (
+              <>
+                <DropdownMenuItem onClick={() => onRestoreCard(card.id)}>
+                  Restore to...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => onPermanentlyDeleteCard(card.id)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                  Delete Permanently
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
+                  <FolderInput className="w-3.5 h-3.5 mr-2" />
+                  Move to...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => onDeleteCard(card.id)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   );
 }
 
