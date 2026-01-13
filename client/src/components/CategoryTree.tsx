@@ -4,13 +4,6 @@ import { cn } from '@/lib/utils';
 import type { Category, Card } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuSeparator,
-} from '@/components/ui/context-menu';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -171,88 +164,66 @@ function CardItem({
   };
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          data-testid={`tree-card-${card.id}`}
-          draggable={!isEditing}
-          onDragStart={handleDragStart}
-          onDragEnd={onCardDragEnd}
-          className={cn(
-            "flex items-center gap-1.5 py-1 px-2 rounded-md cursor-pointer transition-colors group",
-            isSelected
-              ? "bg-primary/10 text-primary"
-              : "hover:bg-accent text-muted-foreground hover:text-foreground",
-            isDragging && "opacity-50"
-          )}
-          style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
-          onClick={() => onSelectCard(card.id, categoryId)}
-        >
-          <FileText className="w-3.5 h-3.5 shrink-0" />
-          {isEditing ? (
-            <Input
-              ref={inputRef}
-              value={editingCardTitle}
-              onChange={(e) => onEditingCardTitleChange(e.target.value)}
-              onBlur={onFinishEditingCard}
-              onKeyDown={handleKeyDown}
-              className="h-5 py-0 px-1 text-xs flex-1"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="text-xs truncate flex-1">{card.title || 'Untitled'}</span>
-          )}
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                data-testid={`card-tree-menu-${card.id}`}
-                className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontal className="w-3 h-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => onRenameCard(card.id)}>
-                <Pencil className="w-3.5 h-3.5 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
-                <FolderInput className="w-3.5 h-3.5 mr-2" />
-                Move to...
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => onDeleteCard(card.id)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
-        <ContextMenuItem onClick={() => onRenameCard(card.id)}>
-          <Pencil className="w-3.5 h-3.5 mr-2" />
-          Rename
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onMoveCard(card.id)}>
-          <FolderInput className="w-3.5 h-3.5 mr-2" />
-          Move to...
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem 
-          onClick={() => onDeleteCard(card.id)}
-          className="text-destructive focus:text-destructive"
-        >
-          <Trash2 className="w-3.5 h-3.5 mr-2" />
-          Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <div
+      data-testid={`tree-card-${card.id}`}
+      draggable={!isEditing}
+      onDragStart={handleDragStart}
+      onDragEnd={onCardDragEnd}
+      className={cn(
+        "flex items-center gap-1.5 py-1 px-2 rounded-md cursor-pointer transition-colors group",
+        isSelected
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-accent text-muted-foreground hover:text-foreground",
+        isDragging && "opacity-50"
+      )}
+      style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}
+      onClick={() => onSelectCard(card.id, categoryId)}
+    >
+      <FileText className="w-3.5 h-3.5 shrink-0" />
+      {isEditing ? (
+        <Input
+          ref={inputRef}
+          value={editingCardTitle}
+          onChange={(e) => onEditingCardTitleChange(e.target.value)}
+          onBlur={onFinishEditingCard}
+          onKeyDown={handleKeyDown}
+          className="h-5 py-0 px-1 text-xs flex-1"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="text-xs truncate flex-1">{card.title || 'Untitled'}</span>
+      )}
+      
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            data-testid={`card-tree-menu-${card.id}`}
+            className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="w-3 h-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem onClick={() => onRenameCard(card.id)}>
+            <Pencil className="w-3.5 h-3.5 mr-2" />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
+            <FolderInput className="w-3.5 h-3.5 mr-2" />
+            Move to...
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem 
+            onClick={() => onDeleteCard(card.id)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -359,137 +330,102 @@ function CategoryItem({
 
   return (
     <div>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div
-            data-testid={`category-item-${category.id}`}
-            draggable={!isEditing}
-            onDragStart={handleDragStart}
-            onDragEnd={onCategoryDragEnd}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={cn(
-              "flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
-              isSelected 
-                ? "bg-primary/10 text-primary" 
-                : "hover:bg-accent text-foreground",
-              isDragging && "opacity-50",
-              isDragOver && "bg-primary/20 ring-2 ring-primary/50"
-            )}
-            style={{ paddingLeft: `${depth * 12 + 8}px` }}
-            onClick={() => onSelectCategory(category.id)}
-          >
-            <button
-              data-testid={`toggle-expand-${category.id}`}
-              className={cn(
-                "w-4 h-4 flex items-center justify-center rounded hover:bg-accent-foreground/10",
-                !hasContent && "invisible"
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand(category.id);
-              }}
-            >
-              {hasContent && (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
-            </button>
-            
-            {isExpanded ? (
-              <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
-            ) : (
-              <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
-            )}
-            
-            {isEditing ? (
-              <Input
-                ref={inputRef}
-                value={editingCategoryName}
-                onChange={(e) => onEditingCategoryNameChange(e.target.value)}
-                onBlur={onFinishEditingCategory}
-                onKeyDown={handleKeyDown}
-                className="h-5 py-0 px-1 text-xs"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="text-xs font-medium truncate flex-1">{category.name}</span>
-            )}
+      <div
+        data-testid={`category-item-${category.id}`}
+        draggable={!isEditing}
+        onDragStart={handleDragStart}
+        onDragEnd={onCategoryDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
+          isSelected 
+            ? "bg-primary/10 text-primary" 
+            : "hover:bg-accent text-foreground",
+          isDragging && "opacity-50",
+          isDragOver && "bg-primary/20 ring-2 ring-primary/50"
+        )}
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        onClick={() => onSelectCategory(category.id)}
+      >
+        <button
+          data-testid={`toggle-expand-${category.id}`}
+          className={cn(
+            "w-4 h-4 flex items-center justify-center rounded hover:bg-accent-foreground/10",
+            !hasContent && "invisible"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand(category.id);
+          }}
+        >
+          {hasContent && (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
+        </button>
+        
+        {isExpanded ? (
+          <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : (
+          <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+        )}
+        
+        {isEditing ? (
+          <Input
+            ref={inputRef}
+            value={editingCategoryName}
+            onChange={(e) => onEditingCategoryNameChange(e.target.value)}
+            onBlur={onFinishEditingCategory}
+            onKeyDown={handleKeyDown}
+            className="h-5 py-0 px-1 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="text-xs font-medium truncate flex-1">{category.name}</span>
+        )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  data-testid={`category-menu-${category.id}`}
-                  className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="w-3 h-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {hasContent && (
-                  <>
-                    <DropdownMenuItem onClick={() => onExpandAll(category.id)}>
-                      <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
-                      Expand All
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onCollapseAll(category.id)}>
-                      <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
-                      Collapse All
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={() => onRenameCategory(category.id)}>
-                  <Pencil className="w-3.5 h-3.5 mr-2" />
-                  Rename
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              data-testid={`category-menu-${category.id}`}
+              className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="w-3 h-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {hasContent && (
+              <>
+                <DropdownMenuItem onClick={() => onExpandAll(category.id)}>
+                  <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
+                  Expand All
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onMoveCategory(category.id)}>
-                  <FolderInput className="w-3.5 h-3.5 mr-2" />
-                  Move to...
+                <DropdownMenuItem onClick={() => onCollapseAll(category.id)}>
+                  <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
+                  Collapse All
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={() => onDeleteCategory(category.id)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-44">
-          {hasContent && (
-            <>
-              <ContextMenuItem onClick={() => onExpandAll(category.id)}>
-                <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
-                Expand All
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => onCollapseAll(category.id)}>
-                <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
-                Collapse All
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-            </>
-          )}
-          <ContextMenuItem onClick={() => onRenameCategory(category.id)}>
-            <Pencil className="w-3.5 h-3.5 mr-2" />
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => onMoveCategory(category.id)}>
-            <FolderInput className="w-3.5 h-3.5 mr-2" />
-            Move to...
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem 
-            onClick={() => onDeleteCategory(category.id)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-2" />
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+              </>
+            )}
+            <DropdownMenuItem onClick={() => onRenameCategory(category.id)}>
+              <Pencil className="w-3.5 h-3.5 mr-2" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onMoveCategory(category.id)}>
+              <FolderInput className="w-3.5 h-3.5 mr-2" />
+              Move to...
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => onDeleteCategory(category.id)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {isExpanded && (
         <div>
