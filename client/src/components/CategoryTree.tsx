@@ -806,17 +806,17 @@ export function CategoryTree({
           <button
             data-testid="export-button"
             onClick={onExport}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent transition-colors min-h-[44px]"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
             Export
           </button>
           <button
             data-testid="import-button"
             onClick={() => importInputRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent transition-colors min-h-[44px]"
           >
-            <Upload className="w-3.5 h-3.5" />
+            <Upload className="w-4 h-4" />
             Import
           </button>
           <input
