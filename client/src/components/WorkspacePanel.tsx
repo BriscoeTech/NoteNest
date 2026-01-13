@@ -971,7 +971,7 @@ export function WorkspacePanel({
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="p-4 border-b border-border space-y-3">
+      <div className="p-4 pl-12 border-b border-border space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-foreground truncate">{categoryName}</h2>
           {isValidCategory && (
