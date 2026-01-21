@@ -157,7 +157,7 @@ function TreeItem({
       >
         <button
           className={cn(
-            "w-4 h-4 flex items-center justify-center rounded hover:bg-accent-foreground/10",
+            "w-4 h-4 flex items-center justify-center rounded hover:bg-accent-foreground/10 z-20 shrink-0",
             !hasChildren && "invisible"
           )}
           onClick={(e) => {
@@ -165,7 +165,7 @@ function TreeItem({
             onToggleExpand(card.id);
           }}
         >
-          {hasChildren && (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
+          {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
 
         {checkboxBlock && (
