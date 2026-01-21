@@ -92,6 +92,8 @@ export default function NotesApp() {
             deletedCount={deletedCount}
             onExport={store.exportData}
             onImport={store.importData}
+            onSearch={setSearchQuery}
+            searchQuery={searchQuery}
           />
         </aside>
       )}
