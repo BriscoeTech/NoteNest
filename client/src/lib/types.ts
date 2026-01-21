@@ -23,7 +23,13 @@ export interface ImageBlock {
   width: number; // percentage 10-100
 }
 
-export type ContentBlock = TextBlock | BulletBlock | ImageBlock;
+export interface CheckboxBlock {
+  id: string;
+  type: 'checkbox';
+  checked: boolean;
+}
+
+export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock;
 
 export interface Card {
   id: string;
