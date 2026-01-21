@@ -550,10 +550,9 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
       const newBlocks = card.blocks.filter(b => b.type !== 'checkbox');
       onUpdateBlocks(newBlocks);
     } else {
-      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'image' && b.type !== 'link');
       // @ts-ignore
       const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
+      onUpdateBlocks([...card.blocks, newBlock]);
     }
   };
 
@@ -562,10 +561,9 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
       const newBlocks = card.blocks.filter(b => b.type !== 'link');
       onUpdateBlocks(newBlocks);
     } else {
-      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'image' && b.type !== 'checkbox');
       // @ts-ignore
       const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
+      onUpdateBlocks([...card.blocks, newBlock]);
     }
   };
 
@@ -578,10 +576,16 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image' && b.type !== 'link');
       // @ts-ignore
       const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
+      // Replace existing image if there is one (we usually only want one image per card), or add?
+      // User said "any combination". But usually multiple images per card is fine.
+      // But for this "grid card" view, we probably just want to append or maybe replace if one exists?
+      // Let's assume append for now to be safe, but typically these cards have 1 main image.
+      // If we want to replace existing image, filter it out.
+      // Let's filter out existing image to keep it clean (1 image per card max usually for cover)
+      const blocksWithoutImage = card.blocks.filter(b => b.type !== 'image');
+      onUpdateBlocks([...blocksWithoutImage, newBlock]);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -832,11 +836,10 @@ export function WorkspacePanel({
       const newBlocks = currentCard.blocks.filter(b => b.type !== 'checkbox');
       onUpdateCardBlocks(currentCard.id, newBlocks);
     } else {
-      // Add checkbox and remove image (mutual exclusivity)
-      const blocksWithoutImage = currentCard.blocks.filter(b => b.type !== 'image');
+      // Add checkbox (no mutual exclusivity)
       // @ts-ignore
       const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateCardBlocks(currentCard.id, [...blocksWithoutImage, newBlock]);
+      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
     }
   };
 
@@ -849,12 +852,13 @@ export function WorkspacePanel({
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       
-      // Remove checkbox and existing image (mutual exclusivity and replace)
-      const blocksWithoutConflicting = currentCard.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image');
+      // Replace existing image if strictly one per card desired, or append?
+      // Let's replace existing image to keep it cleaner, but NOT remove other types.
+      const blocksWithoutImage = currentCard.blocks.filter(b => b.type !== 'image');
       
       // @ts-ignore
       const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-      onUpdateCardBlocks(currentCard.id, [...blocksWithoutConflicting, newBlock]);
+      onUpdateCardBlocks(currentCard.id, [...blocksWithoutImage, newBlock]);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -870,10 +874,10 @@ export function WorkspacePanel({
       const newBlocks = currentCard.blocks.filter(b => b.type !== 'link');
       onUpdateCardBlocks(currentCard.id, newBlocks);
     } else {
-       const blocksWithoutConflicting = currentCard.blocks.filter(b => b.type !== 'image' && b.type !== 'checkbox');
+      // Add link (no mutual exclusivity)
       // @ts-ignore
       const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(currentCard.id, [...blocksWithoutConflicting, newBlock]);
+      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
     }
   };
 
