@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeft } from 'lucide-react';
 import type { Card } from '@/lib/types';
 
+import { RECYCLE_BIN_ID } from '@/lib/types';
+
 export default function NotesApp() {
   const store = useNotesStore();
   const [currentCardId, setCurrentCardId] = useState<string | null>(null); // The scope we are in
@@ -13,13 +15,25 @@ export default function NotesApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const isRecycleBin = selectedCardId === RECYCLE_BIN_ID;
+
   // Derived state
   const currentCard = useMemo(() => {
+     if (isRecycleBin) return null;
      return store.getCard(currentCardId);
-  }, [currentCardId, store.cards]); // store.cards dependency ensures update on change
+  }, [currentCardId, store.cards, isRecycleBin]); // store.cards dependency ensures update on change
 
   // Get children of current card (or root)
   const childrenCards = useMemo(() => {
+    if (isRecycleBin) {
+      const deleted = store.getDeletedCards();
+      if (searchQuery) {
+        const lower = searchQuery.toLowerCase();
+        return deleted.filter(c => c.title.toLowerCase().includes(lower));
+      }
+      return deleted;
+    }
+
     if (searchQuery) {
       return store.searchCards(searchQuery, currentCardId);
     }
@@ -33,7 +47,7 @@ export default function NotesApp() {
       const card = store.getCard(currentCardId);
       return card ? card.children.filter((c: Card) => !c.isDeleted) : [];
     }
-  }, [currentCardId, searchQuery, store.cards]);
+  }, [currentCardId, searchQuery, store.cards, isRecycleBin]);
 
   const handleNavigateCard = useCallback((id: string | null) => {
     setCurrentCardId(id);
@@ -43,7 +57,11 @@ export default function NotesApp() {
 
   const handleSelectCardInTree = useCallback((id: string) => {
     setSelectedCardId(id);
-    setCurrentCardId(id); // Also navigate to it? Yes, user said "clicking them will change the scope"
+    if (id === RECYCLE_BIN_ID) {
+      setCurrentCardId(null); // Recycle bin is a special root view
+    } else {
+      setCurrentCardId(id); // Also navigate to it? Yes, user said "clicking them will change the scope"
+    }
     setSearchQuery('');
   }, []);
 
@@ -57,6 +75,8 @@ export default function NotesApp() {
     store.updateCard(id, { title });
   }, [store.updateCard]);
 
+  const deletedCount = store.getDeletedCards().length;
+
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -68,6 +88,9 @@ export default function NotesApp() {
             onRenameCard={handleRenameCard}
             onMoveCard={store.moveCard}
             onDeleteCard={store.deleteCard}
+            deletedCount={deletedCount}
+            onExport={store.exportData}
+            onImport={store.importData}
           />
         </aside>
       )}
@@ -87,10 +110,11 @@ export default function NotesApp() {
           currentCard={currentCard || null}
           childrenCards={childrenCards}
           allCards={store.cards}
-          isRecycleBin={false} // TODO: Implement recycle bin view
+          isRecycleBin={isRecycleBin}
           onNavigateCard={handleNavigateCard}
           onAddCard={handleAddCard}
           onUpdateCard={store.updateCard}
+
           onUpdateCardBlocks={store.updateCardBlocks}
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}

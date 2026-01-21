@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card } from '@/lib/types';
+import { RECYCLE_BIN_ID } from '@/lib/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,9 @@ interface CardTreeProps {
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
   onDeleteCard: (id: string) => void;
+  deletedCount: number;
+  onExport: () => void;
+  onImport: (data: any, mode: 'merge' | 'override') => void;
 }
 
 interface TreeItemProps {
@@ -242,12 +246,18 @@ export function CategoryTree({
   onRenameCard,
   onMoveCard,
   onDeleteCard,
+  deletedCount,
+  onExport,
+  onImport
 }: CardTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<any>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -298,6 +308,24 @@ export function CategoryTree({
     setCardToMove(null);
   };
 
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        setPendingImportData(data);
+        setImportDialogOpen(true);
+      } catch (error) {
+        alert('Invalid file format. Please select a valid backup file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 pl-10 border-b border-border">
@@ -330,6 +358,48 @@ export function CategoryTree({
               onDrop={handleDrop}
             />
         ))}
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <div
+            className={cn(
+              "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground",
+              selectedCardId === RECYCLE_BIN_ID && "bg-primary/10 text-primary"
+            )}
+            onClick={() => onSelectCard(RECYCLE_BIN_ID)}
+          >
+            <Trash2 className="w-4 h-4 ml-6" />
+            <span className="text-sm font-medium">Recycle Bin</span>
+            {deletedCount > 0 && (
+              <span className="ml-auto text-xs bg-muted-foreground/20 px-1.5 rounded-full">
+                {deletedCount}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <button
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+            onClick={onExport}
+          >
+            <Download className="w-3.5 h-3.5" /> Export
+          </button>
+          <button
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="w-3.5 h-3.5" /> Import
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
+        </div>
       </div>
 
       {/* Reusing CategoryPickerDialog but mapped to Cards */}
@@ -341,6 +411,46 @@ export function CategoryTree({
         title="Move to..."
         showRoot={true}
       />
+
+      {/* Import Dialog */}
+      {importDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-lg shadow-lg max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold mb-2">Import Data</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              How would you like to import this data?
+            </p>
+            <div className="space-y-3">
+              <button
+                className="w-full flex items-center justify-between p-3 rounded-md border border-border hover:bg-accent transition-colors"
+                onClick={() => { onImport(pendingImportData, 'merge'); setImportDialogOpen(false); }}
+              >
+                <div className="text-left">
+                  <div className="font-medium">Merge</div>
+                  <div className="text-xs text-muted-foreground">Keep existing cards and add new ones</div>
+                </div>
+                <ArrowUp className="w-4 h-4" />
+              </button>
+              <button
+                className="w-full flex items-center justify-between p-3 rounded-md border border-border hover:bg-accent hover:text-destructive transition-colors"
+                onClick={() => { onImport(pendingImportData, 'override'); setImportDialogOpen(false); }}
+              >
+                <div className="text-left">
+                  <div className="font-medium">Override</div>
+                  <div className="text-xs text-muted-foreground">Replace all current cards</div>
+                </div>
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <button
+                className="w-full p-2 text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => { setImportDialogOpen(false); setPendingImportData(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
