@@ -459,11 +459,20 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     }
   };
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [card.title]);
+
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
         className={cn(
-          "flex items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors h-24",
+          "flex items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
           checkboxBlock ? "justify-start pl-4" : "justify-center"
         )}
         {...attributes}
@@ -479,17 +488,25 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
             onClick={(e) => e.stopPropagation()}
           />
         )}
-        <Input
+        <Textarea
+          ref={textareaRef}
           value={card.title}
           onChange={(e) => onRename(e.target.value)}
           placeholder="Untitled"
           className={cn(
-            "text-sm font-medium truncate w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent h-auto p-0 cursor-text",
+            "text-sm font-medium w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent p-0 cursor-text resize-none overflow-hidden min-h-[20px]",
             checkboxBlock ? "text-left" : "text-center",
             checkboxBlock?.checked && "line-through text-muted-foreground"
           )}
+          rows={1}
+          onInput={(e) => {
+            const target = e.target as HTMLTextAreaElement;
+            target.style.height = 'auto';
+            target.style.height = target.scrollHeight + 'px';
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
+              e.preventDefault(); // Prevent new line
               e.currentTarget.blur();
             }
             e.stopPropagation(); // Prevent dnd interference
@@ -609,27 +626,47 @@ export function WorkspacePanel({
   };
 
   // Block Actions
-  const addCheckboxBlock = () => {
+  const toggleCheckboxBlock = () => {
     if (!currentCard) return;
-    // @ts-ignore
-    const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-    onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
+    
+    // Check if checkbox exists
+    const hasCheckbox = currentCard.blocks.some(b => b.type === 'checkbox');
+    
+    if (hasCheckbox) {
+      // Remove checkbox
+      const newBlocks = currentCard.blocks.filter(b => b.type !== 'checkbox');
+      onUpdateCardBlocks(currentCard.id, newBlocks);
+    } else {
+      // Add checkbox and remove image (mutual exclusivity)
+      const blocksWithoutImage = currentCard.blocks.filter(b => b.type !== 'image');
+      // @ts-ignore
+      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+      onUpdateCardBlocks(currentCard.id, [...blocksWithoutImage, newBlock]);
+    }
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentCard) return;
     const file = e.target.files?.[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
+      
+      // Remove checkbox and existing image (mutual exclusivity and replace)
+      const blocksWithoutConflicting = currentCard.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image');
+      
       // @ts-ignore
       const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
+      onUpdateCardBlocks(currentCard.id, [...blocksWithoutConflicting, newBlock]);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+  
+  const hasCheckbox = currentCard?.blocks.some(b => b.type === 'checkbox');
+  const hasImage = currentCard?.blocks.some(b => b.type === 'image');
 
   const updateBlock = (index: number, block: ContentBlock) => {
     if (!currentCard) return;
@@ -733,16 +770,35 @@ export function WorkspacePanel({
             {/* Add Block Buttons */}
              <div className="flex items-center gap-2 pt-4 flex-wrap">
                 <button
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                  onClick={addCheckboxBlock}
+                  className={cn(
+                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
+                    hasCheckbox 
+                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20" 
+                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
+                  )}
+                  onClick={toggleCheckboxBlock}
                 >
-                  <CheckSquare className="w-3 h-3" /> Add checkbox
+                  <CheckSquare className="w-3 h-3" /> {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
                 </button>
                 <button
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                  onClick={() => imageInputRef.current?.click()}
+                  className={cn(
+                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
+                    hasImage
+                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20"
+                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
+                  )}
+                  onClick={() => {
+                     // If it has image, maybe we want to remove it? Or just allow adding new one to replace?
+                     // Let's assume clicking active button removes it (toggle off)
+                     if (hasImage) {
+                        const newBlocks = currentCard?.blocks.filter(b => b.type !== 'image') || [];
+                        if (currentCard) onUpdateCardBlocks(currentCard.id, newBlocks);
+                     } else {
+                        imageInputRef.current?.click();
+                     }
+                  }}
                 >
-                  <Image className="w-3 h-3" /> Add image
+                  <Image className="w-3 h-3" /> {hasImage ? "Remove image" : "Add image"}
                 </button>
                 <input
                   ref={imageInputRef}
