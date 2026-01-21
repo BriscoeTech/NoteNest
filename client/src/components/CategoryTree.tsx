@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
@@ -17,7 +17,7 @@ import { getDescendantIds, findCardById } from '@/lib/types';
 interface CardTreeProps {
   cards: Card[];
   selectedCardId: string | null;
-  onSelectCard: (id: string) => void;
+  onSelectCard: (id: string | null) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
   onDeleteCard: (id: string) => void;
@@ -338,6 +338,17 @@ export function CategoryTree({
         onDragLeave={() => setRootDragOver(false)}
         onDrop={handleRootDrop}
       >
+        <div
+          className={cn(
+            "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground mb-1",
+            selectedCardId === null && "bg-primary/10 text-primary"
+          )}
+          onClick={() => onSelectCard(null)}
+        >
+          <Home className="w-4 h-4 ml-6" />
+          <span className="text-sm font-medium">Home</span>
+        </div>
+
         {cards
           .filter(c => !c.isDeleted)
           .map(card => (

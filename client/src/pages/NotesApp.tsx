@@ -55,7 +55,7 @@ export default function NotesApp() {
     setSearchQuery('');
   }, []);
 
-  const handleSelectCardInTree = useCallback((id: string) => {
+  const handleSelectCardInTree = useCallback((id: string | null) => {
     setSelectedCardId(id);
     if (id === RECYCLE_BIN_ID) {
       setCurrentCardId(null); // Recycle bin is a special root view
