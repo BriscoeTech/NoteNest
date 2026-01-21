@@ -29,7 +29,13 @@ export interface CheckboxBlock {
   checked: boolean;
 }
 
-export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock;
+export interface LinkBlock {
+  id: string;
+  type: 'link';
+  url: string;
+}
+
+export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock;
 
 export interface Card {
   id: string;

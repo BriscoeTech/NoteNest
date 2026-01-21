@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock } from '@/lib/types';
+import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -258,6 +258,80 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
     );
   }
 
+  if (block.type === 'link') {
+    const linkBlock = block as LinkBlock;
+    return (
+      <div className="group relative flex items-center gap-1">
+        {isSelected && dragHandleProps && (
+          <div 
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground hidden md:block"
+            {...dragHandleProps.attributes}
+            {...dragHandleProps.listeners}
+          >
+            <GripVertical className="w-3 h-3" />
+          </div>
+        )}
+        <div className="flex-1 flex items-center gap-3 bg-muted/30 rounded p-3">
+          <div className="flex items-center gap-2 flex-1 overflow-hidden">
+             <LinkIcon className="w-4 h-4 text-primary shrink-0" />
+             {linkBlock.url ? (
+               <a 
+                 href={linkBlock.url} 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 className="text-primary hover:underline truncate flex-1 block"
+               >
+                 {linkBlock.url}
+               </a>
+             ) : (
+               <Input
+                 value={linkBlock.url}
+                 onChange={(e) => onUpdate({ ...linkBlock, url: e.target.value })}
+                 placeholder="Paste URL here..."
+                 className="h-8 bg-background"
+                 autoFocus
+               />
+             )}
+          </div>
+          {linkBlock.url && (
+             <Button 
+               variant="ghost" 
+               size="sm" 
+               className="h-6 w-6 p-0"
+               onClick={() => onUpdate({ ...linkBlock, url: '' })}
+             >
+               <Pencil className="w-3 h-3" />
+             </Button>
+          )}
+        </div>
+        {isSelected && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 text-muted-foreground/60 hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Move Up
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+                <ChevronDown className="w-4 h-4 mr-2" />
+                Move Down
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    );
+  }
+
   const bulletBlock = block as BulletBlock;
 
   const updateBullet = (id: string, content: string) => {
@@ -451,6 +525,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
   };
 
   const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
+  const linkBlock = card.blocks.find(b => b.type === 'link') as LinkBlock | undefined;
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -459,18 +534,38 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     }
   };
 
+  const handleLinkUpdate = (url: string) => {
+    if (linkBlock) {
+      const newBlocks = card.blocks.map(b => b.id === linkBlock.id ? { ...b, url } : b);
+      onUpdateBlocks(newBlocks);
+    }
+  };
+
   const hasCheckbox = card.blocks.some(b => b.type === 'checkbox');
   const hasImage = card.blocks.some(b => b.type === 'image');
+  const hasLink = card.blocks.some(b => b.type === 'link');
 
   const toggleCheckbox = () => {
     if (hasCheckbox) {
       const newBlocks = card.blocks.filter(b => b.type !== 'checkbox');
       onUpdateBlocks(newBlocks);
     } else {
-      const blocksWithoutImage = card.blocks.filter(b => b.type !== 'image');
+      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'image' && b.type !== 'link');
       // @ts-ignore
       const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateBlocks([...blocksWithoutImage, newBlock]);
+      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
+    }
+  };
+
+  const toggleLink = () => {
+    if (hasLink) {
+      const newBlocks = card.blocks.filter(b => b.type !== 'link');
+      onUpdateBlocks(newBlocks);
+    } else {
+      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'image' && b.type !== 'checkbox');
+      // @ts-ignore
+      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
     }
   };
 
@@ -483,7 +578,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image');
+      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image' && b.type !== 'link');
       // @ts-ignore
       const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
       onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
@@ -526,6 +621,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
             onClick={(e) => e.stopPropagation()}
           />
         )}
+        <div className="flex-1 w-full flex flex-col items-center">
         <Textarea
           ref={textareaRef}
           value={card.title}
@@ -552,6 +648,38 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           onPointerDown={(e) => e.stopPropagation()} // Prevent drag start on input
           onClick={(e) => e.stopPropagation()} // Prevent click propagation
         />
+        {linkBlock && (
+          <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+             {linkBlock.url ? (
+               <div className={cn("flex items-center gap-1", checkboxBlock ? "justify-start" : "justify-center")}>
+                 <LinkIcon className="w-3 h-3 text-primary shrink-0" />
+                 <a 
+                   href={linkBlock.url.startsWith('http') ? linkBlock.url : `https://${linkBlock.url}`}
+                   target="_blank" 
+                   rel="noopener noreferrer" 
+                   className="text-xs text-primary hover:underline truncate block max-w-full"
+                 >
+                   Link
+                 </a>
+               </div>
+             ) : (
+                <Input
+                  value={linkBlock.url}
+                  onChange={(e) => handleLinkUpdate(e.target.value)}
+                  placeholder="Paste URL..."
+                  className="h-6 text-xs bg-background/80"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                       e.currentTarget.blur();
+                    }
+                    e.stopPropagation();
+                  }}
+                />
+             )}
+          </div>
+        )}
+        </div>
       </div>
 
         <input
@@ -583,6 +711,10 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
                 <CheckSquare className="w-4 h-4 mr-2" />
                 {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleLink(); }}>
+                <LinkIcon className="w-4 h-4 mr-2" />
+                {hasLink ? "Remove link" : "Add link"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { 
                 e.stopPropagation(); 
@@ -730,6 +862,20 @@ export function WorkspacePanel({
   
   const hasCheckbox = currentCard?.blocks.some(b => b.type === 'checkbox');
   const hasImage = currentCard?.blocks.some(b => b.type === 'image');
+  const hasLink = currentCard?.blocks.some(b => b.type === 'link');
+
+  const toggleLinkBlock = () => {
+    if (!currentCard) return;
+    if (hasLink) {
+      const newBlocks = currentCard.blocks.filter(b => b.type !== 'link');
+      onUpdateCardBlocks(currentCard.id, newBlocks);
+    } else {
+       const blocksWithoutConflicting = currentCard.blocks.filter(b => b.type !== 'image' && b.type !== 'checkbox');
+      // @ts-ignore
+      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateCardBlocks(currentCard.id, [...blocksWithoutConflicting, newBlock]);
+    }
+  };
 
   const updateBlock = (index: number, block: ContentBlock) => {
     if (!currentCard) return;
@@ -842,6 +988,17 @@ export function WorkspacePanel({
                   onClick={toggleCheckboxBlock}
                 >
                   <CheckSquare className="w-3 h-3" /> {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
+                </button>
+                <button
+                  className={cn(
+                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
+                    hasLink
+                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20" 
+                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
+                  )}
+                  onClick={toggleLinkBlock}
+                >
+                  <LinkIcon className="w-3 h-3" /> {hasLink ? "Remove link" : "Add link"}
                 </button>
                 <button
                   className={cn(
