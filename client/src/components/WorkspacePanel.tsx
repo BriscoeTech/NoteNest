@@ -375,12 +375,12 @@ function SortableBlock({ id, ...props }: SortableBlockProps) {
 interface GridCardItemProps {
   card: Card;
   onNavigate: () => void;
-  onMoveCard: (id: string, targetId: string | null) => void;
+  onMoveStart: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveCard, onRename, onDelete }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -395,9 +395,6 @@ function GridCardItem({ card, onNavigate, onMoveCard, onRename, onDelete }: Grid
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-
-  // Menu actions
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
@@ -434,7 +431,7 @@ function GridCardItem({ card, onNavigate, onMoveCard, onRename, onDelete }: Grid
                 <FolderOpen className="w-4 h-4 mr-2" />
                 Open
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMoveDialogOpen(true); }}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
                 <FolderInput className="w-4 h-4 mr-2" />
                 Move to...
               </DropdownMenuItem>
@@ -470,6 +467,21 @@ export function WorkspacePanel({
 }: WorkspacePanelProps) {
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [cardToMove, setCardToMove] = useState<string | null>(null);
+
+  const handleMoveStart = (id: string) => {
+    setCardToMove(id);
+    setMoveDialogOpen(true);
+  };
+
+  const handleMoveSelect = (targetId: string | null) => {
+    if (cardToMove) {
+      onMoveCard(cardToMove, targetId);
+    }
+    setMoveDialogOpen(false);
+    setCardToMove(null);
+  };
 
   // Auto resize title
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -708,7 +720,7 @@ export function WorkspacePanel({
                       key={card.id}
                       card={card}
                       onNavigate={() => onNavigateCard(card.id)}
-                      onMoveCard={onMoveCard}
+                      onMoveStart={() => handleMoveStart(card.id)}
                       onRename={(title) => onUpdateCard(card.id, { title })}
                       onDelete={() => onDeleteCard(card.id)}
                     />
@@ -719,6 +731,15 @@ export function WorkspacePanel({
           )}
         </div>
       </div>
+
+      <CategoryPickerDialog
+        open={moveDialogOpen}
+        onOpenChange={setMoveDialogOpen}
+        categories={allCards}
+        onSelect={handleMoveSelect}
+        title="Move to..."
+        showRoot={true}
+      />
     </div>
   );
 }
