@@ -459,6 +459,44 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     }
   };
 
+  const hasCheckbox = card.blocks.some(b => b.type === 'checkbox');
+  const hasImage = card.blocks.some(b => b.type === 'image');
+
+  const toggleCheckbox = () => {
+    if (hasCheckbox) {
+      const newBlocks = card.blocks.filter(b => b.type !== 'checkbox');
+      onUpdateBlocks(newBlocks);
+    } else {
+      const blocksWithoutImage = card.blocks.filter(b => b.type !== 'image');
+      // @ts-ignore
+      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+      onUpdateBlocks([...blocksWithoutImage, newBlock]);
+    }
+  };
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const blocksWithoutConflicting = card.blocks.filter(b => b.type !== 'checkbox' && b.type !== 'image');
+      // @ts-ignore
+      const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
+      onUpdateBlocks([...blocksWithoutConflicting, newBlock]);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const removeImage = () => {
+    const newBlocks = card.blocks.filter(b => b.type !== 'image');
+    onUpdateBlocks(newBlocks);
+  };
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
@@ -516,6 +554,15 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         />
       </div>
 
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          className="hidden"
+          onClick={(e) => e.stopPropagation()}
+        />
+
        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -531,6 +578,22 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
                 <FolderInput className="w-4 h-4 mr-2" />
                 Move to...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
+                <CheckSquare className="w-4 h-4 mr-2" />
+                {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { 
+                e.stopPropagation(); 
+                if (hasImage) {
+                  removeImage();
+                } else {
+                  imageInputRef.current?.click();
+                }
+              }}>
+                <Image className="w-4 h-4 mr-2" />
+                {hasImage ? "Remove image" : "Add image"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
