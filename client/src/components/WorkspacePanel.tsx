@@ -376,9 +376,10 @@ interface GridCardItemProps {
   card: Card;
   onNavigate: () => void;
   onMoveCard: (id: string, targetId: string | null) => void;
+  onRename: (title: string) => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveCard }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveCard, onRename }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -400,12 +401,24 @@ function GridCardItem({ card, onNavigate, onMoveCard }: GridCardItemProps) {
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
-        className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors h-24 justify-center"
-        onClick={onNavigate}
+        className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors h-24 justify-center"
         {...attributes}
         {...listeners}
       >
-        <span className="text-sm font-medium text-center truncate w-full px-2">{card.title || "Untitled"}</span>
+        <Input
+          value={card.title}
+          onChange={(e) => onRename(e.target.value)}
+          placeholder="Untitled"
+          className="text-sm font-medium text-center truncate w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent h-auto p-0 cursor-text"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+            }
+            e.stopPropagation(); // Prevent dnd interference
+          }}
+          onPointerDown={(e) => e.stopPropagation()} // Prevent drag start on input
+          onClick={(e) => e.stopPropagation()} // Prevent click propagation
+        />
       </div>
 
        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -690,6 +703,7 @@ export function WorkspacePanel({
                       card={card}
                       onNavigate={() => onNavigateCard(card.id)}
                       onMoveCard={onMoveCard}
+                      onRename={(title) => onUpdateCard(card.id, { title })}
                     />
                   ))}
                 </div>
