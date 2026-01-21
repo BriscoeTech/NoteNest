@@ -334,7 +334,7 @@ export function useNotesStore() {
     return deleted;
   }, [state.cards]);
 
-  const exportData = useCallback(async () => {
+  const exportData = useCallback(() => {
     const data = {
       version: 2,
       exportedAt: new Date().toISOString(),
@@ -344,16 +344,8 @@ export function useNotesStore() {
     const blob = new Blob([jsonString], { type: 'application/json' });
     const filename = `notes-backup-${new Date().toISOString().split('T')[0]}.json`;
     
-    if (navigator.share && navigator.canShare) {
-      const file = new File([blob], filename, { type: 'application/json' });
-      if (navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: 'Notes Backup' });
-          return;
-        } catch (err) {}
-      }
-    }
-    
+    // Direct download is more reliable than Web Share API for "Export" functionality
+    // especially ensuring it runs synchronously within the user gesture
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
