@@ -506,9 +506,11 @@ interface GridCardItemProps {
   onRename: (title: string) => void;
   onDelete: () => void;
   onUpdateBlocks: (blocks: ContentBlock[]) => void;
+  isRecycleBin?: boolean;
+  onRestore?: () => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, isRecycleBin, onRestore }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -703,39 +705,55 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNavigate(); }}>
-                <FolderOpen className="w-4 h-4 mr-2" />
-                Open
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
-                <FolderInput className="w-4 h-4 mr-2" />
-                Move to...
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
-                <CheckSquare className="w-4 h-4 mr-2" />
-                {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleLink(); }}>
-                <LinkIcon className="w-4 h-4 mr-2" />
-                {hasLink ? "Remove link" : "Add link"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { 
-                e.stopPropagation(); 
-                if (hasImage) {
-                  removeImage();
-                } else {
-                  imageInputRef.current?.click();
-                }
-              }}>
-                <Image className="w-4 h-4 mr-2" />
-                {hasImage ? "Remove image" : "Add image"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
+              {!isRecycleBin ? (
+                <>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNavigate(); }}>
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                    Open
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
+                    <FolderInput className="w-4 h-4 mr-2" />
+                    Move to...
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
+                    <CheckSquare className="w-4 h-4 mr-2" />
+                    {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleLink(); }}>
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    {hasLink ? "Remove link" : "Add link"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (hasImage) {
+                      removeImage();
+                    } else {
+                      imageInputRef.current?.click();
+                    }
+                  }}>
+                    <Image className="w-4 h-4 mr-2" />
+                    {hasImage ? "Remove image" : "Add image"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRestore?.(); }}>
+                    <ArrowUp className="w-4 h-4 mr-2" />
+                    Restore
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Forever
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
        </div>
@@ -915,7 +933,7 @@ export function WorkspacePanel({
                </Button>
              </>
            ) : (
-             <h2 className="text-lg font-semibold">Home</h2>
+             <h2 className="text-lg font-semibold">{isRecycleBin ? "Recycle Bin" : "Home"}</h2>
            )}
          </div>
       </div>
@@ -1024,7 +1042,11 @@ export function WorkspacePanel({
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {currentCard ? "Sub-notes" : "Notes"}
             </h3>
-            <Button size="sm" onClick={() => onAddCard(currentCard?.id || null)}>
+            <Button 
+              size="sm" 
+              onClick={() => onAddCard(currentCard?.id || null)}
+              className={isRecycleBin ? "hidden" : ""}
+            >
               <Plus className="w-4 h-4 mr-1" />
               New Note
             </Button>
@@ -1052,8 +1074,10 @@ export function WorkspacePanel({
                       onNavigate={() => onNavigateCard(card.id)}
                       onMoveStart={() => handleMoveStart(card.id)}
                       onRename={(title) => onUpdateCard(card.id, { title })}
-                      onDelete={() => onDeleteCard(card.id)}
+                      onDelete={() => isRecycleBin ? onPermanentlyDeleteCard(card.id) : onDeleteCard(card.id)}
                       onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                      isRecycleBin={isRecycleBin}
+                      onRestore={() => onRestoreCard(card.id, null)}
                     />
                   ))}
                 </div>
