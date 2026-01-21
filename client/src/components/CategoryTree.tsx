@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card } from '@/lib/types';
+import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID } from '@/lib/types';
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ interface CardTreeProps {
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
   onDeleteCard: (id: string) => void;
+  onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   deletedCount: number;
   onExport: () => void;
   onImport: (data: any, mode: 'merge' | 'override') => void;
@@ -36,6 +37,7 @@ interface TreeItemProps {
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string) => void;
   onDeleteCard: (id: string) => void;
+  onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   draggedCardId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -52,6 +54,7 @@ function TreeItem({
   onRenameCard,
   onMoveCard,
   onDeleteCard,
+  onUpdateCardBlocks,
   draggedCardId,
   onDragStart,
   onDragEnd,
@@ -65,6 +68,15 @@ function TreeItem({
   const [editTitle, setEditTitle] = useState(card.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
+
+  const handleCheckboxChange = (checked: boolean) => {
+    if (checkboxBlock) {
+      const newBlocks = card.blocks.map(b => b.id === checkboxBlock.id ? { ...b, checked } : b);
+      onUpdateCardBlocks(card.id, newBlocks);
+    }
+  };
 
   const isDragging = draggedCardId === card.id;
   // Check if this card is a descendant of the dragged card (to prevent drop loops)
@@ -156,6 +168,16 @@ function TreeItem({
           {hasChildren && (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
         </button>
 
+        {checkboxBlock && (
+          <input
+            type="checkbox"
+            checked={checkboxBlock.checked}
+            onChange={(e) => handleCheckboxChange(e.target.checked)}
+            className="h-3.5 w-3.5 mr-1 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+
         {/* Icon based on content? or just always folder/file? */}
         {hasChildren ? (
            isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -174,7 +196,7 @@ function TreeItem({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="text-xs font-medium truncate flex-1">{card.title || "Untitled"}</span>
+          <span className={cn("text-xs font-medium truncate flex-1", checkboxBlock?.checked && "line-through text-muted-foreground")}>{card.title || "Untitled"}</span>
         )}
 
         <DropdownMenu>
@@ -227,6 +249,7 @@ function TreeItem({
               onRenameCard={onRenameCard}
               onMoveCard={onMoveCard}
               onDeleteCard={onDeleteCard}
+              onUpdateCardBlocks={onUpdateCardBlocks}
               draggedCardId={draggedCardId}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -246,6 +269,7 @@ export function CategoryTree({
   onRenameCard,
   onMoveCard,
   onDeleteCard,
+  onUpdateCardBlocks,
   deletedCount,
   onExport,
   onImport
@@ -363,6 +387,7 @@ export function CategoryTree({
               onRenameCard={onRenameCard}
               onMoveCard={handleMoveClick}
               onDeleteCard={onDeleteCard}
+              onUpdateCardBlocks={onUpdateCardBlocks}
               draggedCardId={draggedCardId}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}

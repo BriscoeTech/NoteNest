@@ -88,6 +88,7 @@ export default function NotesApp() {
             onRenameCard={handleRenameCard}
             onMoveCard={store.moveCard}
             onDeleteCard={store.deleteCard}
+            onUpdateCardBlocks={store.updateCardBlocks}
             deletedCount={deletedCount}
             onExport={store.exportData}
             onImport={store.importData}
