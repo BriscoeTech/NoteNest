@@ -609,20 +609,6 @@ export function WorkspacePanel({
   };
 
   // Block Actions
-  const addTextBlock = () => {
-    if (!currentCard) return;
-    // @ts-ignore
-    const newBlock: TextBlock = { id: generateId(), type: 'text', content: '' };
-    onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
-  };
-  
-  const addBulletBlock = () => {
-    if (!currentCard) return;
-    // @ts-ignore
-    const newBlock: BulletBlock = { id: generateId(), type: 'bullets', items: [{ id: generateId(), content: '', indent: 0 }] };
-    onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
-  };
-
   const addCheckboxBlock = () => {
     if (!currentCard) return;
     // @ts-ignore
@@ -746,18 +732,6 @@ export function WorkspacePanel({
 
             {/* Add Block Buttons */}
              <div className="flex items-center gap-2 pt-4 flex-wrap">
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                  onClick={addTextBlock}
-                >
-                  <Type className="w-3 h-3" /> Add text
-                </button>
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                  onClick={addBulletBlock}
-                >
-                  <List className="w-3 h-3" /> Add bullets
-                </button>
                 <button
                   className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
                   onClick={addCheckboxBlock}
