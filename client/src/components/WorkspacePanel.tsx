@@ -400,23 +400,15 @@ function GridCardItem({ card, onNavigate, onMoveCard }: GridCardItemProps) {
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
-        className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors"
+        className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 cursor-pointer transition-colors h-24 justify-center"
         onClick={onNavigate}
         {...attributes}
         {...listeners}
       >
-        {card.children.length > 0 ? (
-           <FolderOpen className="w-10 h-10 text-primary/70" />
-        ) : (
-           <FileText className="w-10 h-10 text-muted-foreground/50" />
-        )}
-        <span className="text-sm font-medium text-center truncate w-full">{card.title || "Untitled"}</span>
-        <span className="text-xs text-muted-foreground">
-          {card.children.length} items
-        </span>
+        <span className="text-sm font-medium text-center truncate w-full px-2">{card.title || "Untitled"}</span>
       </div>
 
-       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+       <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-6 w-6">
