@@ -570,15 +570,15 @@ export function WorkspacePanel({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center gap-2">
-         {currentCard && (
-           <Button variant="ghost" size="icon" onClick={() => onNavigateCard(currentCard.parentId)}>
-             <ArrowUp className="w-4 h-4" />
-           </Button>
-         )}
-         <div className="flex-1">
+      <div className="p-4 border-b border-border flex items-center gap-2 pl-12">
+         <div className="flex-1 flex items-center gap-2 min-w-0">
            {currentCard ? (
-             <h2 className="text-lg font-semibold truncate">{currentCard.title || "Untitled"}</h2>
+             <>
+               <h2 className="text-lg font-semibold truncate">{currentCard.title || "Untitled"}</h2>
+               <Button variant="ghost" size="icon" onClick={() => onNavigateCard(currentCard.parentId)} className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground">
+                 <ArrowUp className="w-4 h-4" />
+               </Button>
+             </>
            ) : (
              <h2 className="text-lg font-semibold">Home</h2>
            )}
