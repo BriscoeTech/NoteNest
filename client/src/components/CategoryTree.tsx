@@ -291,8 +291,9 @@ export function CategoryTree({
   onExport,
   onImport,
   onSearch,
-  searchQuery
-}: CardTreeProps) {
+  searchQuery,
+  className
+}: CardTreeProps & { className?: string }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -395,7 +396,7 @@ export function CategoryTree({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={cn("flex flex-col h-full", className)}>
       <div className="p-3 pl-10 border-b border-border">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cards</h2>
       </div>
@@ -500,7 +501,7 @@ export function CategoryTree({
         </div>
       </div>
       
-      <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm">
+      <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm pb-8 md:pb-3">
         <div className="flex items-center gap-2">
           <button
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
