@@ -1,11 +1,3 @@
-export interface Category {
-  id: string;
-  name: string;
-  parentId: string | null;
-  children: Category[];
-  sortOrder: number;
-}
-
 export interface BulletItem {
   id: string;
   content: string;
@@ -37,15 +29,20 @@ export interface Card {
   id: string;
   title: string;
   blocks: ContentBlock[];
-  categoryId: string;
+  parentId: string | null;
+  children: Card[];
+  sortOrder: number;
   createdAt: number;
   updatedAt: number;
   isDeleted: boolean;
+  // Legacy fields for migration
+  categoryId?: string;
+  content?: string;
+  bullets?: BulletItem[];
 }
 
 export interface AppState {
-  categories: Category[];
-  cards: Card[];
+  cards: Card[]; // Root level cards
 }
 
 export const RECYCLE_BIN_ID = '__recycle_bin__';
@@ -54,113 +51,76 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 }
 
-export function flattenCategories(categories: Category[]): Category[] {
-  const result: Category[] = [];
-  function traverse(cats: Category[]) {
-    for (const cat of cats) {
-      result.push(cat);
-      traverse(cat.children);
-    }
-  }
-  traverse(categories);
-  return result;
-}
-
-export function findCategoryById(categories: Category[], id: string): Category | null {
-  for (const cat of categories) {
-    if (cat.id === id) return cat;
-    const found = findCategoryById(cat.children, id);
+export function findCardById(cards: Card[], id: string): Card | null {
+  for (const card of cards) {
+    if (card.id === id) return card;
+    const found = findCardById(card.children, id);
     if (found) return found;
   }
   return null;
 }
 
-export function removeCategoryById(categories: Category[], id: string): Category[] {
-  return categories
-    .filter(cat => cat.id !== id)
-    .map(cat => ({
-      ...cat,
-      children: removeCategoryById(cat.children, id)
+export function removeCardFromTree(cards: Card[], id: string): Card[] {
+  return cards
+    .filter(c => c.id !== id)
+    .map(c => ({
+      ...c,
+      children: removeCardFromTree(c.children, id)
     }));
 }
 
-export function addCategoryToParent(categories: Category[], parentId: string | null, newCategory: Category): Category[] {
+export function addCardToParent(cards: Card[], parentId: string | null, newCard: Card): Card[] {
   if (parentId === null) {
-    return [...categories, newCategory];
+    return [newCard, ...cards];
   }
-  return categories.map(cat => {
-    if (cat.id === parentId) {
-      return { ...cat, children: [...cat.children, newCategory] };
+  return cards.map(c => {
+    if (c.id === parentId) {
+      return { ...c, children: [newCard, ...c.children] };
     }
-    return { ...cat, children: addCategoryToParent(cat.children, parentId, newCategory) };
+    return { ...c, children: addCardToParent(c.children, parentId, newCard) };
   });
 }
 
-export function updateCategoryInTree(categories: Category[], id: string, updates: Partial<Category>): Category[] {
-  return categories.map(cat => {
-    if (cat.id === id) {
-      return { ...cat, ...updates };
+export function updateCardInTree(cards: Card[], id: string, updates: Partial<Card>): Card[] {
+  return cards.map(c => {
+    if (c.id === id) {
+      return { ...c, ...updates, updatedAt: Date.now() };
     }
-    return { ...cat, children: updateCategoryInTree(cat.children, id, updates) };
+    return { ...c, children: updateCardInTree(c.children, id, updates) };
   });
 }
 
-export function getAllCategoryIds(categories: Category[]): string[] {
+export function getAllCardIds(cards: Card[]): string[] {
   const ids: string[] = [];
-  function traverse(cats: Category[]) {
-    for (const cat of cats) {
-      ids.push(cat.id);
-      traverse(cat.children);
+  function traverse(list: Card[]) {
+    for (const c of list) {
+      ids.push(c.id);
+      traverse(c.children);
     }
   }
-  traverse(categories);
+  traverse(cards);
   return ids;
 }
 
-export function getDescendantIds(categories: Category[], id: string): string[] {
-  const category = findCategoryById(categories, id);
-  if (!category) return [];
-  return getAllCategoryIds(category.children);
+export function getDescendantIds(cards: Card[], id: string): string[] {
+  const card = findCardById(cards, id);
+  if (!card) return [];
+  return getAllCardIds(card.children);
 }
 
-export function canMoveCategory(categories: Category[], categoryId: string, targetParentId: string | null): boolean {
-  if (categoryId === targetParentId) return false;
+export function canMoveCard(cards: Card[], cardId: string, targetParentId: string | null): boolean {
+  if (cardId === targetParentId) return false;
   if (targetParentId === null) return true;
-  const descendantIds = getDescendantIds(categories, categoryId);
+  const descendantIds = getDescendantIds(cards, cardId);
   return !descendantIds.includes(targetParentId);
 }
 
-export function moveCategoryToParent(categories: Category[], categoryId: string, newParentId: string | null): Category[] {
-  const category = findCategoryById(categories, categoryId);
-  if (!category) return categories;
+export function moveCardToParent(cards: Card[], cardId: string, newParentId: string | null): Card[] {
+  const card = findCardById(cards, cardId);
+  if (!card) return cards;
   
-  const withoutCategory = removeCategoryById(categories, categoryId);
-  const movedCategory: Category = { ...category, parentId: newParentId };
+  const withoutCard = removeCardFromTree(cards, cardId);
+  const movedCard: Card = { ...card, parentId: newParentId, updatedAt: Date.now() };
   
-  return addCategoryToParent(withoutCategory, newParentId, movedCategory);
-}
-
-// Migration helper for old card format
-export function migrateCard(card: any): Card {
-  if (card.blocks) return card as Card;
-  
-  const blocks: ContentBlock[] = [];
-  
-  if (card.content && card.content.trim()) {
-    blocks.push({ id: generateId(), type: 'text', content: card.content });
-  }
-  
-  if (card.bullets && card.bullets.length > 0) {
-    blocks.push({ id: generateId(), type: 'bullets', items: card.bullets });
-  }
-  
-  return {
-    id: card.id,
-    title: card.title || '',
-    blocks,
-    categoryId: card.categoryId,
-    createdAt: card.createdAt,
-    updatedAt: card.updatedAt,
-    isDeleted: card.isDeleted || false
-  };
+  return addCardToParent(withoutCard, newParentId, movedCard);
 }

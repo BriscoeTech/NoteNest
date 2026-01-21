@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Category } from '@/lib/types';
+import type { Card } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -14,8 +14,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface CategoryPickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  categories: Category[];
-  onSelect: (categoryId: string | null) => void;
+  categories: Card[]; // Reusing name for compatibility but it's cards
+  onSelect: (id: string | null) => void;
   title: string;
   excludeIds?: string[];
   showRoot?: boolean;
@@ -23,7 +23,7 @@ interface CategoryPickerDialogProps {
 }
 
 interface PickerItemProps {
-  category: Category;
+  card: Card;
   depth: number;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
@@ -31,20 +31,19 @@ interface PickerItemProps {
   excludeIds: string[];
 }
 
-function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect, excludeIds }: PickerItemProps) {
-  const isExpanded = expandedIds.has(category.id);
-  const hasChildren = category.children.length > 0;
-  const isExcluded = excludeIds.includes(category.id);
+function PickerItem({ card, depth, expandedIds, onToggleExpand, onSelect, excludeIds }: PickerItemProps) {
+  const isExpanded = expandedIds.has(card.id);
+  const hasChildren = card.children && card.children.length > 0;
+  const isExcluded = excludeIds.includes(card.id);
 
   if (isExcluded) return null;
 
   return (
     <div>
       <div
-        data-testid={`picker-category-${category.id}`}
         className="flex items-center gap-1 py-2 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => onSelect(category.id)}
+        onClick={() => onSelect(card.id)}
       >
         <button
           className={cn(
@@ -53,27 +52,27 @@ function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect, ex
           )}
           onClick={(e) => {
             e.stopPropagation();
-            onToggleExpand(category.id);
+            onToggleExpand(card.id);
           }}
         >
           {hasChildren && (isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
         </button>
         
-        {isExpanded ? (
-          <FolderOpen className="w-4 h-4 text-muted-foreground" />
+        {hasChildren ? (
+          isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground" /> : <Folder className="w-4 h-4 text-muted-foreground" />
         ) : (
-          <Folder className="w-4 h-4 text-muted-foreground" />
+          <FileText className="w-4 h-4 text-muted-foreground" />
         )}
         
-        <span className="text-sm font-medium truncate flex-1">{category.name}</span>
+        <span className="text-sm font-medium truncate flex-1">{card.title || "Untitled"}</span>
       </div>
 
       {isExpanded && hasChildren && (
         <div>
-          {category.children.map(child => (
+          {card.children.map(child => (
             <PickerItem
               key={child.id}
-              category={child}
+              card={child}
               depth={depth + 1}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
@@ -90,12 +89,12 @@ function PickerItem({ category, depth, expandedIds, onToggleExpand, onSelect, ex
 export function CategoryPickerDialog({
   open,
   onOpenChange,
-  categories,
+  categories, // actually cards
   onSelect,
   title,
   excludeIds = [],
   showRoot = true,
-  rootLabel = "Uncategorized"
+  rootLabel = "Home (Root)"
 }: CategoryPickerDialogProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -111,8 +110,8 @@ export function CategoryPickerDialog({
     });
   };
 
-  const handleSelect = (categoryId: string | null) => {
-    onSelect(categoryId);
+  const handleSelect = (id: string | null) => {
+    onSelect(id);
     onOpenChange(false);
   };
 
@@ -127,7 +126,6 @@ export function CategoryPickerDialog({
           <div className="py-2">
             {showRoot && (
               <div
-                data-testid="picker-root"
                 className="flex items-center gap-2 py-2 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
                 onClick={() => handleSelect(null)}
               >
@@ -138,10 +136,10 @@ export function CategoryPickerDialog({
             
             {categories.length > 0 && showRoot && <div className="my-2 border-t border-border mx-2" />}
             
-            {categories.map(category => (
+            {categories.map(card => (
               <PickerItem
-                key={category.id}
-                category={category}
+                key={card.id}
+                card={card}
                 depth={0}
                 expandedIds={expandedIds}
                 onToggleExpand={toggleExpand}
