@@ -918,23 +918,6 @@ export function WorkspacePanel({
              <h2 className="text-lg font-semibold">Home</h2>
            )}
          </div>
-         <div className="relative w-64">
-           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-           <Input 
-             placeholder="Search..." 
-             value={searchQuery}
-             onChange={(e) => onSearch(e.target.value)}
-             className="pl-9"
-           />
-           {searchQuery && (
-              <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => onSearch('')}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-8">

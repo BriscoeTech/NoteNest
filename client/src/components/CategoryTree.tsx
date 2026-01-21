@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
@@ -24,6 +24,8 @@ interface CardTreeProps {
   deletedCount: number;
   onExport: () => void;
   onImport: (data: any, mode: 'merge' | 'override') => void;
+  onSearch: (query: string) => void;
+  searchQuery: string;
 }
 
 interface TreeItemProps {
@@ -287,7 +289,9 @@ export function CategoryTree({
   onUpdateCardBlocks,
   deletedCount,
   onExport,
-  onImport
+  onImport,
+  onSearch,
+  searchQuery
 }: CardTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
@@ -394,6 +398,26 @@ export function CategoryTree({
     <div className="flex flex-col h-full">
       <div className="p-3 pl-10 border-b border-border">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cards</h2>
+      </div>
+
+      <div className="px-3 pt-3 pb-1">
+         <div className="relative">
+           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+           <Input 
+             placeholder="Search..." 
+             value={searchQuery}
+             onChange={(e) => onSearch(e.target.value)}
+             className="pl-8 h-8 text-xs bg-muted/40"
+           />
+           {searchQuery && (
+              <button
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => onSearch('')}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+         </div>
       </div>
 
       <div 
