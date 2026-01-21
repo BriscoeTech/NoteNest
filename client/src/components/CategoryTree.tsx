@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
-import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds } from '@/lib/types';
+import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
-import { getDescendantIds, findCardById } from '@/lib/types';
 
 interface CardTreeProps {
   cards: Card[];
