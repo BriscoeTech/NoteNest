@@ -2,91 +2,59 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNotesStore } from '@/hooks/use-notes-store';
 import { CategoryTree } from '@/components/CategoryTree';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
-import { RECYCLE_BIN_ID, findCategoryById } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeft } from 'lucide-react';
+import type { Card } from '@/lib/types';
 
 export default function NotesApp() {
   const store = useNotesStore();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [currentCardId, setCurrentCardId] = useState<string | null>(null); // The scope we are in
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null); // The card selected in the tree (highlighted)
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const isRecycleBin = selectedCategoryId === RECYCLE_BIN_ID;
+  // Derived state
+  const currentCard = useMemo(() => {
+     return store.getCard(currentCardId);
+  }, [currentCardId, store.cards]); // store.cards dependency ensures update on change
 
-  const currentCategory = useMemo(() => {
-    if (!selectedCategoryId || isRecycleBin) return null;
-    return findCategoryById(store.categories, selectedCategoryId);
-  }, [selectedCategoryId, store.categories, isRecycleBin]);
-
-  const categoryName = useMemo(() => {
-    if (isRecycleBin) return 'Recycle Bin';
-    if (currentCategory) return currentCategory.name;
-    return '';
-  }, [isRecycleBin, currentCategory]);
-
-  const displayedCards = useMemo(() => {
-    if (!selectedCategoryId) return [];
-    
-    if (isRecycleBin) {
-      const deleted = store.getDeletedCards();
-      if (searchQuery) {
-        const lower = searchQuery.toLowerCase();
-        return deleted.filter(c => 
-          c.title.toLowerCase().includes(lower)
-        );
-      }
-      return deleted;
-    }
-
+  // Get children of current card (or root)
+  const childrenCards = useMemo(() => {
     if (searchQuery) {
-      return store.searchCards(searchQuery, selectedCategoryId);
+      return store.searchCards(searchQuery, currentCardId);
     }
+    
+    // Manual filtering from all cards
+    if (currentCardId === null) {
+      // Root cards
+      return store.cards.filter(c => c.parentId === null && !c.isDeleted);
+    } else {
+      // Children of current card
+      const card = store.getCard(currentCardId);
+      return card ? card.children.filter((c: Card) => !c.isDeleted) : [];
+    }
+  }, [currentCardId, searchQuery, store.cards]);
 
-    return store.getCardsForCategory(selectedCategoryId);
-  }, [
-    selectedCategoryId, 
-    searchQuery, 
-    store.cards, 
-    isRecycleBin,
-    store.getDeletedCards,
-    store.searchCards,
-    store.getCardsForCategory
-  ]);
-
-  const deletedCount = store.getDeletedCards().length;
-  const hasCategories = store.categories.length > 0;
-
-  const handleSelectCategory = useCallback((id: string | null) => {
-    setSelectedCategoryId(id);
-    setSelectedCardId(null);
+  const handleNavigateCard = useCallback((id: string | null) => {
+    setCurrentCardId(id);
+    setSelectedCardId(id); // Sync selection in tree
     setSearchQuery('');
   }, []);
 
-  const handleSelectCard = useCallback((cardId: string, categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedCardId(cardId);
+  const handleSelectCardInTree = useCallback((id: string) => {
+    setSelectedCardId(id);
+    setCurrentCardId(id); // Also navigate to it? Yes, user said "clicking them will change the scope"
     setSearchQuery('');
   }, []);
 
-  const handleAddCard = useCallback(() => {
-    if (selectedCategoryId && selectedCategoryId !== RECYCLE_BIN_ID) {
-      const newCardId = store.addCard(selectedCategoryId);
-      setSelectedCardId(newCardId);
-      return newCardId;
-    }
-    return undefined;
-  }, [selectedCategoryId, store.addCard]);
+  const handleAddCard = useCallback((parentId: string | null) => {
+    const newId = store.addCard('', parentId);
+    // Optionally auto-navigate?
+    // setCurrentCardId(newId);
+  }, [store.addCard]);
 
-  const handleAddCategory = useCallback((name: string, parentId: string | null) => {
-    const newId = store.addCategory(name, parentId);
-    setSelectedCategoryId(newId);
-    setSelectedCardId(null);
-  }, [store.addCategory]);
-
-  const handleRenameCard = useCallback((cardId: string, title: string) => {
-    store.updateCard(cardId, { title });
+  const handleRenameCard = useCallback((id: string, title: string) => {
+    store.updateCard(id, { title });
   }, [store.updateCard]);
 
   return (
@@ -94,21 +62,12 @@ export default function NotesApp() {
       {sidebarOpen && (
         <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
           <CategoryTree
-            categories={store.categories}
             cards={store.cards}
-            selectedCategoryId={selectedCategoryId}
             selectedCardId={selectedCardId}
-            onSelectCategory={handleSelectCategory}
-            onSelectCard={handleSelectCard}
-            onRenameCategory={store.renameCategory}
-            onMoveCategory={store.moveCategory}
-            onDeleteCategory={store.deleteCategory}
+            onSelectCard={handleSelectCardInTree}
             onRenameCard={handleRenameCard}
             onMoveCard={store.moveCard}
             onDeleteCard={store.deleteCard}
-            deletedCount={deletedCount}
-            onExport={store.exportData}
-            onImport={store.importData}
           />
         </aside>
       )}
@@ -125,28 +84,20 @@ export default function NotesApp() {
 
       <main className="flex-1 min-w-0">
         <WorkspacePanel
-          cards={displayedCards}
+          currentCard={currentCard || null}
+          childrenCards={childrenCards}
           allCards={store.cards}
-          categoryId={selectedCategoryId}
-          categoryName={categoryName}
-          isRecycleBin={isRecycleBin}
-          hasCategories={hasCategories}
-          categories={store.categories}
-          currentCategory={currentCategory}
-          selectedCardId={selectedCardId}
-          onSelectCategory={handleSelectCategory}
-          onSelectCard={setSelectedCardId}
+          isRecycleBin={false} // TODO: Implement recycle bin view
+          onNavigateCard={handleNavigateCard}
           onAddCard={handleAddCard}
-          onAddCategory={handleAddCategory}
           onUpdateCard={store.updateCard}
           onUpdateCardBlocks={store.updateCardBlocks}
           onMoveCard={store.moveCard}
           onDeleteCard={store.deleteCard}
           onRestoreCard={store.restoreCard}
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
-          onReorderCard={store.reorderCard}
-          onReorderCardsByIndex={store.reorderCardsByIndex}
-          onReorderSubcategories={store.reorderSubcategories}
+          onReorderCard={(id, dir) => {}} // Not using this anymore for tree logic? block logic only
+          onReorderCardsByIndex={store.reorderCardsByIndex} // TODO: Implement this in store if needed for children reorder
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
         />
