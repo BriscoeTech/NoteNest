@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem } from '@/lib/types';
+import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -205,6 +205,59 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
     );
   }
 
+  if (block.type === 'checkbox') {
+    const checkboxBlock = block as CheckboxBlock;
+    return (
+      <div className="group relative flex items-center gap-1">
+        {isSelected && dragHandleProps && (
+          <div 
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground hidden md:block"
+            {...dragHandleProps.attributes}
+            {...dragHandleProps.listeners}
+          >
+            <GripVertical className="w-3 h-3" />
+          </div>
+        )}
+        <div className="flex-1 flex items-center gap-3 bg-muted/30 rounded p-3">
+          <input
+            type="checkbox"
+            checked={checkboxBlock.checked}
+            onChange={(e) => onUpdate({ ...checkboxBlock, checked: e.target.checked })}
+            disabled={isRecycleBin}
+            className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+          />
+          <span className={cn("text-base", checkboxBlock.checked && "line-through text-muted-foreground")}>
+            {checkboxBlock.checked ? "Completed" : "Not completed"}
+          </span>
+        </div>
+        {isSelected && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 text-muted-foreground/60 hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+                <ChevronUp className="w-4 h-4 mr-2" />
+                Move Up
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+                <ChevronDown className="w-4 h-4 mr-2" />
+                Move Down
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    );
+  }
+
   const bulletBlock = block as BulletBlock;
 
   const updateBullet = (id: string, content: string) => {
@@ -378,9 +431,10 @@ interface GridCardItemProps {
   onMoveStart: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
+  onUpdateBlocks: (blocks: ContentBlock[]) => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -396,18 +450,44 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete }: Gri
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
+  
+  const handleCheckboxChange = (checked: boolean) => {
+    if (checkboxBlock) {
+      const newBlocks = card.blocks.map(b => b.id === checkboxBlock.id ? { ...b, checked } : b);
+      onUpdateBlocks(newBlocks);
+    }
+  };
+
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
-        className="flex flex-col items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors h-24 justify-center"
+        className={cn(
+          "flex items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors h-24",
+          checkboxBlock ? "justify-start pl-4" : "justify-center"
+        )}
         {...attributes}
         {...listeners}
       >
+        {checkboxBlock && (
+          <input
+            type="checkbox"
+            checked={checkboxBlock.checked}
+            onChange={(e) => handleCheckboxChange(e.target.checked)}
+            className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0 z-10"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
         <Input
           value={card.title}
           onChange={(e) => onRename(e.target.value)}
           placeholder="Untitled"
-          className="text-sm font-medium text-center truncate w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent h-auto p-0 cursor-text"
+          className={cn(
+            "text-sm font-medium truncate w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent h-auto p-0 cursor-text",
+            checkboxBlock ? "text-left" : "text-center",
+            checkboxBlock?.checked && "line-through text-muted-foreground"
+          )}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.currentTarget.blur();
@@ -543,6 +623,13 @@ export function WorkspacePanel({
     onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
   };
 
+  const addCheckboxBlock = () => {
+    if (!currentCard) return;
+    // @ts-ignore
+    const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+    onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
+  };
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentCard) return;
     const file = e.target.files?.[0];
@@ -673,6 +760,12 @@ export function WorkspacePanel({
                 </button>
                 <button
                   className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                  onClick={addCheckboxBlock}
+                >
+                  <CheckSquare className="w-3 h-3" /> Add checkbox
+                </button>
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
                   onClick={() => imageInputRef.current?.click()}
                 >
                   <Image className="w-3 h-3" /> Add image
@@ -723,6 +816,7 @@ export function WorkspacePanel({
                       onMoveStart={() => handleMoveStart(card.id)}
                       onRename={(title) => onUpdateCard(card.id, { title })}
                       onDelete={() => onDeleteCard(card.id)}
+                      onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
                     />
                   ))}
                 </div>
