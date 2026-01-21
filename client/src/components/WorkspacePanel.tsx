@@ -377,9 +377,10 @@ interface GridCardItemProps {
   onNavigate: () => void;
   onMoveCard: (id: string, targetId: string | null) => void;
   onRename: (title: string) => void;
+  onDelete: () => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveCard, onRename }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveCard, onRename, onDelete }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -436,6 +437,11 @@ function GridCardItem({ card, onNavigate, onMoveCard, onRename }: GridCardItemPr
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMoveDialogOpen(true); }}>
                 <FolderInput className="w-4 h-4 mr-2" />
                 Move to...
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -704,6 +710,7 @@ export function WorkspacePanel({
                       onNavigate={() => onNavigateCard(card.id)}
                       onMoveCard={onMoveCard}
                       onRename={(title) => onUpdateCard(card.id, { title })}
+                      onDelete={() => onDeleteCard(card.id)}
                     />
                   ))}
                 </div>
