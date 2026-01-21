@@ -657,7 +657,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                    href={linkBlock.url.startsWith('http') ? linkBlock.url : `https://${linkBlock.url}`}
                    target="_blank" 
                    rel="noopener noreferrer" 
-                   className="text-xs text-primary hover:underline truncate block max-w-full"
+                   className="text-xs text-primary hover:underline break-all whitespace-normal block max-w-full"
                  >
                    Link
                  </a>
@@ -905,7 +905,7 @@ export function WorkspacePanel({
          <div className="flex-1 flex items-center gap-2 min-w-0">
            {currentCard ? (
              <>
-               <h2 className="text-lg font-semibold truncate">{currentCard.title || "Untitled"}</h2>
+               <h2 className="text-lg font-semibold break-words whitespace-normal">{currentCard.title || "Untitled"}</h2>
                <Button variant="ghost" size="icon" onClick={() => onNavigateCard(currentCard.parentId)} className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground">
                  <ArrowUp className="w-4 h-4" />
                </Button>
