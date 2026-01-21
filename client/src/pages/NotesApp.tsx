@@ -80,8 +80,9 @@ export default function NotesApp() {
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       {sidebarOpen && (
-        <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0">
+        <aside className="w-52 border-r border-border bg-sidebar flex-shrink-0 flex flex-col">
           <CategoryTree
+            className="flex-1 min-h-0"
             cards={store.cards}
             selectedCardId={selectedCardId}
             onSelectCard={handleSelectCardInTree}
