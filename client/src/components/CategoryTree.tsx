@@ -197,7 +197,7 @@ function TreeItem({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className={cn("text-xs font-medium truncate flex-1", checkboxBlock?.checked && "line-through text-muted-foreground")}>{card.title || "Untitled"}</span>
+          <span className={cn("text-xs font-medium break-words whitespace-normal flex-1", checkboxBlock?.checked && "line-through text-muted-foreground")}>{card.title || "Untitled"}</span>
         )}
 
         <DropdownMenu>
