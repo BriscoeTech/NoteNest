@@ -171,6 +171,13 @@ export function useNotesStore() {
     }));
   }, []);
 
+  const updateCardBlocks = useCallback((id: string, blocks: ContentBlock[]) => {
+    setState(prev => ({
+      ...prev,
+      cards: updateCardInTree(prev.cards, id, { blocks })
+    }));
+  }, []);
+
   const moveCard = useCallback((cardId: string, newParentId: string | null) => {
     setState(prev => {
       if (!canMoveCard(prev.cards, cardId, newParentId)) {
@@ -183,26 +190,64 @@ export function useNotesStore() {
     });
   }, []);
 
+  const reorderChildren = useCallback((parentId: string | null, childIds: string[]) => {
+    setState(prev => {
+      // Helper to reorder a list based on IDs
+      const reorderList = (list: Card[], ids: string[]): Card[] => {
+        const listMap = new Map(list.map(c => [c.id, c]));
+        const newList: Card[] = [];
+        // Add cards in the order of ids
+        ids.forEach((id, index) => {
+          const card = listMap.get(id);
+          if (card) {
+             // Update sortOrder to persist order
+             newList.push({ ...card, sortOrder: index }); 
+             listMap.delete(id);
+          }
+        });
+        // Append any remaining cards (shouldn't happen if ids is complete)
+        listMap.forEach(card => newList.push(card));
+        return newList;
+      };
+
+      if (parentId === null) {
+        const newRoot = reorderList(prev.cards, childIds);
+        return { ...prev, cards: newRoot };
+      } else {
+        // Find parent and update its children
+        const updateParent = (cards: Card[]): Card[] => {
+          return cards.map(c => {
+            if (c.id === parentId) {
+              return { ...c, children: reorderList(c.children, childIds) };
+            }
+            return { ...c, children: updateParent(c.children) };
+          });
+        };
+        return { ...prev, cards: updateParent(prev.cards) };
+      }
+    });
+  }, []);
+
   const deleteCard = useCallback((id: string) => {
     setState(prev => {
       // Recursive delete mark
       const markDeleted = (cards: Card[]): Card[] => {
         return cards.map(c => {
           if (c.id === id) {
+            const markAllDeleted = (cards: Card[]): Card[] => {
+              return cards.map(c => ({ 
+                ...c, 
+                isDeleted: true, 
+                updatedAt: Date.now(), 
+                children: markAllDeleted(c.children) 
+              }));
+            };
             return { ...c, isDeleted: true, updatedAt: Date.now(), children: markAllDeleted(c.children) };
           }
           return { ...c, children: markDeleted(c.children) };
         });
       };
-      const markAllDeleted = (cards: Card[]): Card[] => {
-        return cards.map(c => ({ 
-          ...c, 
-          isDeleted: true, 
-          updatedAt: Date.now(), 
-          children: markAllDeleted(c.children) 
-        }));
-      };
-
+      
       return {
         ...prev,
         cards: markDeleted(prev.cards)
@@ -219,30 +264,16 @@ export function useNotesStore() {
 
   const restoreCard = useCallback((id: string, targetParentId: string | null) => {
     setState(prev => {
-      // We need to:
-      // 1. Find the card (could be anywhere in deleted state)
-      // 2. Remove it from its current location
-      // 3. Add it to target location
-      // 4. Mark it as not deleted
-      
       const card = findCardById(prev.cards, id);
       if (!card) return prev;
 
-      // Unmark deleted
-      const restoredCard = { ...card, isDeleted: false, updatedAt: Date.now() }; // TODO: restore children too? user might want to selectively restore. For now, let's restore just the card and keep children deleted? Or restore children too?
-      // Usually "Restore" restores the subtree.
-      
       const restoreSubtree = (c: Card): Card => ({
         ...c,
         isDeleted: false,
         children: c.children.map(restoreSubtree)
       });
       
-      const fullyRestoredCard = restoreSubtree(restoredCard);
-
-      // If we are just undeleting in place (if parent is not deleted)
-      // But we passed targetParentId, so we likely want to move it too.
-      // Wait, removeCardFromTree removes by ID.
+      const fullyRestoredCard = restoreSubtree({ ...card, isDeleted: false, updatedAt: Date.now() });
       
       const withoutCard = removeCardFromTree(prev.cards, id);
       const withCardAdded = addCardToParent(withoutCard, targetParentId, fullyRestoredCard);
@@ -264,7 +295,7 @@ export function useNotesStore() {
     let scopeCards = state.cards;
     if (rootId) {
       const root = findCardById(state.cards, rootId);
-      if (root) scopeCards = [root]; // Include root in search? Or just children? Usually descendants.
+      if (root) scopeCards = [root]; 
     }
 
     const traverse = (list: Card[]) => {
@@ -348,25 +379,7 @@ export function useNotesStore() {
     if (mode === 'override') {
       setState({ cards: importedCards });
     } else {
-      // Merge mode: Naive append to root for now, or ID conflict check?
-      // Better to check IDs.
       setState(prev => {
-        // Recursive merge is hard. 
-        // Simple approach: append imported root cards to current root cards, 
-        // regenerating IDs if they conflict?
-        // Or if ID exists, update it?
-        // Let's just append to root and let user sort it out, but avoid duplicate IDs.
-        
-        // Actually, let's map existing IDs.
-        const existingIds = new Set(getAllCardIds(prev.cards));
-        
-        // If an imported card has ID that exists, we should probably skip it or overwrite?
-        // "Merge" usually means add missing stuff.
-        
-        // Let's just append all imported root cards to the list.
-        // But we must ensure unique IDs if we want valid tree.
-        // For now, let's assume imports are unique or we overwrite matches?
-        // Let's just append.
         return {
           cards: [...prev.cards, ...importedCards]
         };
@@ -378,7 +391,9 @@ export function useNotesStore() {
     cards: state.cards,
     addCard,
     updateCard,
+    updateCardBlocks,
     moveCard,
+    reorderChildren,
     deleteCard,
     permanentlyDeleteCard,
     restoreCard,

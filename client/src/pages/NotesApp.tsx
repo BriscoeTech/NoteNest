@@ -121,7 +121,7 @@ export default function NotesApp() {
           onRestoreCard={store.restoreCard}
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onReorderCard={(id, dir) => {}} // Not using this anymore for tree logic? block logic only
-          onReorderCardsByIndex={store.reorderCardsByIndex} // TODO: Implement this in store if needed for children reorder
+          onReorderCardsByIndex={(ids) => store.reorderChildren(currentCardId, ids)}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
         />
