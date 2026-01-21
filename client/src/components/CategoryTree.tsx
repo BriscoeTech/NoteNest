@@ -203,10 +203,10 @@ function TreeItem({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
+              className="w-6 h-6 flex items-center justify-center rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-accent-foreground/10 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
-              <MoreHorizontal className="w-3 h-3" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
