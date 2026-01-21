@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
-import { RECYCLE_BIN_ID } from '@/lib/types';
+import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds } from '@/lib/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,7 @@ interface TreeItemProps {
   selectedCardId: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
+  onExpandRecursively: (id: string, expand: boolean) => void;
   onSelectCard: (id: string) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string) => void;
@@ -50,6 +51,7 @@ function TreeItem({
   selectedCardId,
   expandedIds,
   onToggleExpand,
+  onExpandRecursively,
   onSelectCard,
   onRenameCard,
   onMoveCard,
@@ -217,6 +219,19 @@ function TreeItem({
               <FolderInput className="w-3.5 h-3.5 mr-2" />
               Move to...
             </DropdownMenuItem>
+            {hasChildren && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onExpandRecursively(card.id, true)}>
+                  <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
+                  Expand All
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onExpandRecursively(card.id, false)}>
+                  <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
+                  Collapse All
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={() => onDeleteCard(card.id)}
@@ -250,6 +265,7 @@ function TreeItem({
               onMoveCard={onMoveCard}
               onDeleteCard={onDeleteCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
+              onExpandRecursively={onExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -288,6 +304,31 @@ export function CategoryTree({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExpandRecursively = (id: string | null, expand: boolean) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      let idsToToggle: string[] = [];
+      
+      if (id === null) {
+        // All cards
+        idsToToggle = getAllCardIds(cards);
+      } else {
+        // Descendants
+        const card = findCardById(cards, id);
+        if (card) {
+          idsToToggle = [id, ...getDescendantIds(cards, id)];
+        }
+      }
+
+      if (expand) {
+        idsToToggle.forEach(i => next.add(i));
+      } else {
+        idsToToggle.forEach(i => next.delete(i));
+      }
       return next;
     });
   };
@@ -364,13 +405,34 @@ export function CategoryTree({
       >
         <div
           className={cn(
-            "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground mb-1",
+            "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground mb-1 group relative",
             selectedCardId === null && "bg-primary/10 text-primary"
           )}
           onClick={() => onSelectCard(null)}
         >
           <Home className="w-4 h-4 ml-6" />
-          <span className="text-sm font-medium">Home</span>
+          <span className="text-sm font-medium flex-1">Home</span>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => handleExpandRecursively(null, true)}>
+                <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
+                Expand All
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExpandRecursively(null, false)}>
+                <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
+                Collapse All
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {cards
@@ -388,6 +450,7 @@ export function CategoryTree({
               onMoveCard={handleMoveClick}
               onDeleteCard={onDeleteCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
+              onExpandRecursively={handleExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
