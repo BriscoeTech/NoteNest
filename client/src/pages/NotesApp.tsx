@@ -67,8 +67,7 @@ export default function NotesApp() {
 
   const handleAddCard = useCallback((parentId: string | null) => {
     const newId = store.addCard('', parentId);
-    // Optionally auto-navigate?
-    // setCurrentCardId(newId);
+    return newId;
   }, [store.addCard]);
 
   const handleRenameCard = useCallback((id: string, title: string) => {

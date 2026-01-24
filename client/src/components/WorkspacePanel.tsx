@@ -25,7 +25,7 @@ interface WorkspacePanelProps {
   allCards: Card[]; // used for search/move picker
   isRecycleBin: boolean;
   onNavigateCard: (id: string | null) => void;
-  onAddCard: (parentId: string | null) => void;
+  onAddCard: (parentId: string | null) => string;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
@@ -1042,14 +1042,67 @@ export function WorkspacePanel({
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {currentCard ? "Sub-notes" : "Notes"}
             </h3>
-            <Button 
-              size="sm" 
-              onClick={() => onAddCard(currentCard?.id || null)}
-              className={isRecycleBin ? "hidden" : ""}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              New Note
-            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  size="sm" 
+                  className={isRecycleBin ? "hidden" : ""}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  New Note
+                  <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onAddCard(currentCard?.id || null)}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Note
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                   const id = onAddCard(currentCard?.id || null);
+                   // @ts-ignore
+                   const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+                   onUpdateCardBlocks(id, [block]);
+                }}>
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  Checkbox
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                   const id = onAddCard(currentCard?.id || null);
+                   // @ts-ignore
+                   const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
+                   onUpdateCardBlocks(id, [block]);
+                }}>
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Link
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                   // Trigger file input for new note
+                   const input = document.createElement('input');
+                   input.type = 'file';
+                   input.accept = 'image/*';
+                   input.onchange = (e) => {
+                     const file = (e.target as HTMLInputElement).files?.[0];
+                     if (file) {
+                       const reader = new FileReader();
+                       reader.onload = (event) => {
+                         const dataUrl = event.target?.result as string;
+                         const id = onAddCard(currentCard?.id || null);
+                         // @ts-ignore
+                         const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
+                         onUpdateCardBlocks(id, [block]);
+                       };
+                       reader.readAsDataURL(file);
+                     }
+                   };
+                   input.click();
+                }}>
+                  <Image className="w-4 h-4 mr-2" />
+                  Image
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {childrenCards.length === 0 ? (
