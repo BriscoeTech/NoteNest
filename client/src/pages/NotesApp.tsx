@@ -127,6 +127,7 @@ export default function NotesApp() {
           onReorderCardsByIndex={(ids) => store.reorderChildren(currentCardId, ids)}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
+          sidebarOpen={sidebarOpen}
         />
       </main>
     </div>
