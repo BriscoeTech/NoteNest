@@ -36,6 +36,7 @@ interface WorkspacePanelProps {
   onReorderCardsByIndex: (ids: string[]) => void; // For children reordering
   onSearch: (query: string) => void;
   searchQuery: string;
+  sidebarOpen?: boolean;
 }
 
 // ... BlockEditor ... (Reusing existing component, need to define it)
@@ -777,7 +778,8 @@ export function WorkspacePanel({
   onReorderCard,
   onReorderCardsByIndex,
   onSearch,
-  searchQuery
+  searchQuery,
+  sidebarOpen = true
 }: WorkspacePanelProps) {
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1119,7 +1121,12 @@ export function WorkspacePanel({
                 items={childrenCards.map(c => c.id)}
                 strategy={rectSortingStrategy}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className={cn(
+                  "grid gap-4 transition-all",
+                  sidebarOpen 
+                    ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" 
+                    : "grid-cols-1 sm:grid-cols-1 md:grid-cols-3 lg:grid-cols-4"
+                )}>
                   {childrenCards.map(card => (
                     <GridCardItem
                       key={card.id}
