@@ -19,6 +19,7 @@ interface CardTreeProps {
   onSelectCard: (id: string | null) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
+  onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   deletedCount: number;
@@ -38,6 +39,7 @@ interface TreeItemProps {
   onSelectCard: (id: string) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string) => void;
+  onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   draggedCardId: string | null;
@@ -56,6 +58,7 @@ function TreeItem({
   onSelectCard,
   onRenameCard,
   onMoveCard,
+  onReorderCard,
   onDeleteCard,
   onUpdateCardBlocks,
   draggedCardId,
@@ -220,6 +223,14 @@ function TreeItem({
               <FolderInput className="w-3.5 h-3.5 mr-2" />
               Move to...
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onReorderCard(card.id, 'up')}>
+              <ArrowUp className="w-3.5 h-3.5 mr-2" />
+              Move Up
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onReorderCard(card.id, 'down')}>
+              <ChevronDown className="w-3.5 h-3.5 mr-2" />
+              Move Down
+            </DropdownMenuItem>
             {hasChildren && (
               <>
                 <DropdownMenuSeparator />
@@ -264,6 +275,7 @@ function TreeItem({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={onMoveCard}
+              onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
               onExpandRecursively={onExpandRecursively}
@@ -285,6 +297,7 @@ export function CategoryTree({
   onSelectCard,
   onRenameCard,
   onMoveCard,
+  onReorderCard,
   onDeleteCard,
   onUpdateCardBlocks,
   deletedCount,
@@ -472,6 +485,7 @@ export function CategoryTree({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={handleMoveClick}
+              onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
               onExpandRecursively={handleExpandRecursively}

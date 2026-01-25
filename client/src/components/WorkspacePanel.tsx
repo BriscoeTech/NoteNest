@@ -509,9 +509,10 @@ interface GridCardItemProps {
   onUpdateBlocks: (blocks: ContentBlock[]) => void;
   isRecycleBin?: boolean;
   onRestore?: () => void;
+  onReorder?: (direction: 'up' | 'down') => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, isRecycleBin, onRestore }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, isRecycleBin, onRestore, onReorder }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -715,6 +716,14 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
                     <FolderInput className="w-4 h-4 mr-2" />
                     Move to...
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReorder?.('up'); }}>
+                    <ArrowUp className="w-4 h-4 mr-2" />
+                    Move Up
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReorder?.('down'); }}>
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    Move Down
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
@@ -1138,6 +1147,7 @@ export function WorkspacePanel({
                       onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
                       isRecycleBin={isRecycleBin}
                       onRestore={() => onRestoreCard(card.id, null)}
+                      onReorder={(dir) => onReorderCard(card.id, dir)}
                     />
                   ))}
                 </div>

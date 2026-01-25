@@ -87,6 +87,7 @@ export default function NotesApp() {
             onSelectCard={handleSelectCardInTree}
             onRenameCard={handleRenameCard}
             onMoveCard={store.moveCard}
+            onReorderCard={store.moveCardStep}
             onDeleteCard={store.deleteCard}
             onUpdateCardBlocks={store.updateCardBlocks}
             deletedCount={deletedCount}
@@ -123,7 +124,7 @@ export default function NotesApp() {
           onDeleteCard={store.deleteCard}
           onRestoreCard={store.restoreCard}
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
-          onReorderCard={(id, dir) => {}} // Not using this anymore for tree logic? block logic only
+          onReorderCard={store.moveCardStep}
           onReorderCardsByIndex={(ids) => store.reorderChildren(currentCardId, ids)}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
