@@ -600,14 +600,14 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     onUpdateBlocks(newBlocks);
   };
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  }, [card.title]);
+  // useEffect(() => {
+  //   if (textareaRef.current) {
+  //     textareaRef.current.style.height = 'auto';
+  //     textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+  //   }
+  // }, [card.title]);
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
@@ -630,32 +630,30 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           />
         )}
         <div className="flex-1 w-full flex flex-col items-center">
-        <Textarea
-          ref={textareaRef}
-          value={card.title}
-          onChange={(e) => onRename(e.target.value)}
-          placeholder="Untitled"
+        <div
           className={cn(
-            "text-sm font-medium w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent p-0 cursor-text resize-none overflow-hidden min-h-[20px] break-words whitespace-pre-wrap h-auto",
+            "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 cursor-text min-h-[20px] break-words whitespace-pre-wrap outline-none",
             checkboxBlock ? "text-left" : "text-center",
             checkboxBlock?.checked && "line-through text-muted-foreground"
           )}
-          rows={1}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = target.scrollHeight + 'px';
-          }}
+          contentEditable
+          suppressContentEditableWarning
+          onBlur={(e) => onRename(e.currentTarget.textContent || "")}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault(); // Prevent new line
-              e.currentTarget.blur();
-            }
-            e.stopPropagation(); // Prevent dnd interference
+             if (e.key === 'Enter') {
+               e.preventDefault();
+               e.currentTarget.blur();
+             }
+             e.stopPropagation();
           }}
-          onPointerDown={(e) => e.stopPropagation()} // Prevent drag start on input
-          onClick={(e) => e.stopPropagation()} // Prevent click propagation
-        />
+          onClick={(e) => {
+            e.stopPropagation();
+            e.currentTarget.focus();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {card.title}
+        </div>
         {linkBlock && (
           <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
              {linkBlock.url ? (
