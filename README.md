@@ -22,7 +22,7 @@ This application is designed to be fully static and hostable on GitHub Pages.
     ```bash
     npm run build
     ```
-    This will create a `docs` folder containing `index.html` and assets.
+    This will create a `docs` folder at the repo root containing `index.html` and assets.
 
 2.  **Push to GitHub**:
     Commit and push the `docs` folder to your repository.
