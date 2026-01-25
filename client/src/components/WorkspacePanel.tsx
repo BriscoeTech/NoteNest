@@ -636,7 +636,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           onChange={(e) => onRename(e.target.value)}
           placeholder="Untitled"
           className={cn(
-            "text-sm font-medium w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent p-0 cursor-text resize-none overflow-hidden min-h-[20px] break-words whitespace-pre-wrap",
+            "text-sm font-medium w-full px-2 border-none shadow-none focus-visible:ring-0 bg-transparent p-0 cursor-text resize-none overflow-hidden min-h-[20px] break-words whitespace-pre-wrap h-auto",
             checkboxBlock ? "text-left" : "text-center",
             checkboxBlock?.checked && "line-through text-muted-foreground"
           )}
