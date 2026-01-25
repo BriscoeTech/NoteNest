@@ -197,16 +197,23 @@ export function useNotesStore() {
         const listMap = new Map(list.map(c => [c.id, c]));
         const newList: Card[] = [];
         // Add cards in the order of ids
+        const len = ids.length;
         ids.forEach((id, index) => {
           const card = listMap.get(id);
           if (card) {
              // Update sortOrder to persist order
-             newList.push({ ...card, sortOrder: index }); 
+             // Existing sort is descending (b - a), so higher value is first/top.
+             // We assign (len - index) to ensure first item has highest value.
+             newList.push({ ...card, sortOrder: (Date.now() + (len - index)) }); 
              listMap.delete(id);
           }
         });
         // Append any remaining cards (shouldn't happen if ids is complete)
-        listMap.forEach(card => newList.push(card));
+        // Give them lower sort order
+        let remainingIndex = 1;
+        listMap.forEach(card => {
+           newList.push({ ...card, sortOrder: Date.now() - remainingIndex++ });
+        });
         return newList;
       };
 
@@ -219,6 +226,106 @@ export function useNotesStore() {
           return cards.map(c => {
             if (c.id === parentId) {
               return { ...c, children: reorderList(c.children, childIds) };
+            }
+            return { ...c, children: updateParent(c.children) };
+          });
+        };
+        return { ...prev, cards: updateParent(prev.cards) };
+      }
+    });
+  }, []);
+
+  const moveCardStep = useCallback((cardId: string, direction: 'up' | 'down') => {
+    setState(prev => {
+      // Find the card and its parent
+      const card = findCardById(prev.cards, cardId);
+      if (!card) return prev;
+
+      let siblings: Card[] = [];
+      if (card.parentId) {
+        const parent = findCardById(prev.cards, card.parentId);
+        if (parent) siblings = parent.children;
+      } else {
+        siblings = prev.cards.filter(c => c.parentId === null);
+      }
+
+      // Filter non-deleted and sort descending (visual order)
+      const sortedSiblings = siblings
+        .filter(c => !c.isDeleted)
+        .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+
+      const currentIndex = sortedSiblings.findIndex(c => c.id === cardId);
+      if (currentIndex === -1) return prev;
+
+      // Calculate new index
+      let newIndex = currentIndex;
+      if (direction === 'up') {
+        newIndex = currentIndex - 1;
+      } else {
+        newIndex = currentIndex + 1;
+      }
+
+      // Check bounds
+      if (newIndex < 0 || newIndex >= sortedSiblings.length) return prev;
+
+      // Create new order of IDs
+      const newOrderIds = [...sortedSiblings.map(c => c.id)];
+      // Swap
+      [newOrderIds[currentIndex], newOrderIds[newIndex]] = [newOrderIds[newIndex], newOrderIds[currentIndex]];
+
+      // Re-use reorder logic
+      // We need to re-apply this to the parent's children (or root)
+      // Copy-paste reorder logic but internal to avoid state update collision? 
+      // Actually we can just update the state directly here similar to reorderChildren
+      
+      const reorderList = (list: Card[], ids: string[]): Card[] => {
+        const listMap = new Map(list.map(c => [c.id, c]));
+        const newList: Card[] = [];
+        const len = ids.length;
+        const now = Date.now();
+        ids.forEach((id, index) => {
+          const c = listMap.get(id);
+          if (c) {
+             newList.push({ ...c, sortOrder: now + (len - index) }); 
+             listMap.delete(id);
+          }
+        });
+        listMap.forEach(c => newList.push(c));
+        return newList;
+      };
+
+      if (card.parentId === null) {
+         // Reorder root
+         // We need to preserve deleted cards which were filtered out
+         const deletedRoots = prev.cards.filter(c => c.parentId === null && c.isDeleted);
+         // And reorder the visible ones
+         const reorderedVisible = reorderList(sortedSiblings, newOrderIds);
+         
+         // Combine: We need to replace the root cards in prev.cards
+         // easiest is to map prev.cards? No, prev.cards is the full tree.
+         // Root cards are those in prev.cards with parentId === null.
+         // We can reconstruct prev.cards.
+         
+         // Actually, prev.cards contains EVERYTHING if flattened? 
+         // No, looking at structure: AppState { cards: Card[] }. 
+         // And loadState/migrateLegacyData suggests it returns `rootCards`.
+         // So `state.cards` is the LIST OF ROOT CARDS (which contain children recursively).
+         
+         // So for Root cards:
+         const otherRoots = prev.cards.filter(c => c.id !== cardId && !newOrderIds.includes(c.id)); // Should be just deleted ones
+         return {
+            ...prev,
+            cards: [...reorderedVisible, ...otherRoots]
+         };
+      } else {
+        // Update parent
+        const updateParent = (cards: Card[]): Card[] => {
+          return cards.map(c => {
+            if (c.id === card.parentId) {
+               // Preserve deleted children
+               const deletedChildren = c.children.filter(child => child.isDeleted);
+               const reorderedVisible = reorderList(sortedSiblings, newOrderIds);
+               return { ...c, children: [...reorderedVisible, ...deletedChildren] };
             }
             return { ...c, children: updateParent(c.children) };
           });
@@ -386,6 +493,7 @@ export function useNotesStore() {
     updateCardBlocks,
     moveCard,
     reorderChildren,
+    moveCardStep,
     deleteCard,
     permanentlyDeleteCard,
     restoreCard,
