@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Card, AppState, ContentBlock } from '@/lib/types';
+import { get, set } from 'idb-keyval';
 import { 
   generateId, 
   removeCardFromTree, 
@@ -18,7 +19,7 @@ const defaultState: AppState = {
   cards: []
 };
 
-// Migration helpers
+// Migration helpers (kept for potential legacy localstorage data if we want to migrate it once)
 function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
   const categoryMap = new Map<string, Card>();
 
@@ -90,12 +91,10 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
 
   // Add legacy cards to tree
   convertedCards.forEach((card: Card) => {
-    // TypeScript thinks parentId is string|null, but checking map usage
     if (card.parentId && categoryMap.has(card.parentId)) {
       const parent = categoryMap.get(card.parentId)!;
       parent.children.push(card);
     } else {
-      // If parent not found (orphaned or root), add to root
       rootCards.push(card);
     }
   });
@@ -110,40 +109,57 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
   return rootCards;
 }
 
-function loadState(): AppState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Check if it's legacy data (has categories)
-      if (parsed.categories && Array.isArray(parsed.categories)) {
-        console.log('Migrating legacy data...');
-        const newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
-        return { cards: newCards };
-      }
-      // New format
-      return { cards: parsed.cards || [] };
-    }
-  } catch (e) {
-    console.error('Failed to load state:', e);
-  }
-  return defaultState;
-}
-
-function saveState(state: AppState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save state:', e);
-  }
-}
-
 export function useNotesStore() {
-  const [state, setState] = useState<AppState>(loadState);
+  const [state, setState] = useState<AppState>(defaultState);
+  const [isLoaded, setIsLoaded] = useState(false);
 
+  // Load state from IDB (or localStorage fallack migration)
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    const loadData = async () => {
+      try {
+        // Try IDB first
+        const saved = await get<string>(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.categories && Array.isArray(parsed.categories)) {
+             console.log('Migrating legacy data...');
+             const newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
+             setState({ cards: newCards });
+          } else {
+             setState({ cards: parsed.cards || [] });
+          }
+        } else {
+           // Fallback: check localStorage for migration
+           const localSaved = localStorage.getItem(STORAGE_KEY);
+           if (localSaved) {
+              console.log('Migrating from localStorage to IDB...');
+              const parsed = JSON.parse(localSaved);
+              let newCards: Card[] = [];
+              if (parsed.categories) {
+                 newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
+              } else {
+                 newCards = parsed.cards || [];
+              }
+              setState({ cards: newCards });
+              // Save to IDB immediately
+              await set(STORAGE_KEY, JSON.stringify({ cards: newCards }));
+           }
+        }
+      } catch (e) {
+        console.error('Failed to load state:', e);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Save state to IDB on change
+  useEffect(() => {
+    if (isLoaded) {
+      set(STORAGE_KEY, JSON.stringify(state)).catch(err => console.error('Failed to save to IDB', err));
+    }
+  }, [state, isLoaded]);
 
   const addCard = useCallback((title: string, parentId: string | null): string => {
     const newCard: Card = {
