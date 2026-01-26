@@ -130,9 +130,6 @@ export default function NotesApp() {
           searchQuery={searchQuery}
           sidebarOpen={sidebarOpen}
         />
-        <div className="absolute bottom-2 right-2 text-xs text-muted-foreground/30 pointer-events-none select-none">
-           v2.1 (GH Pages)
-        </div>
       </main>
     </div>
   );
