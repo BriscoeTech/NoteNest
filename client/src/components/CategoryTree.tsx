@@ -516,7 +516,7 @@ export function CategoryTree({
       </div>
       
       <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm pb-8 md:pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-2">
           <button
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
             onClick={onExport}
@@ -536,6 +536,9 @@ export function CategoryTree({
             onChange={handleImportFile}
             className="hidden"
           />
+        </div>
+        <div className="text-[10px] text-muted-foreground/40 text-center select-none">
+          v2.1
         </div>
       </div>
 
