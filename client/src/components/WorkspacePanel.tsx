@@ -721,6 +721,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                     <FolderInput className="w-4 h-4 mr-2" />
                     Move to...
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReorder?.('up'); }}>
                     <ArrowUp className="w-4 h-4 mr-2" />
                     Move Up
