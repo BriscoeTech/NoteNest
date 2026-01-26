@@ -697,14 +697,20 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           onClick={(e) => e.stopPropagation()}
         />
 
-       <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+       <div className="absolute top-1 left-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="start">
               {!isRecycleBin ? (
                 <>
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNavigate(); }}>
