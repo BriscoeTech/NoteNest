@@ -223,6 +223,7 @@ function TreeItem({
               <FolderInput className="w-3.5 h-3.5 mr-2" />
               Move to...
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onReorderCard(card.id, 'up')}>
               <ArrowUp className="w-3.5 h-3.5 mr-2" />
               Move Up
