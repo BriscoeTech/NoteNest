@@ -539,7 +539,7 @@ export function CategoryTree({
           />
         </div>
         <div className="text-[10px] text-muted-foreground/40 text-center select-none">
-          v2.1
+          v2.2
         </div>
       </div>
 
