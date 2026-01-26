@@ -188,7 +188,7 @@ function TreeItem({
         {hasChildren ? (
            isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : (
-           <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+           !checkboxBlock && <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
 
         {isEditing ? (
