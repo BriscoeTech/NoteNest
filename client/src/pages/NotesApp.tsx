@@ -109,7 +109,7 @@ export default function NotesApp() {
         {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
       </Button>
 
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 relative">
         <WorkspacePanel
           currentCard={currentCard || null}
           childrenCards={childrenCards}
@@ -130,6 +130,9 @@ export default function NotesApp() {
           searchQuery={searchQuery}
           sidebarOpen={sidebarOpen}
         />
+        <div className="absolute bottom-2 right-2 text-xs text-muted-foreground/30 pointer-events-none select-none">
+           v2.1 (GH Pages)
+        </div>
       </main>
     </div>
   );
