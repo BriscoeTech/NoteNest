@@ -5,6 +5,8 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { metaImagesPlugin } from "./vite-plugin-meta-images";
 
+const appVersion = process.env.npm_package_version ?? "0.0.0";
+
 export default defineConfig({
   plugins: [
     react(),
@@ -34,6 +36,9 @@ export default defineConfig({
     postcss: {
       plugins: [],
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {

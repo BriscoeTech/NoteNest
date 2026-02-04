@@ -459,7 +459,7 @@ export function useNotesStore() {
 
   const exportData = useCallback(() => {
     const data = {
-      version: 2,
+      version: __APP_VERSION__,
       exportedAt: new Date().toISOString(),
       cards: state.cards
     };
