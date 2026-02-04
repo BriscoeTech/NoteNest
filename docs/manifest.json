@@ -1,7 +1,7 @@
 {
-  "name": "Hierarchical Notes",
-  "short_name": "Notes",
-  "description": "A hierarchical notes application for organizing your thoughts.",
+  "name": "NoteNest",
+  "short_name": "NoteNest",
+  "description": "NoteNest helps you organize your notes in a clean, hierarchical workspace.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,5 +1,5 @@
 // Minimal Service Worker for PWA installability with safer updates.
-const CACHE_NAME = 'notes-app-v4';
+const CACHE_NAME = 'notenest-v1';
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
   './pwa-icon.png',

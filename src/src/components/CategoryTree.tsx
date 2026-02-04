@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, 
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
+import { APP_VERSION } from '@/lib/app-version';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -539,7 +540,7 @@ export function CategoryTree({
           />
         </div>
         <div className="text-[10px] text-muted-foreground/40 text-center select-none">
-          v{__APP_VERSION__.replace(/\.0$/, "")}
+          {APP_VERSION}
         </div>
       </div>
 
