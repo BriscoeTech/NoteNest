@@ -39,6 +39,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   root: path.resolve(import.meta.dirname, "src"),
+  publicDir: path.resolve(import.meta.dirname, "public"),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
