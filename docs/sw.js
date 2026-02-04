@@ -1,5 +1,5 @@
 // Minimal Service Worker for PWA installability with safer updates.
-const CACHE_NAME = 'notes-app-v2';
+const CACHE_NAME = 'notes-app-v4';
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
   './pwa-icon.png',
@@ -28,15 +28,9 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
 
   if (request.mode === 'navigate') {
-    // Network-first for HTML to avoid stale shell.
+    // Always fetch the latest HTML to avoid stale shell/hashed assets.
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseCopy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('./', responseCopy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match('./'))
+      fetch(request, { cache: 'no-store' })
     );
     return;
   }
