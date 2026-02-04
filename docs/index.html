@@ -7,12 +7,12 @@
     <meta property="og:title" content="NoteCards" />
     <meta property="og:description" content="A clean, minimal notes and cards app with recursive categories and rich text editing" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://ed1b0a0d-8da0-485f-8335-bf326b362683-00-3ico8dcme3sph.picard.replit.dev/opengraph.jpg" />
+    <meta property="og:image" content="https://replit.com/public/images/opengraph.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@replit" />
     <meta name="twitter:title" content="NoteCards" />
     <meta name="twitter:description" content="A clean, minimal notes and cards app with recursive categories and rich text editing" />
-    <meta name="twitter:image" content="https://ed1b0a0d-8da0-485f-8335-bf326b362683-00-3ico8dcme3sph.picard.replit.dev/opengraph.jpg" />
+    <meta name="twitter:image" content="https://replit.com/public/images/opengraph.png" />
 
     <title>NoteCards</title>
     <link rel="icon" type="image/png" href="./favicon.png" />
@@ -34,7 +34,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           // Use relative path so GitHub Pages subpaths work.
-          navigator.serviceWorker.register('./sw.js')
+          navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then(registration => {
               console.log('SW registered: ', registration);
             })
@@ -43,6 +43,6 @@
             });
         });
       }
-    </script>
+    </script>
   </body>
 </html>

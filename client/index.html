@@ -32,7 +32,7 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           // Use relative path so GitHub Pages subpaths work.
-          navigator.serviceWorker.register('./sw.js')
+          navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then(registration => {
               console.log('SW registered: ', registration);
             })
