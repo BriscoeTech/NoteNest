@@ -396,6 +396,10 @@ export function CategoryTree({
     setCardToMove(null);
   };
 
+  const moveExcludeIds = cardToMove
+    ? [cardToMove, ...getDescendantIds(cards, cardToMove)]
+    : [];
+
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -569,6 +573,7 @@ export function CategoryTree({
         categories={cards as any} // Cast for compatibility with picker which expects Category[]
         onSelect={handleMoveSelect}
         title="Move to..."
+        excludeIds={moveExcludeIds}
         showRoot={true}
       />
 

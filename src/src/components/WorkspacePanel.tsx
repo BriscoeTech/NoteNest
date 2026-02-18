@@ -4,7 +4,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock } from '@/lib/types';
-import { generateId } from '@/lib/types';
+import { generateId, getDescendantIds } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -813,6 +813,10 @@ export function WorkspacePanel({
     setCardToMove(null);
   };
 
+  const moveExcludeIds = cardToMove
+    ? [cardToMove, ...getDescendantIds(allCards, cardToMove)]
+    : [];
+
   // Auto resize title
   const autoResize = (textarea: HTMLTextAreaElement) => {
     textarea.style.height = 'auto';
@@ -1168,6 +1172,7 @@ export function WorkspacePanel({
         categories={allCards}
         onSelect={handleMoveSelect}
         title="Move to..."
+        excludeIds={moveExcludeIds}
         showRoot={true}
       />
     </div>

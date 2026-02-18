@@ -28,6 +28,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Move cards between parents | Implemented |
 | Notes model | Prevent invalid cyclic moves | Implemented |
 | Notes model | Manual reorder (up/down and drag reorder) | Implemented |
+| Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety | Implemented |
 | Notes model | Typed new-note templates (Note, Checkbox, Link, Image) | Implemented |
 | Content | Card blocks: text, bullets, image, checkbox, link | Implemented |
 | Content | Add/remove/toggle special blocks (checkbox/link/image) | Implemented |
@@ -45,6 +46,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Data safety | Export JSON backup | Implemented |
 | Data safety | Import JSON backup with merge/override modes | Implemented |
 | Data safety | Invalid import file shows error feedback and does not apply changes | Implemented |
+| Data safety | Import is parse-validated; payload shape validation is minimal | Implemented |
 | Persistence | IndexedDB persistence via `idb-keyval` | Implemented |
 | Persistence | Legacy migration fallback from localStorage format | Implemented |
 | UX | Sidebar collapse/expand | Implemented |
@@ -76,12 +78,14 @@ This section is the authoritative feature contract. Changes must be reflected he
 2. Store validates move (`canMoveCard`) to avoid self/descendant loops.
 3. Store updates parent linkage and timestamps.
 4. User can reorder within siblings (up/down or drag reindex).
+5. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
 
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
 2. Deleted cards appear in Recycle Bin view.
 3. Current UI restore action restores deleted cards to root.
 4. Permanent delete removes card subtree from state.
+5. Store supports restore to an arbitrary target parent, but current UI only exposes restore-to-root.
 
 ### 3.5 Import and export
 1. Export serializes full tree with version metadata.
@@ -127,6 +131,7 @@ Source of truth: `src/src/lib/types.ts`.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.
 - Sorting uses `sortOrder` (higher value renders earlier).
+- Reordering operates on non-deleted sibling sets while preserving deleted siblings in the resulting list.
 - Search results exclude deleted cards except in recycle bin workflows.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
@@ -213,6 +218,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 6.4 Dialogs
 - `CategoryPickerDialog` for move target selection.
 - Import mode dialog for merge/override choice.
+- Move target picker excludes self and descendants for the selected moving card.
+- Store validation (`canMoveCard`) remains the final safety guard for invalid targets.
 
 ## 7. Search Architecture
 
@@ -268,6 +275,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 8.3 Merge vs override semantics
 - `merge`: root-level concatenation `[...existing.cards, ...imported.cards]`.
 - `override`: `state.cards = imported.cards`.
+- Validation note:
+- current UI enforces JSON parse validity for import, while payload structure validation remains minimal.
 
 ## 9. Offline, PWA, and Deployment
 
@@ -336,7 +345,9 @@ Before each release/version bump, verify all items below:
 - Can rename notes from tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.
+- Move picker excludes invalid self/descendant targets and store validation still rejects invalid targets as safety.
 - Can reorder siblings (up/down) in tree and grid drag reorder in workspace.
+- Reorder behavior preserves deleted siblings while reordering visible siblings.
 - Can add/edit/remove each block type:
 - text, bullets, image, checkbox, link.
 - Card modifier semantics are preserved:
@@ -361,11 +372,13 @@ Before each release/version bump, verify all items below:
 - Recycle Bin includes deleted descendants even when parent is deleted.
 - Restore restores note subtree.
 - Restore action in current UI restores deleted card subtree to root.
+- Store restore API supports target parent even though UI currently restores to root only.
 - Permanent delete removes note permanently.
 - Export downloads valid JSON with version and timestamps.
 - Import merge adds without wiping existing notes.
 - Import override replaces notes.
 - Invalid import file shows error feedback and does not import.
+- Import path is parse-validated; structurally weak but parseable payloads are minimally validated in current implementation.
 - App reload preserves data from IndexedDB.
 - Dark mode persists after refresh.
 - Initial theme follows system preference when no saved theme exists.
