@@ -2,11 +2,23 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import fs from "fs";
 
-const appVersion = process.env.npm_package_version ?? "0.0.0";
+const packageJsonPath = path.resolve(import.meta.dirname, "package.json");
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+  version?: string;
+};
+const appVersion = packageJson.version ?? "0.0.0";
+const htmlVersionPlugin = {
+  name: "html-version-plugin",
+  transformIndexHtml(html: string) {
+    return html.replaceAll("__APP_VERSION__", appVersion);
+  },
+};
 
 export default defineConfig({
   plugins: [
+    htmlVersionPlugin,
     react(),
     tailwindcss(),
   ],

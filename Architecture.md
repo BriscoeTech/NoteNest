@@ -180,6 +180,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 5.5 Versioning Contract
 - App version source is `package.json` version injected at build time.
+- Version must be controlled in one place only: `package.json` (`version` field).
+- Do not hardcode version strings in source/HTML/config; derive from `package.json` during build.
 - Required package version format: `MAJOR.MINOR` (two-part numeric form, e.g., `2.9`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
@@ -430,6 +432,7 @@ Before each release/version bump, verify all items below:
 - Data contract (if applicable),
 - Regression Checklist.
 - Any removed or changed behavior must explicitly update status and rationale.
+- Version bumps must update `package.json` only; any secondary version references must be build-derived, not manually edited.
 
 ## 15. Source File Map
 
