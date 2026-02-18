@@ -57,6 +57,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Sidebar footer app version display (`APP_VERSION`) | Implemented |
 | UX | Recycle Bin displays deleted-card count badge | Implemented |
 | UX | Recycle Bin view is read-only for content editing and note creation | Implemented |
+| UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) | Implemented |
 | PWA | Manifest + service worker + installable static app | Implemented |
 | Deploy | Static GitHub Pages build to `docs/` | Implemented |
 
@@ -226,6 +227,20 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Move target picker excludes self and descendants for the selected moving card.
 - Store validation (`canMoveCard`) remains the final safety guard for invalid targets.
 
+### 6.5 Card Action Menu Contract (`...`)
+
+- Tree card `...` menu (normal cards):
+- `Rename`, `Move to...`, `Move Up`, `Move Down`, optional `Expand All`/`Collapse All` (when card has visible children), `Delete`.
+- Workspace grid card `...` menu (normal cards):
+- `Open`, `Move to...`, `Move Up`, `Move Down`, modifier toggles (`Add/Remove checkbox`, `Add/Remove link`, `Add/Remove image`), `Delete`.
+- Recycle Bin right-panel tree row `...` menu:
+- `Restore`, `Delete Forever`.
+- Recycle Bin right-panel tree rows:
+- actions are menu-based under `...` (not always-visible action buttons),
+- menu provides `Restore` and `Delete Forever`.
+- Menu visibility pattern:
+- context actions are revealed via `...` trigger (typically hover-revealed on desktop), preserving compact card layout.
+
 ## 7. Search Architecture
 
 - Search input control is in the sidebar tree.
@@ -393,6 +408,11 @@ Before each release/version bump, verify all items below:
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
 - App version is visible in sidebar footer.
 - Package/app version follows `MAJOR.MINOR` and displays as `vMAJOR.MINOR`.
+- Card `...` menu actions are correct by context:
+- tree normal cards expose rename/move/reorder/delete (+expand/collapse when applicable),
+- grid normal cards expose open/move/reorder/modifier toggles/delete,
+- recycle-bin cards/rows expose restore and delete-forever via `...` menu.
+- Recycle Bin row restore/delete actions are menu-based, not always-visible buttons.
 - PWA install prompt/behavior and service worker registration still function.
 - `npm run check` passes.
 - `npm run build` produces deployable `docs/`.

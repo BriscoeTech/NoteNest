@@ -793,7 +793,7 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
   return (
     <div>
       <div
-        className="flex items-center gap-2 rounded-md border bg-card p-3"
+        className="group flex items-center gap-2 rounded-md border bg-card p-3"
         style={{ marginLeft: `${depth * 20}px` }}
       >
         {hasChildren ? <Folder className="h-4 w-4 text-muted-foreground" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
@@ -803,14 +803,31 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
             Deleted {formatDistanceToNow(new Date(card.updatedAt), { addSuffix: true })}
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => onRestore(card.id)}>
-            Restore
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => onDeleteForever(card.id)}>
-            Delete
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 opacity-0 group-hover:opacity-100"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onRestore(card.id)}>
+              <ArrowUp className="w-4 h-4 mr-2" />
+              Restore
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDeleteForever(card.id)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Forever
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {deletedChildren.length > 0 && (
