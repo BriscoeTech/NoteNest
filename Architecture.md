@@ -315,6 +315,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Type check: `npm run check`.
 - Production static build for pages: `npm run build`.
 - Build script (`script/build.ts`) outputs to repo `docs/` with `base: "./"` for GitHub Pages compatibility.
+- `docs/` is a required tracked deploy artifact for GitHub Pages branch-folder publishing and must not be removed as an "orphaned" directory.
 
 ## 10. Technology Choices and Rationale
 
