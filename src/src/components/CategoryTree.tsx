@@ -537,16 +537,6 @@ export function CategoryTree({
           >
             <Upload className="w-3.5 h-3.5" /> Import
           </button>
-          <button
-            type="button"
-            aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
-            aria-pressed={isDarkMode}
-            className="shrink-0 flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-            onClick={onToggleDarkMode}
-          >
-            {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">Dark</span>
-          </button>
           <input
             ref={importInputRef}
             type="file"
@@ -554,6 +544,18 @@ export function CategoryTree({
             onChange={handleImportFile}
             className="hidden"
           />
+        </div>
+        <div className="mb-2">
+          <button
+            type="button"
+            aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
+            aria-pressed={isDarkMode}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+            onClick={onToggleDarkMode}
+          >
+            {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Dark</span>
+          </button>
         </div>
         <div className="text-[10px] text-muted-foreground/40 text-center select-none">
           {APP_VERSION}
