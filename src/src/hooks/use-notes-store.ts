@@ -449,9 +449,10 @@ export function useNotesStore() {
       for (const c of list) {
         if (c.isDeleted) {
           deleted.push(c);
-        } else {
-          traverse(c.children);
         }
+        // Always traverse children so deleted descendants are included
+        // even when their parent is also deleted.
+        traverse(c.children);
       }
     };
     traverse(state.cards);
