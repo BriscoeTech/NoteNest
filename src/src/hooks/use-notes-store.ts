@@ -403,20 +403,37 @@ export function useNotesStore() {
 
   const restoreCard = useCallback((id: string, targetParentId: string | null) => {
     setState(prev => {
-      const card = findCardById(prev.cards, id);
-      if (!card) return prev;
+      let restoredCard: Card | null = null;
+      const now = Date.now();
 
-      const restoreSubtree = (c: Card): Card => ({
-        ...c,
-        isDeleted: false,
-        children: c.children.map(restoreSubtree)
-      });
-      
-      const fullyRestoredCard = restoreSubtree({ ...card, isDeleted: false, updatedAt: Date.now() });
-      
-      const withoutCard = removeCardFromTree(prev.cards, id);
-      const withCardAdded = addCardToParent(withoutCard, targetParentId, fullyRestoredCard);
+      const rebuildRestoredSubtree = (card: Card, parentId: string | null): Card => {
+        const rebuilt: Card = {
+          ...card,
+          parentId,
+          isDeleted: false,
+          updatedAt: now,
+          children: []
+        };
+        rebuilt.children = card.children.map(child => rebuildRestoredSubtree(child, card.id));
+        return rebuilt;
+      };
 
+      const detachCard = (cards: Card[]): Card[] => {
+        const next: Card[] = [];
+        for (const card of cards) {
+          if (card.id === id) {
+            restoredCard = rebuildRestoredSubtree(card, targetParentId);
+            continue;
+          }
+          next.push({ ...card, children: detachCard(card.children) });
+        }
+        return next;
+      };
+
+      const withoutCard = detachCard(prev.cards);
+      if (!restoredCard) return prev;
+
+      const withCardAdded = addCardToParent(withoutCard, targetParentId, restoredCard);
       return { ...prev, cards: withCardAdded };
     });
   }, []);

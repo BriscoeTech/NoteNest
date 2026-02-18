@@ -42,6 +42,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Soft delete into recycle bin | Implemented |
 | Deletion | Restore deleted card subtree | Implemented |
 | Deletion | Permanent delete from recycle bin | Implemented |
+| Deletion | Restore undeletes all descendants in subtree (recursive restore) | Implemented |
 | Deletion | Recycle Bin lists deleted descendants even when ancestor is deleted | Implemented |
 | Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view | Implemented |
 | Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action | Implemented |
@@ -89,6 +90,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 3. Current UI restore action restores deleted cards to root.
 4. Permanent delete removes card subtree from state.
 5. Store supports restore to an arbitrary target parent, but current UI only exposes restore-to-root.
+6. Restore is recursive: restoring a deleted parent restores all descendants in that subtree.
 
 ### 3.5 Import and export
 1. Export serializes full tree with version metadata.
@@ -135,6 +137,7 @@ Source of truth: `src/src/lib/types.ts`.
 - A card cannot be moved under itself or under any descendant.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.
+- Restore rebuilds subtree parent links consistently under the chosen restore target.
 - Sorting uses `sortOrder` (higher value renders earlier).
 - Reordering operates on non-deleted sibling sets while preserving deleted siblings in the resulting list.
 - Search results exclude deleted cards except in recycle bin workflows.
@@ -394,6 +397,7 @@ Before each release/version bump, verify all items below:
 - Restore restores note subtree.
 - Restore action in current UI restores deleted card subtree to root.
 - Store restore API supports target parent even though UI currently restores to root only.
+- Restoring a deleted parent undeletes all nested descendants recursively.
 - Permanent delete removes note permanently.
 - Empty Recycle Bin permanently deletes all deleted items.
 - Export downloads valid JSON with version and timestamps.
