@@ -1,6 +1,7 @@
 {
   "name": "NoteNest",
   "short_name": "NoteNest",
+  "id": "./",
   "description": "NoteNest helps you organize your notes in a clean, hierarchical workspace.",
   "start_url": "./",
   "scope": "./",

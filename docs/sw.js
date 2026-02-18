@@ -2,9 +2,9 @@
 const CACHE_NAME = 'notenest-v1';
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
-  './pwa-icon.png',
+  './icons/pwa-icon.png',
   './manifest.json',
-  './favicon.png',
+  './icons/favicon.ico',
 ];
 
 self.addEventListener('install', (event) => {
