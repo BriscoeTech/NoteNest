@@ -32,6 +32,7 @@ interface WorkspacePanelProps {
   onDeleteCard: (id: string) => void;
   onRestoreCard: (id: string, targetId: string | null) => void;
   onPermanentlyDeleteCard: (id: string) => void;
+  onEmptyRecycleBin: () => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onReorderCardsByIndex: (ids: string[]) => void; // For children reordering
   onSearch: (query: string) => void;
@@ -776,6 +777,59 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
   );
 }
 
+interface RecycleBinTreeItemProps {
+  card: Card;
+  depth: number;
+  onRestore: (id: string) => void;
+  onDeleteForever: (id: string) => void;
+}
+
+function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: RecycleBinTreeItemProps) {
+  const deletedChildren = card.children
+    .filter(c => c.isDeleted)
+    .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+  const hasChildren = deletedChildren.length > 0;
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-2 rounded-md border bg-card p-3"
+        style={{ marginLeft: `${depth * 20}px` }}
+      >
+        {hasChildren ? <Folder className="h-4 w-4 text-muted-foreground" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{card.title || 'Untitled'}</div>
+          <div className="text-xs text-muted-foreground">
+            Deleted {formatDistanceToNow(new Date(card.updatedAt), { addSuffix: true })}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={() => onRestore(card.id)}>
+            Restore
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => onDeleteForever(card.id)}>
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      {deletedChildren.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {deletedChildren.map(child => (
+            <RecycleBinTreeItem
+              key={child.id}
+              card={child}
+              depth={depth + 1}
+              onRestore={onRestore}
+              onDeleteForever={onDeleteForever}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WorkspacePanel({
   currentCard,
   childrenCards,
@@ -789,6 +843,7 @@ export function WorkspacePanel({
   onDeleteCard,
   onRestoreCard,
   onPermanentlyDeleteCard,
+  onEmptyRecycleBin,
   onReorderCard,
   onReorderCardsByIndex,
   onSearch,
@@ -940,6 +995,12 @@ export function WorkspacePanel({
     onUpdateCardBlocks(currentCard.id, newBlocks);
   };
 
+  const handleEmptyRecycleBin = () => {
+    if (window.confirm('Permanently delete all items in Recycle Bin?')) {
+      onEmptyRecycleBin();
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
@@ -1062,73 +1123,92 @@ export function WorkspacePanel({
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               {currentCard ? "Sub-notes" : "Notes"}
             </h3>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  size="sm" 
-                  className={isRecycleBin ? "hidden" : ""}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  New Note
-                  <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onAddCard(currentCard?.id || null)}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Note
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                   const id = onAddCard(currentCard?.id || null);
-                   // @ts-ignore
-                   const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-                   onUpdateCardBlocks(id, [block]);
-                }}>
-                  <CheckSquare className="w-4 h-4 mr-2" />
-                  Checkbox
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                   const id = onAddCard(currentCard?.id || null);
-                   // @ts-ignore
-                   const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
-                   onUpdateCardBlocks(id, [block]);
-                }}>
-                  <LinkIcon className="w-4 h-4 mr-2" />
-                  Link
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                   // Trigger file input for new note
-                   const input = document.createElement('input');
-                   input.type = 'file';
-                   input.accept = 'image/*';
-                   input.onchange = (e) => {
-                     const file = (e.target as HTMLInputElement).files?.[0];
-                     if (file) {
-                       const reader = new FileReader();
-                       reader.onload = (event) => {
-                         const dataUrl = event.target?.result as string;
-                         const id = onAddCard(currentCard?.id || null);
-                         // @ts-ignore
-                         const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-                         onUpdateCardBlocks(id, [block]);
-                       };
-                       reader.readAsDataURL(file);
-                     }
-                   };
-                   input.click();
-                }}>
-                  <Image className="w-4 h-4 mr-2" />
-                  Image
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
+            {isRecycleBin ? (
+              <Button variant="destructive" size="sm" onClick={handleEmptyRecycleBin}>
+                <Trash2 className="w-4 h-4 mr-1" />
+                Empty Recycle Bin
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="w-4 h-4 mr-1" />
+                    New Note
+                    <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onAddCard(currentCard?.id || null)}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Note
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                     const id = onAddCard(currentCard?.id || null);
+                     // @ts-ignore
+                     const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+                     onUpdateCardBlocks(id, [block]);
+                  }}>
+                    <CheckSquare className="w-4 h-4 mr-2" />
+                    Checkbox
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                     const id = onAddCard(currentCard?.id || null);
+                     // @ts-ignore
+                     const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
+                     onUpdateCardBlocks(id, [block]);
+                  }}>
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    Link
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                     // Trigger file input for new note
+                     const input = document.createElement('input');
+                     input.type = 'file';
+                     input.accept = 'image/*';
+                     input.onchange = (e) => {
+                       const file = (e.target as HTMLInputElement).files?.[0];
+                       if (file) {
+                         const reader = new FileReader();
+                         reader.onload = (event) => {
+                           const dataUrl = event.target?.result as string;
+                           const id = onAddCard(currentCard?.id || null);
+                           // @ts-ignore
+                           const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
+                           onUpdateCardBlocks(id, [block]);
+                         };
+                         reader.readAsDataURL(file);
+                       }
+                     };
+                     input.click();
+                  }}>
+                    <Image className="w-4 h-4 mr-2" />
+                    Image
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {childrenCards.length === 0 ? (
              <div className="text-center py-10 text-muted-foreground italic border-2 border-dashed rounded-lg">
-               No notes here yet. Create one!
+               {isRecycleBin ? "Recycle Bin is empty." : "No notes here yet. Create one!"}
              </div>
+          ) : isRecycleBin ? (
+            <div className="space-y-2">
+              {childrenCards
+                .filter(c => c.isDeleted)
+                .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0))
+                .map(card => (
+                  <RecycleBinTreeItem
+                    key={card.id}
+                    card={card}
+                    depth={0}
+                    onRestore={(id) => onRestoreCard(id, null)}
+                    onDeleteForever={onPermanentlyDeleteCard}
+                  />
+                ))}
+            </div>
           ) : (
             <DndContext
               sensors={childSensors}

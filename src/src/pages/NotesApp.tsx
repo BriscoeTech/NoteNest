@@ -33,12 +33,35 @@ export default function NotesApp() {
   // Get children of current card (or root)
   const childrenCards = useMemo(() => {
     if (isRecycleBin) {
-      const deleted = store.getDeletedCards();
+      const collectDeletedRoots = (cards: Card[], parentDeleted = false): Card[] => {
+        const roots: Card[] = [];
+        for (const card of cards) {
+          if (card.isDeleted && !parentDeleted) {
+            roots.push(card);
+          }
+          roots.push(...collectDeletedRoots(card.children, parentDeleted || card.isDeleted));
+        }
+        return roots;
+      };
+
+      const filterDeletedTree = (cards: Card[], lower: string): Card[] => {
+        const filtered: Card[] = [];
+        for (const card of cards) {
+          const filteredChildren = filterDeletedTree(card.children.filter(c => c.isDeleted), lower);
+          const matches = card.title.toLowerCase().includes(lower);
+          if (matches || filteredChildren.length > 0) {
+            filtered.push({ ...card, children: filteredChildren });
+          }
+        }
+        return filtered;
+      };
+
+      const deletedRoots = collectDeletedRoots(store.cards);
       if (searchQuery) {
         const lower = searchQuery.toLowerCase();
-        return deleted.filter(c => c.title.toLowerCase().includes(lower));
+        return filterDeletedTree(deletedRoots, lower);
       }
-      return deleted;
+      return deletedRoots;
     }
 
     if (searchQuery) {
@@ -138,6 +161,7 @@ export default function NotesApp() {
           onDeleteCard={store.deleteCard}
           onRestoreCard={store.restoreCard}
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
+          onEmptyRecycleBin={store.emptyRecycleBin}
           onReorderCard={store.moveCardStep}
           onReorderCardsByIndex={(ids) => store.reorderChildren(currentCardId, ids)}
           onSearch={setSearchQuery}

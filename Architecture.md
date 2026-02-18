@@ -43,6 +43,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Restore deleted card subtree | Implemented |
 | Deletion | Permanent delete from recycle bin | Implemented |
 | Deletion | Recycle Bin lists deleted descendants even when ancestor is deleted | Implemented |
+| Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view | Implemented |
+| Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action | Implemented |
 | Data safety | Export JSON backup | Implemented |
 | Data safety | Import JSON backup with merge/override modes | Implemented |
 | Data safety | Invalid import file shows error feedback and does not apply changes | Implemented |
@@ -110,6 +112,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 3. New note creation actions are hidden in recycle-bin mode.
 4. Available actions are restore-to-root and permanent delete.
 5. Deleted descendants are listed in Recycle Bin even if a deleted ancestor is also present.
+6. Right-panel Recycle Bin view preserves tree hierarchy (nested deleted items).
+7. `Empty Recycle Bin` permanently purges all deleted items.
 
 ## 4. Data Model and Invariants
 
@@ -135,6 +139,7 @@ Source of truth: `src/src/lib/types.ts`.
 - Search results exclude deleted cards except in recycle bin workflows.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
+- Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
 - Current image UX keeps at most one image block per card by replacing existing image block on add.
 
 ### 4.3 Generated fields
@@ -370,10 +375,12 @@ Before each release/version bump, verify all items below:
 - Adding an image replaces prior image block on the same card.
 - Delete moves note subtree to recycle bin.
 - Recycle Bin includes deleted descendants even when parent is deleted.
+- Recycle Bin right-panel preserves deleted parent/child hierarchy.
 - Restore restores note subtree.
 - Restore action in current UI restores deleted card subtree to root.
 - Store restore API supports target parent even though UI currently restores to root only.
 - Permanent delete removes note permanently.
+- Empty Recycle Bin permanently deletes all deleted items.
 - Export downloads valid JSON with version and timestamps.
 - Import merge adds without wiping existing notes.
 - Import override replaces notes.

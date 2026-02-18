@@ -386,6 +386,21 @@ export function useNotesStore() {
     }));
   }, []);
 
+  const emptyRecycleBin = useCallback(() => {
+    const removeDeleted = (cards: Card[]): Card[] =>
+      cards
+        .filter(c => !c.isDeleted)
+        .map(c => ({
+          ...c,
+          children: removeDeleted(c.children)
+        }));
+
+    setState(prev => ({
+      ...prev,
+      cards: removeDeleted(prev.cards)
+    }));
+  }, []);
+
   const restoreCard = useCallback((id: string, targetParentId: string | null) => {
     setState(prev => {
       const card = findCardById(prev.cards, id);
@@ -514,6 +529,7 @@ export function useNotesStore() {
     moveCardStep,
     deleteCard,
     permanentlyDeleteCard,
+    emptyRecycleBin,
     restoreCard,
     getCard,
     searchCards,
