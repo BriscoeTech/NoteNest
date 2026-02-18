@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNotesStore } from '@/hooks/use-notes-store';
 import { CategoryTree } from '@/components/CategoryTree';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
@@ -14,6 +14,13 @@ export default function NotesApp() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null); // The card selected in the tree (highlighted)
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const savedTheme = window.localStorage.getItem('notenest-theme');
+    if (savedTheme === 'dark') return true;
+    if (savedTheme === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
   const isRecycleBin = selectedCardId === RECYCLE_BIN_ID;
 
@@ -76,6 +83,11 @@ export default function NotesApp() {
 
   const deletedCount = store.getDeletedCards().length;
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    window.localStorage.setItem('notenest-theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -95,6 +107,8 @@ export default function NotesApp() {
             onImport={store.importData}
             onSearch={setSearchQuery}
             searchQuery={searchQuery}
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={() => setIsDarkMode(prev => !prev)}
           />
         </aside>
       )}

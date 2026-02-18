@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
@@ -28,6 +28,8 @@ interface CardTreeProps {
   onImport: (data: any, mode: 'merge' | 'override') => void;
   onSearch: (query: string) => void;
   searchQuery: string;
+  isDarkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
 interface TreeItemProps {
@@ -307,6 +309,8 @@ export function CategoryTree({
   onImport,
   onSearch,
   searchQuery,
+  isDarkMode,
+  onToggleDarkMode,
   className
 }: CardTreeProps & { className?: string }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -520,16 +524,28 @@ export function CategoryTree({
       <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm pb-8 md:pb-3">
         <div className="flex items-center gap-2 mb-2">
           <button
+            type="button"
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
             onClick={onExport}
           >
             <Download className="w-3.5 h-3.5" /> Export
           </button>
           <button
+            type="button"
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
             onClick={() => importInputRef.current?.click()}
           >
             <Upload className="w-3.5 h-3.5" /> Import
+          </button>
+          <button
+            type="button"
+            aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
+            aria-pressed={isDarkMode}
+            className="shrink-0 flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+            onClick={onToggleDarkMode}
+          >
+            {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">Dark</span>
           </button>
           <input
             ref={importInputRef}
