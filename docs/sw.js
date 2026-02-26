@@ -1,5 +1,6 @@
 // Minimal Service Worker for PWA installability with safer updates.
-const CACHE_NAME = 'notenest-v1';
+const versionFromUrl = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE_NAME = `notenest-v${versionFromUrl}`;
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
   './icons/pwa-icon.png',

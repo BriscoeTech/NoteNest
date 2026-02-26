@@ -15,10 +15,23 @@ if [[ -f "$PID_FILE" ]]; then
   fi
 fi
 
+pkill -f "vite dev" > /dev/null 2>&1 || true
+
 nohup npm run dev -- --host "$HOST" --port "$PORT" > "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 
-sleep 1
+for _ in {1..20}; do
+  LOCAL_LINE="$(grep -m 1 "Local:" "$LOG_FILE" || true)"
+  if [[ -n "$LOCAL_LINE" ]]; then
+    break
+  fi
+  sleep 0.2
+done
+
 echo "Started Vite dev server (pid: $(cat "$PID_FILE"))."
-echo "URL: http://$HOST:$PORT/"
+if [[ -n "$LOCAL_LINE" ]]; then
+  echo "$LOCAL_LINE"
+else
+  echo "URL: http://$HOST:$PORT/"
+fi
 echo "Log: $LOG_FILE"
