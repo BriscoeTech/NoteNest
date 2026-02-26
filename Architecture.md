@@ -209,8 +209,9 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - move/reorder/delete,
 - native drag-and-drop parent reassignment.
 - card checkbox quick toggle when card includes checkbox block.
-- Footer supports export/import and dark mode toggle.
-- Footer displays current app version (`APP_VERSION`).
+- Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
+- utility section supports export/import and dark mode toggle.
+- utility section displays current app version (`APP_VERSION`).
 - Recycle Bin row shows a count badge for deleted cards when count > 0.
 
 ### 6.2.1 Tree Visual Semantics
