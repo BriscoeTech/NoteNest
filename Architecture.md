@@ -182,9 +182,15 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - App version source is `package.json` version injected at build time.
 - Version must be controlled in one place only: `package.json` (`version` field).
 - Do not hardcode version strings in source/HTML/config; derive from `package.json` during build.
-- Required package version format: `MAJOR.MINOR` (two-part numeric form, e.g., `2.9`).
+- Required package version format: semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
+- Version bump workflow:
+- Always bump the MINOR version for any user-facing or behavior change (UI/UX, data, or workflow).
+- PATCH should remain 0; do not use patch bumps for this project.
+- minor bump: `npm run version:minor`
+- bump + rebuild docs for release: `npm run release:minor`
+- `package-lock.json` version changes are npm-generated side effects; never manually edit lockfile versions.
 
 ## 6. UI Architecture
 
@@ -414,7 +420,7 @@ Before each release/version bump, verify all items below:
 - Recycle Bin shows deleted-item count badge when non-zero.
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
 - App version is visible in sidebar footer.
-- Package/app version follows `MAJOR.MINOR` and displays as `vMAJOR.MINOR`.
+- Package/app version follows semver `MAJOR.MINOR.PATCH` and displays as `vMAJOR.MINOR`.
 - Card `...` menu actions are correct by context:
 - tree normal cards expose rename/move/reorder/delete (+expand/collapse when applicable),
 - grid normal cards expose open/move/reorder/modifier toggles/delete,
@@ -432,7 +438,7 @@ Before each release/version bump, verify all items below:
 - Data contract (if applicable),
 - Regression Checklist.
 - Any removed or changed behavior must explicitly update status and rationale.
-- Version bumps must update `package.json` only; any secondary version references must be build-derived, not manually edited.
+- Version bumps must be done via npm scripts (`version:patch`/`version:minor`) so `package.json` and `package-lock.json` stay in sync automatically.
 
 ## 15. Source File Map
 

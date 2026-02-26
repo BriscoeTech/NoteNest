@@ -523,46 +523,46 @@ export function CategoryTree({
             )}
           </div>
         </div>
-      </div>
-      
-      <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm pb-8 md:pb-3">
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-            onClick={onExport}
-          >
-            <Download className="w-3.5 h-3.5" /> Export
-          </button>
-          <button
-            type="button"
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-            onClick={() => importInputRef.current?.click()}
-          >
-            <Upload className="w-3.5 h-3.5" /> Import
-          </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-        </div>
-        <div className="mb-2">
-          <button
-            type="button"
-            aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
-            aria-pressed={isDarkMode}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-            onClick={onToggleDarkMode}
-          >
-            {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">Dark</span>
-          </button>
-        </div>
-        <div className="text-[10px] text-muted-foreground/40 text-center select-none">
-          {APP_VERSION}
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              type="button"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              onClick={onExport}
+            >
+              <Download className="w-3.5 h-3.5" /> Export
+            </button>
+            <button
+              type="button"
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              onClick={() => importInputRef.current?.click()}
+            >
+              <Upload className="w-3.5 h-3.5" /> Import
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+          </div>
+          <div className="mb-2">
+            <button
+              type="button"
+              aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
+              aria-pressed={isDarkMode}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              onClick={onToggleDarkMode}
+            >
+              {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">Dark</span>
+            </button>
+          </div>
+          <div className="text-[10px] text-muted-foreground/40 text-center select-none">
+            {APP_VERSION}
+          </div>
         </div>
       </div>
 

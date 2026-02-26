@@ -1,12 +1,16 @@
 {
   "name": "rest-express",
-  "version": "2.19",
+  "version": "2.20.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "vite dev --port 5000",
     "build": "tsx script/build.ts",
-    "check": "tsc"
+    "check": "tsc",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "release:patch": "npm run version:patch && npm run build",
+    "release:minor": "npm run version:minor && npm run build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
