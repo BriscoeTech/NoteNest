@@ -185,6 +185,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Required package version format: semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
+- Cache-busting uses `__APP_VERSION__` in `src/index.html` for the manifest link and service worker registration so browser caches update after version bumps. The service worker derives its cache version from the `v` query string.
 - Version bump workflow:
 - Always bump the MINOR version for any user-facing or behavior change (UI/UX, data, or workflow).
 - PATCH should remain 0; do not use patch bumps for this project.

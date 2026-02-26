@@ -44,3 +44,5 @@ To run locally:
 npm install
 npm run dev
 ```
+
+Note: The manifest link and service worker registration use `__APP_VERSION__` for cache-busting, so a version bump ensures browsers fetch fresh assets without a hard refresh.
