@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock } from '@/lib/types';
+import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint } from '@/lib/types';
 import { generateId, getDescendantIds } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,902 @@ interface BlockEditorProps {
   };
 }
 
+const DRAWING_PREVIEW_WIDTH = 640;
+const DRAWING_PREVIEW_HEIGHT = 360;
+
+function renderDrawingStrokes(
+  ctx: CanvasRenderingContext2D,
+  strokes: DrawingStroke[],
+  width: number,
+  height: number
+) {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  for (const stroke of strokes) {
+    if (!stroke.points.length) continue;
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    const kind = stroke.kind ?? 'freehand';
+
+    ctx.save();
+    ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = stroke.color || '#111827';
+    ctx.fillStyle = stroke.color || '#111827';
+    ctx.lineWidth = Math.max(1, stroke.width || 2);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (kind === 'line') {
+      ctx.beginPath();
+      ctx.moveTo(first.x * width, first.y * height);
+      ctx.lineTo(last.x * width, last.y * height);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
+    if (kind === 'rectangle') {
+      const left = Math.min(first.x, last.x) * width;
+      const top = Math.min(first.y, last.y) * height;
+      const w = Math.abs(last.x - first.x) * width;
+      const h = Math.abs(last.y - first.y) * height;
+      ctx.strokeRect(left, top, w, h);
+      ctx.restore();
+      continue;
+    }
+
+    if (kind === 'circle') {
+      const cx = ((first.x + last.x) / 2) * width;
+      const cy = ((first.y + last.y) / 2) * height;
+      const rx = Math.abs(last.x - first.x) * width / 2;
+      const ry = Math.abs(last.y - first.y) * height / 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
+    if (stroke.points.length === 1) {
+      const x = first.x * width;
+      const y = first.y * height;
+      const radius = Math.max(0.5, ctx.lineWidth / 2);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(first.x * width, first.y * height);
+    for (let i = 1; i < stroke.points.length; i += 1) {
+      const p = stroke.points[i];
+      ctx.lineTo(p.x * width, p.y * height);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function getStrokeSegmentsNormalized(stroke: DrawingStroke): Array<{ ax: number; ay: number; bx: number; by: number }> {
+  const kind = stroke.kind ?? 'freehand';
+  if (!stroke.points.length) return [];
+  const first = stroke.points[0];
+  const last = stroke.points[stroke.points.length - 1];
+
+  if (kind === 'line') {
+    return [{ ax: first.x, ay: first.y, bx: last.x, by: last.y }];
+  }
+
+  if (kind === 'rectangle') {
+    const x1 = first.x;
+    const y1 = first.y;
+    const x2 = last.x;
+    const y2 = last.y;
+    return [
+      { ax: x1, ay: y1, bx: x2, by: y1 },
+      { ax: x2, ay: y1, bx: x2, by: y2 },
+      { ax: x2, ay: y2, bx: x1, by: y2 },
+      { ax: x1, ay: y2, bx: x1, by: y1 },
+    ];
+  }
+
+  if (kind === 'circle') {
+    const cx = (first.x + last.x) / 2;
+    const cy = (first.y + last.y) / 2;
+    const rx = Math.max(0.0005, Math.abs(last.x - first.x) / 2);
+    const ry = Math.max(0.0005, Math.abs(last.y - first.y) / 2);
+    const steps = 24;
+    const segs: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
+    let prevX = cx + rx;
+    let prevY = cy;
+    for (let i = 1; i <= steps; i += 1) {
+      const t = (i / steps) * Math.PI * 2;
+      const x = cx + Math.cos(t) * rx;
+      const y = cy + Math.sin(t) * ry;
+      segs.push({ ax: prevX, ay: prevY, bx: x, by: y });
+      prevX = x;
+      prevY = y;
+    }
+    return segs;
+  }
+
+  if (stroke.points.length === 1) {
+    const p = stroke.points[0];
+    return [{ ax: p.x, ay: p.y, bx: p.x, by: p.y }];
+  }
+
+  const segs: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
+  for (let i = 1; i < stroke.points.length; i += 1) {
+    const a = stroke.points[i - 1];
+    const b = stroke.points[i];
+    segs.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+  }
+  return segs;
+}
+
+function getStrokeSegments(stroke: DrawingStroke, width: number, height: number): Array<{ ax: number; ay: number; bx: number; by: number }> {
+  return getStrokeSegmentsNormalized(stroke).map((s) => ({
+    ax: s.ax * width,
+    ay: s.ay * height,
+    bx: s.bx * width,
+    by: s.by * height,
+  }));
+}
+
+function pointInRectNormalized(p: DrawingPoint, rect: NormalizedRect): boolean {
+  return p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
+}
+
+function orientation(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
+  const v = (by - ay) * (cx - bx) - (bx - ax) * (cy - by);
+  if (Math.abs(v) < 1e-9) return 0;
+  return v > 0 ? 1 : 2;
+}
+
+function onSegment(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): boolean {
+  return (
+    bx <= Math.max(ax, cx) + 1e-9 &&
+    bx + 1e-9 >= Math.min(ax, cx) &&
+    by <= Math.max(ay, cy) + 1e-9 &&
+    by + 1e-9 >= Math.min(ay, cy)
+  );
+}
+
+function segmentsIntersect(
+  a1x: number,
+  a1y: number,
+  a2x: number,
+  a2y: number,
+  b1x: number,
+  b1y: number,
+  b2x: number,
+  b2y: number
+): boolean {
+  const o1 = orientation(a1x, a1y, a2x, a2y, b1x, b1y);
+  const o2 = orientation(a1x, a1y, a2x, a2y, b2x, b2y);
+  const o3 = orientation(b1x, b1y, b2x, b2y, a1x, a1y);
+  const o4 = orientation(b1x, b1y, b2x, b2y, a2x, a2y);
+
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && onSegment(a1x, a1y, b1x, b1y, a2x, a2y)) return true;
+  if (o2 === 0 && onSegment(a1x, a1y, b2x, b2y, a2x, a2y)) return true;
+  if (o3 === 0 && onSegment(b1x, b1y, a1x, a1y, b2x, b2y)) return true;
+  if (o4 === 0 && onSegment(b1x, b1y, a2x, a2y, b2x, b2y)) return true;
+  return false;
+}
+
+function strokeIntersectsRect(stroke: DrawingStroke, rect: NormalizedRect): boolean {
+  const segments = getStrokeSegmentsNormalized(stroke);
+  if (!segments.length) return false;
+
+  const edges = [
+    { ax: rect.left, ay: rect.top, bx: rect.right, by: rect.top },
+    { ax: rect.right, ay: rect.top, bx: rect.right, by: rect.bottom },
+    { ax: rect.right, ay: rect.bottom, bx: rect.left, by: rect.bottom },
+    { ax: rect.left, ay: rect.bottom, bx: rect.left, by: rect.top },
+  ];
+
+  for (const seg of segments) {
+    const aInside = pointInRectNormalized({ x: seg.ax, y: seg.ay }, rect);
+    const bInside = pointInRectNormalized({ x: seg.bx, y: seg.by }, rect);
+    if (aInside || bInside) return true;
+
+    for (const edge of edges) {
+      if (segmentsIntersect(seg.ax, seg.ay, seg.bx, seg.by, edge.ax, edge.ay, edge.bx, edge.by)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function createDrawingPreviewDataUrl(strokes: DrawingStroke[]): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = DRAWING_PREVIEW_WIDTH;
+  canvas.height = DRAWING_PREVIEW_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  renderDrawingStrokes(ctx, strokes, DRAWING_PREVIEW_WIDTH, DRAWING_PREVIEW_HEIGHT);
+  return canvas.toDataURL('image/png');
+}
+
+function distancePointToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const apx = px - ax;
+  const apy = py - ay;
+  const abLenSq = abx * abx + aby * aby;
+  if (abLenSq === 0) {
+    const dx = px - ax;
+    const dy = py - ay;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+  const cx = ax + abx * t;
+  const cy = ay + aby * t;
+  const dx = px - cx;
+  const dy = py - cy;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function strokeContainsPoint(
+  stroke: DrawingStroke,
+  point: DrawingPoint,
+  width: number,
+  height: number
+): boolean {
+  if (!stroke.points.length) return false;
+  const px = point.x * width;
+  const py = point.y * height;
+  const radius = Math.max(6, stroke.width / 2 + 4);
+
+  const segments = getStrokeSegments(stroke, width, height);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const seg = segments[i];
+    const dist = distancePointToSegment(px, py, seg.ax, seg.ay, seg.bx, seg.by);
+    if (dist <= radius) return true;
+  }
+  return false;
+}
+
+type NormalizedRect = { left: number; top: number; right: number; bottom: number };
+type SelectionHandle = 'nw' | 'ne' | 'sw' | 'se';
+
+function normalizeRect(a: DrawingPoint, b: DrawingPoint): NormalizedRect {
+  return {
+    left: Math.min(a.x, b.x),
+    right: Math.max(a.x, b.x),
+    top: Math.min(a.y, b.y),
+    bottom: Math.max(a.y, b.y),
+  };
+}
+
+function getStrokeBounds(stroke: DrawingStroke): NormalizedRect | null {
+  if (!stroke.points.length) return null;
+  let left = stroke.points[0].x;
+  let right = stroke.points[0].x;
+  let top = stroke.points[0].y;
+  let bottom = stroke.points[0].y;
+  for (const p of stroke.points) {
+    left = Math.min(left, p.x);
+    right = Math.max(right, p.x);
+    top = Math.min(top, p.y);
+    bottom = Math.max(bottom, p.y);
+  }
+  return { left, right, top, bottom };
+}
+
+function rectsIntersect(a: NormalizedRect, b: NormalizedRect): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+function getSelectionBounds(strokes: DrawingStroke[], ids: string[]): NormalizedRect | null {
+  const selected = strokes.filter((s) => ids.includes(s.id));
+  if (!selected.length) return null;
+  let left = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const stroke of selected) {
+    const b = getStrokeBounds(stroke);
+    if (!b) continue;
+    left = Math.min(left, b.left);
+    right = Math.max(right, b.right);
+    top = Math.min(top, b.top);
+    bottom = Math.max(bottom, b.bottom);
+  }
+  if (!Number.isFinite(left)) return null;
+  return { left, right, top, bottom };
+}
+
+function DrawingBlockEditor({
+  block,
+  isRecycleBin,
+  isSelected,
+  onUpdate,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+  dragHandleProps,
+}: BlockEditorProps & { block: DrawingBlock }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const draftStrokeRef = useRef<DrawingStroke | null>(null);
+  const interactionRef = useRef<
+    | null
+    | { mode: 'marquee'; start: DrawingPoint; current: DrawingPoint }
+    | { mode: 'move'; start: DrawingPoint; baseStrokes: DrawingStroke[] }
+    | {
+        mode: 'resize';
+        handle: SelectionHandle;
+        baseStrokes: DrawingStroke[];
+        anchor: DrawingPoint;
+        initialVector: { x: number; y: number };
+      }
+  >(null);
+  const [tool, setTool] = useState<'pen' | 'line' | 'rectangle' | 'circle' | 'eraser' | 'select'>('select');
+  const [color, setColor] = useState('#111827');
+  const [brushSize, setBrushSize] = useState(4);
+  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
+  const [marqueeRect, setMarqueeRect] = useState<NormalizedRect | null>(null);
+  const [transientStrokes, setTransientStrokes] = useState<DrawingStroke[] | null>(null);
+
+  const displayedStrokes = transientStrokes ?? block.strokes;
+  const historyPast = block.historyPast ?? [];
+  const historyFuture = block.historyFuture ?? [];
+  const shapeToolKind: Record<'line' | 'rectangle' | 'circle', DrawingStroke['kind']> = {
+    line: 'line',
+    rectangle: 'rectangle',
+    circle: 'circle',
+  };
+
+  const getNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): DrawingPoint => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+    };
+  };
+
+  const getCanvasDrawSize = () => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      width: Math.max(1, Math.round(rect.width)),
+      height: Math.max(1, Math.round(rect.height)),
+    };
+  };
+
+  const getHandlePositions = (bounds: NormalizedRect) => ({
+    nw: { x: bounds.left, y: bounds.top },
+    ne: { x: bounds.right, y: bounds.top },
+    sw: { x: bounds.left, y: bounds.bottom },
+    se: { x: bounds.right, y: bounds.bottom },
+  });
+
+  const drawOnCanvas = (strokes: DrawingStroke[], selectionBounds: NormalizedRect | null, marquee: NormalizedRect | null) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    renderDrawingStrokes(ctx, strokes, width, height);
+
+    if (selectionBounds && tool === 'select') {
+      ctx.save();
+      const x = selectionBounds.left * width;
+      const y = selectionBounds.top * height;
+      const w = (selectionBounds.right - selectionBounds.left) * width;
+      const h = (selectionBounds.bottom - selectionBounds.top) * height;
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      const handles = Object.values(getHandlePositions(selectionBounds));
+      for (const handle of handles) {
+        const hx = handle.x * width;
+        const hy = handle.y * height;
+        ctx.fillStyle = '#2563eb';
+        ctx.fillRect(hx - 4, hy - 4, 8, 8);
+      }
+      ctx.restore();
+    }
+
+    if (marquee && tool === 'select') {
+      ctx.save();
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.fillStyle = 'rgba(14,165,233,0.12)';
+      const x = marquee.left * width;
+      const y = marquee.top * height;
+      const w = (marquee.right - marquee.left) * width;
+      const h = (marquee.bottom - marquee.top) * height;
+      ctx.fillRect(x, y, w, h);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.restore();
+    }
+  };
+
+  const commitStrokes = (nextStrokes: DrawingStroke[]) => {
+    const same =
+      nextStrokes.length === block.strokes.length &&
+      nextStrokes.every((s, i) => {
+        const current = block.strokes[i];
+        if (!current) return false;
+        if (s.id !== current.id) return false;
+        if ((s.kind ?? 'freehand') !== (current.kind ?? 'freehand')) return false;
+        if (s.color !== current.color || s.width !== current.width || s.tool !== current.tool) return false;
+        if (s.points.length !== current.points.length) return false;
+        for (let p = 0; p < s.points.length; p += 1) {
+          const a = s.points[p];
+          const b = current.points[p];
+          if (!b) return false;
+          if (a.x !== b.x || a.y !== b.y) return false;
+        }
+        return true;
+      });
+    if (same) return;
+    const maxHistory = 50;
+    const nextPast = [...historyPast, block.strokes].slice(-maxHistory);
+    onUpdate({
+      ...block,
+      strokes: nextStrokes,
+      redoStrokes: [],
+      historyPast: nextPast,
+      historyFuture: [],
+      previewDataUrl: createDrawingPreviewDataUrl(nextStrokes),
+    });
+  };
+
+  const undoStroke = () => {
+    if (!historyPast.length || isRecycleBin) return;
+    const previous = historyPast[historyPast.length - 1];
+    onUpdate({
+      ...block,
+      strokes: previous,
+      redoStrokes: [],
+      historyPast: historyPast.slice(0, -1),
+      historyFuture: [...historyFuture, block.strokes],
+      previewDataUrl: createDrawingPreviewDataUrl(previous),
+    });
+  };
+
+  const redoStroke = () => {
+    if (!historyFuture.length || isRecycleBin) return;
+    const restored = historyFuture[historyFuture.length - 1];
+    onUpdate({
+      ...block,
+      strokes: restored,
+      redoStrokes: [],
+      historyPast: [...historyPast, block.strokes],
+      historyFuture: historyFuture.slice(0, -1),
+      previewDataUrl: createDrawingPreviewDataUrl(restored),
+    });
+  };
+
+  useEffect(() => {
+    const selectionBounds = getSelectionBounds(displayedStrokes, selectedStrokeIds);
+    drawOnCanvas(displayedStrokes, selectionBounds, marqueeRect);
+  }, [displayedStrokes, selectedStrokeIds, marqueeRect, tool]);
+
+  useEffect(() => {
+    if ((block.historyPast?.length ?? 0) === 0 && (block.historyFuture?.length ?? 0) === 0 && (block.redoStrokes?.length ?? 0) === 0) {
+      return;
+    }
+    onUpdate({
+      ...block,
+      historyPast: [],
+      historyFuture: [],
+      redoStrokes: [],
+    });
+  }, [block.id]);
+
+  useEffect(() => {
+    const onResize = () => {
+      const selectionBounds = getSelectionBounds(displayedStrokes, selectedStrokeIds);
+      drawOnCanvas(displayedStrokes, selectionBounds, marqueeRect);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [displayedStrokes, selectedStrokeIds, marqueeRect, tool]);
+
+  useEffect(() => {
+    setSelectedStrokeIds((prev) => prev.filter((id) => block.strokes.some((s) => s.id === id)));
+  }, [block.strokes]);
+
+  const applyMove = (base: DrawingStroke[], ids: string[], dx: number, dy: number): DrawingStroke[] =>
+    base.map((stroke) =>
+      ids.includes(stroke.id)
+        ? { ...stroke, points: stroke.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+        : stroke
+    );
+
+  const applyResize = (
+    base: DrawingStroke[],
+    ids: string[],
+    anchor: DrawingPoint,
+    initialVector: { x: number; y: number },
+    currentPoint: DrawingPoint,
+    constrainAspect: boolean
+  ): DrawingStroke[] => {
+    const targetVector = { x: currentPoint.x - anchor.x, y: currentPoint.y - anchor.y };
+    let sx = Math.abs(initialVector.x) < 1e-5 ? 1 : targetVector.x / initialVector.x;
+    let sy = Math.abs(initialVector.y) < 1e-5 ? 1 : targetVector.y / initialVector.y;
+
+    if (constrainAspect) {
+      const uniform = Math.max(Math.abs(sx), Math.abs(sy));
+      sx = (sx < 0 ? -1 : 1) * uniform;
+      sy = (sy < 0 ? -1 : 1) * uniform;
+    }
+
+    return base.map((stroke) =>
+      ids.includes(stroke.id)
+        ? {
+            ...stroke,
+            points: stroke.points.map((p) => ({
+              x: anchor.x + (p.x - anchor.x) * sx,
+              y: anchor.y + (p.y - anchor.y) * sy,
+            })),
+          }
+        : stroke
+    );
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isRecycleBin) return;
+    event.preventDefault();
+    const point = getNormalizedPoint(event);
+
+    if (tool === 'eraser') {
+      const { width, height } = getCanvasDrawSize();
+      const hitIndexFromTop = [...block.strokes]
+        .reverse()
+        .findIndex((stroke) => strokeContainsPoint(stroke, point, width, height));
+      if (hitIndexFromTop !== -1) {
+        const actualIndex = block.strokes.length - 1 - hitIndexFromTop;
+        const next = block.strokes.filter((_, i) => i !== actualIndex);
+        commitStrokes(next);
+      }
+      return;
+    }
+
+    if (tool === 'select') {
+      const { width, height } = getCanvasDrawSize();
+      const hitIndexFromTop = [...block.strokes]
+        .reverse()
+        .findIndex((stroke) => strokeContainsPoint(stroke, point, width, height));
+      const hitStrokeIndex = hitIndexFromTop !== -1 ? block.strokes.length - 1 - hitIndexFromTop : -1;
+      const hitStrokeId = hitStrokeIndex !== -1 ? block.strokes[hitStrokeIndex].id : null;
+
+      const selectionBounds = getSelectionBounds(block.strokes, selectedStrokeIds);
+      if (selectionBounds) {
+        const handles = getHandlePositions(selectionBounds);
+        const px = point.x * width;
+        const py = point.y * height;
+        const handleHit = (Object.entries(handles) as Array<[SelectionHandle, DrawingPoint]>).find(([_, hp]) => {
+          const hx = hp.x * width;
+          const hy = hp.y * height;
+          return Math.abs(px - hx) <= 8 && Math.abs(py - hy) <= 8;
+        });
+        if (handleHit) {
+          const [handleName] = handleHit;
+          const corner = handles[handleName];
+          const opposite: Record<SelectionHandle, DrawingPoint> = {
+            nw: handles.se,
+            ne: handles.sw,
+            sw: handles.ne,
+            se: handles.nw,
+          };
+          interactionRef.current = {
+            mode: 'resize',
+            handle: handleName,
+            baseStrokes: block.strokes,
+            anchor: opposite[handleName],
+            initialVector: { x: corner.x - opposite[handleName].x, y: corner.y - opposite[handleName].y },
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+        if (
+          point.x >= selectionBounds.left &&
+          point.x <= selectionBounds.right &&
+          point.y >= selectionBounds.top &&
+          point.y <= selectionBounds.bottom
+        ) {
+          interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
+        }
+      }
+
+      if (hitStrokeId) {
+        if (!selectedStrokeIds.includes(hitStrokeId) || selectedStrokeIds.length > 1) {
+          setSelectedStrokeIds([hitStrokeId]);
+        }
+        interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      interactionRef.current = { mode: 'marquee', start: point, current: point };
+      setMarqueeRect(normalizeRect(point, point));
+      setSelectedStrokeIds([]);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const isShapeTool = tool === 'line' || tool === 'rectangle' || tool === 'circle';
+    const stroke: DrawingStroke = {
+      id: generateId(),
+      color,
+      width: brushSize,
+      tool: 'pen',
+      kind: isShapeTool ? shapeToolKind[tool] : 'freehand',
+      points: isShapeTool ? [point, point] : [point],
+    };
+    draftStrokeRef.current = stroke;
+    setTransientStrokes([...block.strokes, stroke]);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const point = getNormalizedPoint(event);
+
+    if (draftStrokeRef.current) {
+      const kind = draftStrokeRef.current.kind ?? 'freehand';
+      draftStrokeRef.current =
+        kind === 'freehand'
+          ? { ...draftStrokeRef.current, points: [...draftStrokeRef.current.points, point] }
+          : { ...draftStrokeRef.current, points: [draftStrokeRef.current.points[0], point] };
+      setTransientStrokes([...block.strokes, draftStrokeRef.current]);
+      return;
+    }
+
+    if (!interactionRef.current) return;
+
+    if (interactionRef.current.mode === 'marquee') {
+      interactionRef.current = { ...interactionRef.current, current: point };
+      setMarqueeRect(normalizeRect(interactionRef.current.start, point));
+      return;
+    }
+
+    if (interactionRef.current.mode === 'move') {
+      const dx = point.x - interactionRef.current.start.x;
+      const dy = point.y - interactionRef.current.start.y;
+      setTransientStrokes(applyMove(interactionRef.current.baseStrokes, selectedStrokeIds, dx, dy));
+      return;
+    }
+
+    if (interactionRef.current.mode === 'resize') {
+      const resized = applyResize(
+        interactionRef.current.baseStrokes,
+        selectedStrokeIds,
+        interactionRef.current.anchor,
+        interactionRef.current.initialVector,
+        point,
+        keepAspectRatio
+      );
+      setTransientStrokes(resized);
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (draftStrokeRef.current) {
+      const stroke = draftStrokeRef.current;
+      draftStrokeRef.current = null;
+      setTransientStrokes(null);
+      commitStrokes([...block.strokes, stroke]);
+      return;
+    }
+
+    if (interactionRef.current?.mode === 'marquee' && marqueeRect) {
+      const selected = block.strokes
+        .filter((stroke) => strokeIntersectsRect(stroke, marqueeRect))
+        .map((s) => s.id);
+      setSelectedStrokeIds(selected);
+      setMarqueeRect(null);
+      interactionRef.current = null;
+      return;
+    }
+
+    if ((interactionRef.current?.mode === 'move' || interactionRef.current?.mode === 'resize') && transientStrokes) {
+      const next = transientStrokes;
+      setTransientStrokes(null);
+      interactionRef.current = null;
+      commitStrokes(next);
+      return;
+    }
+
+    interactionRef.current = null;
+    setTransientStrokes(null);
+    setMarqueeRect(null);
+  };
+
+  const clearCanvas = () => {
+    if (isRecycleBin) return;
+    setSelectedStrokeIds([]);
+    commitStrokes([]);
+  };
+
+  const recolorSelectedStrokes = (nextColor: string) => {
+    if (!selectedStrokeIds.length) return;
+    const next = block.strokes.map((stroke) =>
+      selectedStrokeIds.includes(stroke.id)
+        ? { ...stroke, color: nextColor, tool: 'pen' as const }
+        : stroke
+    );
+    commitStrokes(next);
+  };
+
+  const resizeSelectedStrokes = (nextWidth: number) => {
+    if (!selectedStrokeIds.length) return;
+    const next = block.strokes.map((stroke) =>
+      selectedStrokeIds.includes(stroke.id)
+        ? { ...stroke, width: nextWidth }
+        : stroke
+    );
+    commitStrokes(next);
+  };
+
+  const swatches = ['#111827', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
+
+  return (
+    <div className="group relative flex items-start gap-1">
+      {isSelected && dragHandleProps && (
+        <div
+          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
+          {...dragHandleProps.attributes}
+          {...dragHandleProps.listeners}
+        >
+          <GripVertical className="w-3 h-3" />
+        </div>
+      )}
+      <div className="flex-1">
+        <div className="rounded border bg-muted/20 p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant={tool === 'pen' ? 'default' : 'outline'} onClick={() => setTool('pen')} disabled={isRecycleBin}>
+              <Brush className="w-4 h-4 mr-1" />
+              Pen
+            </Button>
+            <Button type="button" size="sm" variant={tool === 'line' ? 'default' : 'outline'} onClick={() => setTool('line')} disabled={isRecycleBin}>
+              <Minus className="w-4 h-4 mr-1" />
+              Line
+            </Button>
+            <Button type="button" size="sm" variant={tool === 'rectangle' ? 'default' : 'outline'} onClick={() => setTool('rectangle')} disabled={isRecycleBin}>
+              <Square className="w-4 h-4 mr-1" />
+              Rectangle
+            </Button>
+            <Button type="button" size="sm" variant={tool === 'circle' ? 'default' : 'outline'} onClick={() => setTool('circle')} disabled={isRecycleBin}>
+              <Circle className="w-4 h-4 mr-1" />
+              Circle
+            </Button>
+            <Button type="button" size="sm" variant={tool === 'eraser' ? 'default' : 'outline'} onClick={() => setTool('eraser')} disabled={isRecycleBin}>
+              <Eraser className="w-4 h-4 mr-1" />
+              Erase Segment
+            </Button>
+            <Button type="button" size="sm" variant={tool === 'select' ? 'default' : 'outline'} onClick={() => setTool('select')} disabled={isRecycleBin}>
+              <Move className="w-4 h-4 mr-1" />
+              Select
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={keepAspectRatio ? 'default' : 'outline'}
+              onClick={() => setKeepAspectRatio((v) => !v)}
+              disabled={isRecycleBin || tool !== 'select'}
+            >
+              {keepAspectRatio ? 'Aspect: On' : 'Aspect: Off'}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={undoStroke} disabled={isRecycleBin || !historyPast.length}>
+              <Undo2 className="w-4 h-4 mr-1" />
+              Undo
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={redoStroke} disabled={isRecycleBin || !historyFuture.length}>
+              <Redo2 className="w-4 h-4 mr-1" />
+              Redo
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={clearCanvas} disabled={isRecycleBin || !block.strokes.length}>
+              Clear
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Color</span>
+            {swatches.map((swatch) => (
+              <button
+                key={swatch}
+                type="button"
+                onClick={() => {
+                  setColor(swatch);
+                  if (selectedStrokeIds.length > 0) {
+                    recolorSelectedStrokes(swatch);
+                  }
+                }}
+                disabled={isRecycleBin}
+                className={cn('h-6 w-6 rounded-full border', color === swatch ? 'ring-2 ring-primary ring-offset-1' : 'ring-0')}
+                style={{ backgroundColor: swatch }}
+              />
+            ))}
+            <span className="text-xs text-muted-foreground ml-2">Brush</span>
+            <input
+              type="range"
+              min="1"
+              max="32"
+              step="1"
+              value={brushSize}
+              onChange={(e) => {
+                const nextWidth = Number(e.target.value);
+                setBrushSize(nextWidth);
+                if (selectedStrokeIds.length > 0) {
+                  resizeSelectedStrokes(nextWidth);
+                }
+              }}
+              disabled={isRecycleBin}
+              className="w-32 accent-primary"
+            />
+            <span className="text-xs text-muted-foreground w-8">{brushSize}</span>
+          </div>
+
+          <canvas
+            ref={canvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            className="w-full h-72 rounded bg-white border touch-none"
+          />
+        </div>
+      </div>
+      {isSelected && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+              <ChevronUp className="w-4 h-4 mr-2" />
+              Move Up
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Move Down
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
 function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dragHandleProps }: BlockEditorProps) {
   const textRef = useRef<HTMLTextAreaElement>(null);
   const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
@@ -84,6 +980,23 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
       focusNextBullet.current = null;
     }
   }, [block]);
+
+  if (block.type === 'drawing') {
+    return (
+      <DrawingBlockEditor
+        block={block}
+        isRecycleBin={isRecycleBin}
+        isSelected={isSelected}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        canMoveUp={canMoveUp}
+        canMoveDown={canMoveDown}
+        dragHandleProps={dragHandleProps}
+      />
+    );
+  }
 
   if (block.type === 'text') {
     return (
@@ -531,6 +1444,8 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
 
   const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
   const linkBlock = card.blocks.find(b => b.type === 'link') as LinkBlock | undefined;
+  const imageBlock = card.blocks.find(b => b.type === 'image') as ImageBlock | undefined;
+  const drawingBlock = card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined;
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -549,6 +1464,8 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
   const hasCheckbox = card.blocks.some(b => b.type === 'checkbox');
   const hasImage = card.blocks.some(b => b.type === 'image');
   const hasLink = card.blocks.some(b => b.type === 'link');
+  const hasDrawing = card.blocks.some(b => b.type === 'drawing');
+  const isMediaCard = false;
 
   const toggleCheckbox = () => {
     if (hasCheckbox) {
@@ -568,6 +1485,24 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     } else {
       // @ts-ignore
       const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateBlocks([...card.blocks, newBlock]);
+    }
+  };
+
+  const toggleDrawing = () => {
+    if (hasDrawing) {
+      const newBlocks = card.blocks.filter(b => b.type !== 'drawing');
+      onUpdateBlocks(newBlocks);
+    } else {
+      const newBlock: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        redoStrokes: [],
+        previewDataUrl: createDrawingPreviewDataUrl([]),
+        historyPast: [],
+        historyFuture: [],
+      };
       onUpdateBlocks([...card.blocks, newBlock]);
     }
   };
@@ -614,7 +1549,8 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
         className={cn(
-          "flex items-center gap-2 p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
+          "flex items-center gap-2 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
+          isMediaCard ? "p-0 overflow-hidden" : "p-4",
           checkboxBlock ? "justify-start pl-4" : "justify-center"
         )}
         {...attributes}
@@ -631,30 +1567,32 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           />
         )}
         <div className="flex-1 w-full flex flex-col items-center">
-        <div
-          className={cn(
-            "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 cursor-text min-h-[20px] break-words whitespace-pre-wrap outline-none",
-            checkboxBlock ? "text-left" : "text-center",
-            checkboxBlock?.checked && "line-through text-muted-foreground"
-          )}
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => onRename(e.currentTarget.textContent || "")}
-          onKeyDown={(e) => {
-             if (e.key === 'Enter') {
-               e.preventDefault();
-               e.currentTarget.blur();
-             }
-             e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            e.currentTarget.focus();
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {card.title}
-        </div>
+        {!isMediaCard && (
+          <div
+            className={cn(
+              "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 cursor-text min-h-[20px] break-words whitespace-pre-wrap outline-none",
+              checkboxBlock ? "text-left" : "text-center",
+              checkboxBlock?.checked && "line-through text-muted-foreground"
+            )}
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) => onRename(e.currentTarget.textContent || "")}
+            onKeyDown={(e) => {
+               if (e.key === 'Enter') {
+                 e.preventDefault();
+                 e.currentTarget.blur();
+               }
+               e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.currentTarget.focus();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {card.title}
+          </div>
+        )}
         {linkBlock && (
           <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
              {linkBlock.url ? (
@@ -684,6 +1622,42 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                   }}
                 />
              )}
+          </div>
+        )}
+        {imageBlock && (
+          <div
+            className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigate();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
+              <img
+                src={imageBlock.dataUrl}
+                alt="Card image"
+                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
+              />
+            </div>
+          </div>
+        )}
+        {drawingBlock && (
+          <div
+            className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigate();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
+              <img
+                src={drawingBlock.previewDataUrl || createDrawingPreviewDataUrl(drawingBlock.strokes)}
+                alt="Drawing preview"
+                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
+              />
+            </div>
           </div>
         )}
         </div>
@@ -739,6 +1713,10 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleLink(); }}>
                     <LinkIcon className="w-4 h-4 mr-2" />
                     {hasLink ? "Remove link" : "Add link"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleDrawing(); }}>
+                    <Brush className="w-4 h-4 mr-2" />
+                    {hasDrawing ? "Remove drawing" : "Add drawing"}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={(e) => { 
                     e.stopPropagation(); 
@@ -977,6 +1955,7 @@ export function WorkspacePanel({
   const hasCheckbox = currentCard?.blocks.some(b => b.type === 'checkbox');
   const hasImage = currentCard?.blocks.some(b => b.type === 'image');
   const hasLink = currentCard?.blocks.some(b => b.type === 'link');
+  const hasDrawing = currentCard?.blocks.some(b => b.type === 'drawing');
 
   const toggleLinkBlock = () => {
     if (!currentCard) return;
@@ -1010,6 +1989,25 @@ export function WorkspacePanel({
     if (newIndex < 0 || newIndex >= currentCard.blocks.length) return;
     const newBlocks = arrayMove(currentCard.blocks, index, newIndex);
     onUpdateCardBlocks(currentCard.id, newBlocks);
+  };
+
+  const toggleDrawingBlock = () => {
+    if (!currentCard) return;
+    if (hasDrawing) {
+      const newBlocks = currentCard.blocks.filter(b => b.type !== 'drawing');
+      onUpdateCardBlocks(currentCard.id, newBlocks);
+    } else {
+      const newBlock: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        redoStrokes: [],
+        previewDataUrl: createDrawingPreviewDataUrl([]),
+        historyPast: [],
+        historyFuture: [],
+      };
+      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
+    }
   };
 
   const handleEmptyRecycleBin = () => {
@@ -1123,6 +2121,17 @@ export function WorkspacePanel({
                 >
                   <Image className="w-3 h-3" /> {hasImage ? "Remove image" : "Add image"}
                 </button>
+                <button
+                  className={cn(
+                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
+                    hasDrawing
+                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20"
+                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
+                  )}
+                  onClick={toggleDrawingBlock}
+                >
+                  <Brush className="w-3 h-3" /> {hasDrawing ? "Remove drawing" : "Add drawing"}
+                </button>
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -1177,6 +2186,23 @@ export function WorkspacePanel({
                   }}>
                     <LinkIcon className="w-4 h-4 mr-2" />
                     Link
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => {
+                     const id = onAddCard(currentCard?.id || null);
+                     const block: DrawingBlock = {
+                       id: generateId(),
+                       type: 'drawing',
+                       strokes: [],
+                       redoStrokes: [],
+                       previewDataUrl: createDrawingPreviewDataUrl([]),
+                       historyPast: [],
+                       historyFuture: [],
+                     };
+                     onUpdateCardBlocks(id, [block]);
+                     onNavigateCard(id);
+                  }}>
+                    <Brush className="w-4 h-4 mr-2" />
+                    Drawing
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => {
                      // Trigger file input for new note

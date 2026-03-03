@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X, Moon, Sun } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X, Moon, Sun, Image as ImageIcon, Brush } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
@@ -79,6 +79,8 @@ function TreeItem({
   const [isDragOver, setIsDragOver] = useState(false);
 
   const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
+  const imageBlock = card.blocks.find(b => b.type === 'image');
+  const drawingBlock = card.blocks.find(b => b.type === 'drawing');
 
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -191,7 +193,11 @@ function TreeItem({
         {hasChildren ? (
            isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : (
-           !checkboxBlock && <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+           !checkboxBlock && (
+             imageBlock ? <ImageIcon className="w-4 h-4 text-muted-foreground shrink-0" /> :
+             drawingBlock ? <Brush className="w-4 h-4 text-muted-foreground shrink-0" /> :
+             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+           )
         )}
 
         {isEditing ? (

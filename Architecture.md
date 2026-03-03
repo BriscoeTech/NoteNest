@@ -21,56 +21,65 @@ NoteNest is a local-first, hierarchical note workspace for organizing personal n
 
 This section is the authoritative feature contract. Changes must be reflected here.
 
-| Area | Feature | Status |
-|---|---|---|
-| Notes model | Hierarchical note tree (root + nested children) | Implemented |
-| Notes model | Card rename and inline title editing | Implemented |
-| Notes model | Move cards between parents | Implemented |
-| Notes model | Prevent invalid cyclic moves | Implemented |
-| Notes model | Manual reorder (up/down and drag reorder) | Implemented |
-| Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety | Implemented |
-| Notes model | Typed new-note templates (Note, Checkbox, Link, Image) | Implemented |
-| Content | Card blocks: text, bullets, image, checkbox, link | Implemented |
-| Content | Add/remove/toggle special blocks (checkbox/link/image) | Implemented |
-| Content | Reorder blocks with drag and with move up/down | Implemented |
-| Content | One image block per card in current UI flows (replace existing image on add) | Implemented |
-| Content | Quick checkbox toggle directly in tree/grid when checkbox block exists | Implemented |
-| Search | Search by title and textual block content | Implemented |
-| Search | Recycle Bin search is title-only (deleted cards) | Implemented |
-| Search | Navigation/selection clears active search query | Implemented |
-| Search | Current-card block editor is hidden while search is active | Implemented |
-| Deletion | Soft delete into recycle bin | Implemented |
-| Deletion | Restore deleted card subtree | Implemented |
-| Deletion | Permanent delete from recycle bin | Implemented |
-| Deletion | Restore undeletes all descendants in subtree (recursive restore) | Implemented |
-| Deletion | Recycle Bin lists deleted descendants even when ancestor is deleted | Implemented |
-| Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view | Implemented |
-| Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action | Implemented |
-| Data safety | Export JSON backup | Implemented |
-| Data safety | Import JSON backup with merge/override modes | Implemented |
-| Data safety | Invalid import file shows error feedback and does not apply changes | Implemented |
-| Data safety | Import is parse-validated; payload shape validation is minimal | Implemented |
-| Persistence | IndexedDB persistence via `idb-keyval` | Implemented |
-| Persistence | Legacy migration fallback from localStorage format | Implemented |
-| UX | Sidebar collapse/expand | Implemented |
-| UX | Dark mode toggle with local preference storage | Implemented |
-| UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists | Implemented |
-| UX | Sidebar footer app version display (`APP_VERSION`) | Implemented |
-| UX | Recycle Bin displays deleted-card count badge | Implemented |
-| UX | Recycle Bin view is read-only for content editing and note creation | Implemented |
-| UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) | Implemented |
-| PWA | Manifest + service worker + installable static app | Implemented |
-| Deploy | Static GitHub Pages build to `docs/` | Implemented |
+| Area | Feature 
+|---|---
+| Notes model | Hierarchical note tree (root + nested children) 
+| Notes model | Card rename and inline title editing 
+| Notes model | Move cards between parents 
+| Notes model | Prevent invalid cyclic moves 
+| Notes model | Manual reorder (up/down and drag reorder) 
+| Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety 
+| Notes model | Typed new-note templates (Note, Checkbox, Link, Image, Drawing) 
+| Content | Card blocks: text, bullets, image, checkbox, link, drawing 
+| Content | Add/remove/toggle special blocks (checkbox/link/image/drawing) 
+| Content | Reorder blocks with drag and with move up/down 
+| Content | One image block per card in current UI flows (replace existing image on add) 
+| Content | Drawing tools: select, pen, line, rectangle, circle, erase-segment 
+| Content | Drawing selection supports direct line-hit + marquee + move + resize 
+| Content | Drawing selection resize supports aspect-ratio lock toggle 
+| Content | Selected drawing objects support color and width edits 
+| Content | Drawing undo/redo snapshot history; reset on drawing open 
+| Content | Quick checkbox toggle directly in tree/grid when checkbox block exists 
+| Search | Search by title and textual block content 
+| Search | Recycle Bin search is title-only (deleted cards) 
+| Search | Navigation/selection clears active search query 
+| Search | Current-card block editor is hidden while search is active 
+| Deletion | Soft delete into recycle bin 
+| Deletion | Restore deleted card subtree 
+| Deletion | Permanent delete from recycle bin 
+| Deletion | Restore undeletes all descendants in subtree (recursive restore) 
+| Deletion | Recycle Bin lists deleted descendants even when ancestor is deleted 
+| Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view 
+| Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action 
+| Data safety | Export JSON backup 
+| Data safety | Import JSON backup with merge/override modes 
+| Data safety | Invalid import file shows error feedback and does not apply changes 
+| Data safety | Import is parse-validated; payload shape validation is minimal 
+| Persistence | IndexedDB persistence via `idb-keyval` 
+| Persistence | Legacy migration fallback from localStorage format 
+| UX | Sidebar collapse/expand 
+| UX | Dark mode toggle with local preference storage 
+| UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
+| UX | Sidebar footer app version display (`APP_VERSION`) 
+| UX | Recycle Bin displays deleted-card count badge 
+| UX | Recycle Bin view is read-only for content editing and note creation 
+| UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
+| UX | Grid cards show image/drawing previews and open note on preview click 
+| UX | Image and drawing cards render title text in grid 
+| UX | Tree leaf icons are specialized for image and drawing notes 
+| PWA | Manifest + service worker + installable static app 
+| Deploy | Static GitHub Pages build to `docs/` 
 
 ## 3. User Flows
 
 ### 3.1 Create and edit note
 1. User creates a new note at root or under current scope.
-2. User may create from templates: plain note, checkbox note, link note, or image note.
+2. User may create from templates: plain note, checkbox note, link note, image note, or drawing note.
 3. New card is inserted under target parent with generated ID and timestamps.
 4. Template note creation can initialize first block based on selected template.
-5. User edits card title and blocks.
-6. Changes are persisted to IndexedDB after state updates.
+5. Drawing template creation immediately opens the created note for editing.
+6. User edits card title and blocks.
+7. Changes are persisted to IndexedDB after state updates.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
@@ -127,7 +136,7 @@ Source of truth: `src/src/lib/types.ts`.
 - `Card`:
 - `id`, `title`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `ContentBlock` union:
-- `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`.
+- `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`.
 - Recycle bin sentinel ID: `RECYCLE_BIN_ID = "__recycle_bin__"`.
 
 ### 4.2 Invariants
@@ -145,6 +154,8 @@ Source of truth: `src/src/lib/types.ts`.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
 - Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
 - Current image UX keeps at most one image block per card by replacing existing image block on add.
+- Drawing editor opens with Select as default tool.
+- Drawing session undo/redo history is reset when opening a drawing note.
 
 ### 4.3 Generated fields
 - IDs generated via `generateId()`.
@@ -223,7 +234,9 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - If card has no visible children and has a checkbox block:
 - do not show file icon; checkbox acts as the leading visual marker.
 - If card has no visible children and no checkbox block:
-- show file icon.
+- if image block exists, show image icon,
+- else if drawing block exists, show drawing icon,
+- else show file icon.
 
 ### 6.3 Workspace panel
 - `src/src/components/WorkspacePanel.tsx`:
@@ -231,8 +244,10 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Current card editor for title and block list.
 - Children displayed as card grid with create/move/reorder/delete actions.
 - Uses `@dnd-kit` for block and child-card drag sorting.
-- New-note dropdown provides typed creation templates (note/checkbox/link/image).
+- New-note dropdown provides typed creation templates (note/checkbox/link/image/drawing).
 - Grid cards allow quick checkbox toggle and link open behavior.
+- Grid cards render image/drawing previews and open note on preview click.
+- Drawing editor in workspace supports tool-based drawing, stroke selection, transform, and style updates.
 
 ### 6.4 Dialogs
 - `CategoryPickerDialog` for move target selection.
@@ -245,7 +260,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Tree card `...` menu (normal cards):
 - `Rename`, `Move to...`, `Move Up`, `Move Down`, optional `Expand All`/`Collapse All` (when card has visible children), `Delete`.
 - Workspace grid card `...` menu (normal cards):
-- `Open`, `Move to...`, `Move Up`, `Move Down`, modifier toggles (`Add/Remove checkbox`, `Add/Remove link`, `Add/Remove image`), `Delete`.
+- `Open`, `Move to...`, `Move Up`, `Move Down`, modifier toggles (`Add/Remove checkbox`, `Add/Remove link`, `Add/Remove image`, `Add/Remove drawing`), `Delete`.
 - Recycle Bin right-panel tree row `...` menu:
 - `Restore`, `Delete Forever`.
 - Recycle Bin right-panel tree rows:
@@ -281,15 +296,25 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - In grid cards, links are opened with `https://` prepended when missing scheme.
 - Image behavior:
 - Adding an image in current card editor or grid-card quick actions replaces any existing image block on that card.
+- Drawing behavior:
+- Default drawing tool on open: `Select`.
+- Available tools: `Select`, `Pen`, `Line`, `Rectangle`, `Circle`, `Erase Segment`.
+- Eraser removes whole stroke objects by rendered-line hit.
+- Selection supports marquee and direct click-hit on rendered lines.
+- Selected strokes support move and corner-handle resize.
+- Resize supports aspect-ratio lock toggle.
+- Color swatches and width slider apply to selected strokes when selection exists.
+- Marquee selects only when region touches/crosses rendered geometry, not bbox-only overlap.
 
 ## 7.2 Modifier Semantics (Current UI Contract)
 
-- Although blocks are modeled as a list, current UX treats `checkbox`, `link`, and `image` as card modifiers in normal flows.
+- Although blocks are modeled as a list, current UX treats `checkbox`, `link`, `image`, and `drawing` as card-level toggles in normal flows.
 - Modifier behavior in current UI:
 - `checkbox`: toggle add/remove; quick toggle checked state is available from tree/grid when present.
 - `link`: toggle add/remove; edited inline in card/grid contexts.
 - `image`: toggle add/remove; adding image replaces existing image block on the same card.
-- Template note creation can initialize a card with one modifier block (`checkbox`, `link`, or `image`).
+- `drawing`: toggle add/remove; drawing notes open immediately when created from drawing template.
+- Template note creation can initialize a card with one modifier/content block (`checkbox`, `link`, `image`, or `drawing`).
 - Regression note:
 - UI semantics above are contract-level behavior even though the data model can technically hold multiple blocks of the same type.
 
@@ -322,6 +347,9 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 9.2 Build and deploy
 - Dev server: `npm run dev` (Vite, port 5000).
+- Optional local-only dev-server helper scripts:
+- `script/dev-server-start.sh` / `script/dev-server-stop.sh`
+- `script/dev-server-start.bat` / `script/dev-server-stop.bat`
 - Type check: `npm run check`.
 - Production static build for pages: `npm run build`.
 - Build script (`script/build.ts`) outputs to repo `docs/` with `base: "./"` for GitHub Pages compatibility.
@@ -375,7 +403,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 Before each release/version bump, verify all items below:
 
 - Can create root and nested notes.
-- Can create typed notes from templates: Note, Checkbox, Link, Image.
+- Can create typed notes from templates: Note, Checkbox, Link, Image, Drawing.
 - Can rename notes from tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.
@@ -383,16 +411,20 @@ Before each release/version bump, verify all items below:
 - Can reorder siblings (up/down) in tree and grid drag reorder in workspace.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
 - Can add/edit/remove each block type:
-- text, bullets, image, checkbox, link.
+- text, bullets, image, checkbox, link, drawing.
 - Card modifier semantics are preserved:
 - checkbox is singleton toggle-style in normal UI flows.
 - link is singleton toggle-style in normal UI flows.
 - image is singleton toggle-style in normal UI flows.
+- drawing is singleton toggle-style in normal UI flows.
 - Checkbox can be toggled directly from tree and grid cards when present.
 - Tree icon rules are preserved:
 - folder open/closed for parents with visible children,
 - checkbox-leading rows omit file icon,
-- leaf cards without checkbox show file icon.
+- leaf cards without checkbox show icon by priority:
+- image icon when image block exists,
+- drawing icon when drawing block exists and no image block,
+- otherwise file icon.
 - Can reorder blocks via drag and up/down actions.
 - Bullet keyboard controls work:
 - Tab/Shift+Tab indent, Enter add bullet, Backspace empty-item behavior.
@@ -402,6 +434,20 @@ Before each release/version bump, verify all items below:
 - Current-card block editor is hidden during active search.
 - Link in grid opens correctly with scheme normalization.
 - Adding an image replaces prior image block on the same card.
+- Drawing behavior checks:
+- drawing template opens created note immediately,
+- drawing opens with `Select` tool by default,
+- tools available: select/pen/line/rectangle/circle/erase-segment,
+- direct click-hit and marquee selection both work on rendered geometry,
+- selected strokes can move/resize,
+- aspect toggle affects resize constraints,
+- selected stroke color and width updates apply via toolbar,
+- undo/redo works across draw/erase/style/transform operations,
+- opening drawing resets undo/redo history session baseline.
+- Card preview checks:
+- image and drawing previews are visible in grid cards,
+- clicking image/drawing preview opens the note,
+- image and drawing cards display title text.
 - Delete moves note subtree to recycle bin.
 - Recycle Bin includes deleted descendants even when parent is deleted.
 - Recycle Bin right-panel preserves deleted parent/child hierarchy.
@@ -454,4 +500,91 @@ Before each release/version bump, verify all items below:
 - Move dialog: `src/src/components/CategoryPickerDialog.tsx`
 - Vite config: `vite.config.ts`
 - Build script: `script/build.ts`
+- Dev server scripts: `script/dev-server-start.sh`, `script/dev-server-stop.sh`, `script/dev-server-start.bat`, `script/dev-server-stop.bat`
 - PWA manifest/SW: `public/manifest.json`, `public/sw.js`
+
+## 16. Session Change Log (2026-03-03)
+
+This section documents all user-facing and architecture-relevant changes implemented in this session.
+
+### 16.1 Dev Server Tooling
+
+- Added and hardened local dev server control scripts:
+- `script/dev-server-start.sh`
+- `script/dev-server-stop.sh`
+- `script/dev-server-start.bat`
+- `script/dev-server-stop.bat`
+- Start scripts enforce single-instance behavior and print host/port URL.
+- Stop scripts terminate matching Vite dev-server process flow and clear PID tracking.
+- Start scripts validate local dependencies and provide explicit startup-failure diagnostics.
+
+### 16.2 Drawing Domain Model
+
+- Extended content model with `DrawingBlock` and drawing stroke structures in `src/src/lib/types.ts`.
+- Added `DrawingStroke.kind` support for:
+- `freehand`
+- `line`
+- `rectangle`
+- `circle`
+- Added drawing history fields for session undo/redo snapshots:
+- `historyPast`
+- `historyFuture`
+
+### 16.3 Drawing Editor Capabilities
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- New drawing tools:
+- Select (default on drawing open)
+- Pen (freehand)
+- Line
+- Rectangle
+- Circle
+- Erase Segment
+- Stroke-level object erasing:
+- eraser click removes whole rendered stroke segment/object.
+- Selection workflows:
+- rectangle marquee selection,
+- direct click-hit selection on rendered geometry,
+- move selected strokes by dragging,
+- resize selected strokes via corner handles.
+- Resize behavior:
+- maintain-aspect-ratio toggle (`Aspect: On/Off`) for selection resize.
+- Style editing for selected objects:
+- color swatch click recolors selected strokes,
+- width slider updates selected stroke width.
+- Undo/redo system:
+- snapshot-based history for draw, erase, transform, recolor, width changes, and clear.
+- Drawing-open history behavior:
+- opening a drawing editor resets undo/redo history to a fresh session baseline.
+
+### 16.4 Card/Grid Presentation
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Added drawing template creation flow and immediate navigation/open after creation.
+- Drawing and image previews are visible on workspace cards.
+- Clicking drawing/image preview opens the corresponding note.
+- Card title rendering updated per final user preference:
+- drawing cards show title text,
+- image cards show title text.
+
+### 16.5 Tree View Semantics
+
+Implemented in `src/src/components/CategoryTree.tsx`:
+
+- Added leaf icon specialization by content type:
+- image notes use an image icon,
+- drawing notes use a brush icon.
+
+### 16.6 Selection Precision Refinement
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Rectangle selection now selects only when the marquee crosses or touches rendered stroke geometry.
+- Bounding-box-only overlap is no longer sufficient for selection.
+
+### 16.7 Validation Notes
+
+- TypeScript validation executed repeatedly after each change set:
+- `npm run check` passes with current session changes.

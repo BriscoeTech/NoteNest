@@ -1,5 +1,6 @@
 const rawVersion = __APP_VERSION__;
 
+// Display only major.minor in UI, while package.json keeps full semver.
 // NOTE: App version must always be two-part "vMAJOR.MINOR" (e.g., v2.7).
 // Keep package.json version in MAJOR.MINOR format so this stays consistent.
 export const APP_VERSION = /^(\d+)\.(\d+)$/.test(rawVersion)

@@ -35,7 +35,31 @@ export interface LinkBlock {
   url: string;
 }
 
-export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock;
+export interface DrawingPoint {
+  x: number; // normalized 0..1
+  y: number; // normalized 0..1
+}
+
+export interface DrawingStroke {
+  id: string;
+  color: string;
+  width: number;
+  tool: 'pen' | 'eraser';
+  kind?: 'freehand' | 'line' | 'rectangle' | 'circle';
+  points: DrawingPoint[];
+}
+
+export interface DrawingBlock {
+  id: string;
+  type: 'drawing';
+  strokes: DrawingStroke[];
+  redoStrokes: DrawingStroke[];
+  previewDataUrl: string;
+  historyPast?: DrawingStroke[][];
+  historyFuture?: DrawingStroke[][];
+}
+
+export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock;
 
 export interface Card {
   id: string;
