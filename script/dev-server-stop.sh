@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HOST="${1:-127.0.0.1}"
-PORT="${2:-5000}"
 PID_FILE="/tmp/notenest-vite.pid"
 
-if [[ -f "$PID_FILE" ]]; then
-  PID="$(cat "$PID_FILE" || true)"
-  if [[ -n "$PID" ]] && ps -p "$PID" > /dev/null 2>&1; then
-    kill "$PID" || true
-    sleep 1
-    if ps -p "$PID" > /dev/null 2>&1; then
-      kill -9 "$PID" || true
-    fi
-    rm -f "$PID_FILE"
-    echo "Stopped Vite dev server (pid: $PID)."
-    exit 0
+PIDS="$(pgrep -f "vite.*dev" || true)"
+if [[ -n "$PIDS" ]]; then
+  echo "$PIDS" | xargs -r kill > /dev/null 2>&1 || true
+  sleep 1
+  STILL_RUNNING="$(echo "$PIDS" | xargs -r -I {} sh -c 'ps -p "{}" > /dev/null 2>&1 && echo "{}"' || true)"
+  if [[ -n "$STILL_RUNNING" ]]; then
+    echo "$STILL_RUNNING" | xargs -r kill -9 > /dev/null 2>&1 || true
   fi
+  COUNT="$(echo "$PIDS" | wc -w | tr -d ' ')"
+  rm -f "$PID_FILE"
+  echo "Stopped $COUNT Vite dev server process(es)."
+  exit 0
 fi
 
-pkill -f "vite dev --port $PORT --host $HOST" > /dev/null 2>&1 || true
 rm -f "$PID_FILE"
-echo "No running Vite dev server found for http://$HOST:$PORT/."
+echo "No running Vite dev server process found."
