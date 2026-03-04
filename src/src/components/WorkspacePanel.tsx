@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint } from '@/lib/types';
@@ -1896,7 +1896,8 @@ export function WorkspacePanel({
 
   // Card Children Dnd
   const childSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
