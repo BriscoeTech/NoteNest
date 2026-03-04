@@ -25,4 +25,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Remove-Item -Path $pidFile -Force -ErrorAction SilentlyContinue;" ^
   "if ($killed.Count -eq 0) { Write-Output 'No running Vite dev server process found.' } else { Write-Output ('Stopped ' + $killed.Count + ' Vite dev server process(es).') }"
 
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3"
+
 endlocal

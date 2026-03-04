@@ -1,5 +1,25 @@
 # NoteNest Architecture
 
+## 0. Document Scope and Authoring Standard
+
+This document is the canonical requirements and architecture specification for NoteNest. It defines what the product must do, key constraints, and why major architectural choices were made.
+
+### 0.1 Focus
+- Define stable product behavior, data contracts, invariants, and non-functional requirements.
+- Capture architecture-level rationale and tradeoffs that inform long-term design decisions.
+- Serve as a reconstruction guide for re-implementing the product from scratch.
+
+### 0.2 Tone and Style
+- Use normative, implementation-independent language where possible (`must`, `should`, `may`).
+- Describe required behavior and constraints, not per-session timelines or dev diary notes.
+- Exclude operational procedures (release steps, scripts, runbooks); keep this document architecture-focused.
+
+### 0.3 What Must Be Added Here
+- Any new user-facing behavior contract.
+- Any data model or import/export contract change.
+- Any new invariant, safety rule, or architectural constraint.
+- Any architecture-level rationale or tradeoff that affects design decisions.
+
 ## 1. Purpose and Scope
 
 ### 1.1 Product purpose
@@ -200,13 +220,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Required package version format: semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
-- Cache-busting uses `__APP_VERSION__` in `src/index.html` for the manifest link and service worker registration so browser caches update after version bumps. The service worker derives its cache version from the `v` query string.
-- Version bump workflow:
-- Always bump the MINOR version for any user-facing or behavior change (UI/UX, data, or workflow).
-- PATCH should remain 0; do not use patch bumps for this project.
-- minor bump: `npm run version:minor`
-- bump + rebuild docs for release: `npm run release:minor`
-- `package-lock.json` version changes are npm-generated side effects; never manually edit lockfile versions.
+- Cache-busting uses `__APP_VERSION__` in `src/index.html` for the manifest link and service worker registration so browser caches update when app version changes. The service worker derives its cache version from the `v` query string.
 
 ## 6. UI Architecture
 
@@ -354,12 +368,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - GET assets served cache-first with runtime cache fill.
 
 ### 9.2 Build and deploy
-- Dev server: `npm run dev` (Vite, port 5000).
-- Optional local-only dev-server helper scripts:
-- `script/dev-server-start.sh` / `script/dev-server-stop.sh`
-- `script/dev-server-start.bat` / `script/dev-server-stop.bat`
-- Type check: `npm run check`.
-- Production static build for pages: `npm run build`.
+- The build pipeline is static-site oriented and produces deploy artifacts in `docs/`.
 - Build script (`script/build.ts`) outputs to repo `docs/` with `base: "./"` for GitHub Pages compatibility.
 - `docs/` is a required tracked deploy artifact for GitHub Pages branch-folder publishing and must not be removed as an "orphaned" directory.
 
@@ -406,9 +415,9 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Tree drag UI prevents common invalid drops, while hard correctness is enforced in store move validation.
 - Whole-state JSON persistence may become heavy at very large dataset sizes.
 
-## 13. Regression Checklist (Release Gate)
+## 13. Product Regression Checklist
 
-Before each release/version bump, verify all items below:
+Verify the product behavior items below:
 
 - Can create root and nested notes.
 - Can create typed notes from templates: Note, Checkbox, Link, Image, Drawing.
@@ -481,160 +490,10 @@ Before each release/version bump, verify all items below:
 - Recycle Bin shows deleted-item count badge when non-zero.
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
 - App version is visible in sidebar footer.
-- Package/app version follows semver `MAJOR.MINOR.PATCH` and displays as `vMAJOR.MINOR`.
+- App version display format in UI is `vMAJOR.MINOR`.
 - Card `...` menu actions are correct by context:
 - tree normal cards expose rename/move/reorder/delete (+expand/collapse when applicable),
 - grid normal cards expose open/move/reorder/modifier toggles/delete,
 - recycle-bin cards/rows expose restore and delete-forever via `...` menu.
 - Recycle Bin row restore/delete actions are menu-based, not always-visible buttons.
 - PWA install prompt/behavior and service worker registration still function.
-- `npm run check` passes.
-- `npm run build` produces deployable `docs/`.
-
-## 14. Change Control Rules
-
-- Any PR that changes behavior must update this file in the same PR.
-- Any new user-facing feature must be added to:
-- Canonical Feature Inventory,
-- Data contract (if applicable),
-- Regression Checklist.
-- Any removed or changed behavior must explicitly update status and rationale.
-- Version bumps must be done via npm scripts (`version:patch`/`version:minor`) so `package.json` and `package-lock.json` stay in sync automatically.
-
-## 15. Source File Map
-
-- App entry: `src/src/main.tsx`, `src/src/App.tsx`
-- App shell/orchestration: `src/src/pages/NotesApp.tsx`
-- Store and persistence: `src/src/hooks/use-notes-store.ts`
-- Types and tree utilities: `src/src/lib/types.ts`
-- Versioning: `src/src/lib/app-version.ts`
-- Tree UI: `src/src/components/CategoryTree.tsx`
-- Workspace UI: `src/src/components/WorkspacePanel.tsx`
-- Move dialog: `src/src/components/CategoryPickerDialog.tsx`
-- Vite config: `vite.config.ts`
-- Build script: `script/build.ts`
-- Dev server scripts: `script/dev-server-start.sh`, `script/dev-server-stop.sh`, `script/dev-server-start.bat`, `script/dev-server-stop.bat`
-- PWA manifest/SW: `public/manifest.json`, `public/sw.js`
-
-## 16. Session Change Log (2026-03-03)
-
-This section documents all user-facing and architecture-relevant changes implemented in this session.
-
-### 16.1 Dev Server Tooling
-
-- Added and hardened local dev server control scripts:
-- `script/dev-server-start.sh`
-- `script/dev-server-stop.sh`
-- `script/dev-server-start.bat`
-- `script/dev-server-stop.bat`
-- Start scripts enforce single-instance behavior and print host/port URL.
-- Stop scripts terminate matching Vite dev-server process flow and clear PID tracking.
-- Start scripts validate local dependencies and provide explicit startup-failure diagnostics.
-
-### 16.2 Drawing Domain Model
-
-- Extended content model with `DrawingBlock` and drawing stroke structures in `src/src/lib/types.ts`.
-- Added `DrawingStroke.kind` support for:
-- `freehand`
-- `line`
-- `rectangle`
-- `circle`
-- Added drawing history fields for session undo/redo snapshots:
-- `historyPast`
-- `historyFuture`
-
-### 16.3 Drawing Editor Capabilities
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- New drawing tools:
-- Select (default on drawing open)
-- Pen (freehand)
-- Line
-- Rectangle
-- Circle
-- Erase Segment
-- Stroke-level object erasing:
-- eraser click removes whole rendered stroke segment/object.
-- Selection workflows:
-- rectangle marquee selection,
-- direct click-hit selection on rendered geometry,
-- move selected strokes by dragging,
-- resize selected strokes via corner handles.
-- Resize behavior:
-- maintain-aspect-ratio toggle (`Aspect: On/Off`) for selection resize.
-- Style editing for selected objects:
-- color swatch click recolors selected strokes,
-- width slider updates selected stroke width.
-- Undo/redo system:
-- snapshot-based history for draw, erase, transform, recolor, width changes, and clear.
-- Drawing-open history behavior:
-- opening a drawing editor resets undo/redo history to a fresh session baseline.
-
-### 16.4 Card/Grid Presentation
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Added drawing template creation flow and immediate navigation/open after creation.
-- Drawing and image previews are visible on workspace cards.
-- Clicking drawing/image preview opens the corresponding note.
-- Card title rendering updated per final user preference:
-- drawing cards show title text,
-- image cards show title text.
-
-### 16.5 Tree View Semantics
-
-Implemented in `src/src/components/CategoryTree.tsx`:
-
-- Added leaf icon specialization by content type:
-- image notes use an image icon,
-- drawing notes use a brush icon.
-
-### 16.6 Selection Precision Refinement
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Rectangle selection now selects only when the marquee crosses or touches rendered stroke geometry.
-- Bounding-box-only overlap is no longer sufficient for selection.
-
-### 16.7 Validation Notes
-
-- TypeScript validation executed repeatedly after each change set:
-- `npm run check` passes with current session changes.
-
-## 17. Session Change Log (2026-03-04)
-
-This section documents all user-facing and architecture-relevant changes implemented in this session.
-
-### 17.1 Drawing Selection Interaction Refinements
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Selection pointer-down flow now prioritizes direct stroke hit-targeting before "move current selection bounds" behavior.
-- Added pending-hit behavior so drag-start on an unselected stroke can transition into marquee selection after movement threshold.
-- Added additive selection modifiers:
-- `Ctrl`/`Shift` + click adds the hit object to current selection.
-- `Ctrl`/`Shift` + marquee adds all intersecting objects to current selection.
-
-### 17.2 Drawing Surface Sizing and Stability
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Replaced fixed-height drawing canvas (`h-72`) with fixed-aspect square viewport (`aspect-square`).
-- Drawing viewport now scales uniformly with available width and avoids non-uniform stretch when sidebar visibility changes.
-- Mobile/stylus usability improved by larger effective drawing area.
-
-### 17.3 Drawing Defaults and Preview Consistency
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Changed default brush size from `4` to `2`.
-- Grid drawing preview now renders directly from current stroke data (`createDrawingPreviewDataUrl(drawingBlock.strokes)`) to avoid stale cached previews showing incorrect line widths.
-
-### 17.4 Image Card Presentation Tuning
-
-Implemented in `src/src/components/WorkspacePanel.tsx`:
-
-- Increased image preview height while keeping width behavior unchanged:
-- media-card image min-height increased (`140px` -> `220px`),
-- non-media image preview height increased (`h-24` -> `h-36`).
