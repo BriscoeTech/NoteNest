@@ -172,3 +172,61 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - type picker dialog flows,
 - double-click opening,
 - updated menu contracts and regression checklist.
+
+### Post-2.29 Incremental UX and Reliability Updates
+- Added sidebar `Hard Refresh` action below dark mode.
+- Implemented mobile overscroll guard to reduce pull-to-refresh gesture conflicts in Android PWA usage.
+- Tuned workspace card drag activation on touch to use long-press behavior for better scroll-vs-drag separation on mobile.
+- Refined grid title editing interaction:
+- long-hold activates title edit mode,
+- drag gestures are preserved when not in edit mode.
+
+### Drawing and Image Rendering Refinements
+- Drawing editor toolbar was decluttered:
+- drawing tool selection moved into a `Tools` dropdown,
+- color, line width, clear, and aspect toggle moved into the same dropdown.
+- Drawing viewport changed from square to fixed `3:4` aspect to provide more vertical space while preserving non-stretched rendering.
+- Circle drawing behavior corrected:
+- with aspect lock enabled, circles are now constrained in pixel space to render as true circles (not ovals),
+- with aspect lock disabled, ovals remain allowed.
+- Grid drawing preview rendering updated to avoid crop/stretch:
+- preview generation now matches drawing viewport aspect,
+- card height adapts to drawing preview instead of forcing distorted fill.
+- Image grid cards were aligned with drawing behavior:
+- card height adapts to image aspect,
+- images scale proportionally without crop/stretch.
+
+### Service Worker and Refresh Stability
+- Migrated service worker cache behavior to avoid refresh instability:
+- removed recursive version-based cache-name lookup during fetch handling,
+- switched to stable runtime cache naming,
+- forced network/no-store fetch path for `version.json`.
+- Hardened `Hard Refresh` action to:
+- unregister service workers,
+- clear Cache Storage,
+- reload cleanly.
+- Added architecture-level refresh outcome contracts:
+- normal refresh must render reliably without white-screen loop,
+- hard refresh must recover app state and re-register service worker on subsequent load.
+
+### Version Source Migration
+- Migrated app/runtime version source from build-time injected constants to runtime `version.json`.
+- Added `version.json` as root source of truth and emitted build artifact (`docs/version.json`).
+- Replaced npm semver bump scripts for app versioning with `script/version-bump.ts` targeting `version.json`.
+- Updated Vite configuration to serve/emit `version.json` directly.
+- Removed `__APP_VERSION__` build-time constant usage from app/html flows.
+- Updated runtime version loading in `src/src/lib/app-version.ts` and app bootstrap in `src/src/main.tsx`.
+- Preserved UI version display contract as `vMAJOR.MINOR`.
+- Updated docs (`Architecture.md`, `DevelopmentProcessGuide.md`, `README.md`) to reflect the new versioning process and runtime source.
+
+### Release Progression
+- Version progression during these sessions advanced through:
+- `2.30.0`,
+- `2.31.0`,
+- `2.32.0`,
+- `2.33.0`,
+- `2.34.0`,
+- `2.35.0`,
+- `2.36.0`,
+- `2.37.0`,
+- `2.38.0`.

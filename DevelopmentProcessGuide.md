@@ -75,6 +75,11 @@ npm run build
 - Output location: `docs/`
 - `docs/` is a required tracked deploy artifact for GitHub Pages.
 
+### 2.1 Runtime Refresh Verification
+- Validate both refresh paths after service-worker related changes:
+- Normal browser refresh must render app shell correctly.
+- Sidebar `Hard Refresh` must clear service workers/cache and recover to a working app state.
+
 ## 3. Local Dev Server Workflow
 
 ### Required Scripts

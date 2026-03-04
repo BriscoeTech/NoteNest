@@ -675,10 +675,19 @@ export function CategoryTree({
               type="button"
               aria-label="Hard refresh"
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-              onClick={() => {
-                const url = new URL(window.location.href);
-                url.searchParams.set('refresh', Date.now().toString());
-                window.location.replace(url.toString());
+              onClick={async () => {
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map((reg) => reg.unregister()));
+                  }
+                  if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((key) => caches.delete(key)));
+                  }
+                } finally {
+                  window.location.reload();
+                }
               }}
             >
               <RefreshCw className="w-3.5 h-3.5" />

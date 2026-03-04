@@ -61,7 +61,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | Drawing selection supports additive selection with Ctrl/Shift click and Ctrl/Shift marquee 
 | Content | Drawing selection resize supports aspect-ratio lock toggle 
 | Content | Selected drawing objects support color and width edits 
-| Content | Drawing editor uses a fixed-aspect square viewport to avoid sidebar/stretch distortion 
+| Content | Drawing editor uses a fixed-aspect `3:4` viewport to avoid sidebar/stretch distortion 
 | Content | Default drawing brush size is 2 
 | Content | Drawing undo/redo snapshot history; reset on drawing open 
 | Content | Quick checkbox toggle directly in tree/grid for checkbox-type cards 
@@ -84,6 +84,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Persistence | Legacy migration fallback from localStorage format 
 | UX | Sidebar collapse/expand 
 | UX | Dark mode toggle with local preference storage 
+| UX | Sidebar Hard Refresh action resets service worker + cache storage and reloads app 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
 | UX | Sidebar footer app version display (`APP_VERSION`) 
 | UX | Recycle Bin displays deleted-card count badge 
@@ -95,6 +96,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Image and drawing cards render title text in grid 
 | UX | Tree icons are driven by card type (folder, note, checkbox, link, image, drawing) 
 | PWA | Manifest + service worker + installable static app 
+| PWA | Normal refresh must render reliably (no white-screen loop) with active service worker 
 | Deploy | Static GitHub Pages build to `docs/` 
 
 ## 3. User Flows
@@ -116,6 +118,14 @@ This section is the authoritative feature contract. Changes must be reflected he
 2. In workspace grid, opening cards is triggered by double-click.
 3. App updates current scope (`currentCardId`) and tree selection state.
 4. Workspace shows current card content and, when applicable, children grid.
+
+### 3.9 Refresh and recovery behavior
+1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
+2. Hard Refresh action in sidebar must:
+- unregister service workers,
+- clear Cache Storage entries,
+- reload the page.
+3. After Hard Refresh, the app must re-register service worker on next load and continue normal operation.
 
 ### 3.3 Move and reorder
 1. User drags card in tree or uses "Move to..." picker.
@@ -330,8 +340,12 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Drawing behavior:
 - Default drawing tool on open: `Select`.
 - Available tools: `Select`, `Pen`, `Line`, `Rectangle`, `Circle`, `Erase Segment`.
+- Tools are selected from a compact `Tools` dropdown in drawing editor.
 - Default brush size is `2`.
 - Eraser removes whole stroke objects by rendered-line hit.
+- Circle tool behavior:
+- with aspect lock on, circle draw is constrained to true circles,
+- with aspect lock off, circle draw allows ovals.
 - Selection supports marquee and direct click-hit on rendered lines.
 - `Ctrl`/`Shift` + click adds stroke/object to current selection.
 - `Ctrl`/`Shift` + marquee adds intersecting strokes/objects to current selection.
@@ -339,7 +353,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Resize supports aspect-ratio lock toggle.
 - Color swatches and width slider apply to selected strokes when selection exists.
 - Marquee selects only when region touches/crosses rendered geometry, not bbox-only overlap.
-- Drawing surface is rendered in a fixed square viewport so resizing surrounding layout does not distort drawing geometry.
+- Drawing surface is rendered in a fixed-aspect viewport (`3:4`) so resizing surrounding layout does not distort drawing geometry.
 
 ## 7.2 Card Type UI Semantics (Current UI Contract)
 
@@ -470,11 +484,14 @@ Verify the product behavior items below:
 - undo/redo works across draw/erase/style/transform operations,
 - opening drawing resets undo/redo history session baseline.
 - drawing viewport remains fixed-aspect and does not stretch when sidebar/layout width changes.
+- drawing viewport uses fixed `3:4` aspect and does not stretch when sidebar/layout width changes.
+- with aspect lock on, circle tool produces true circles (not ovals).
 - Card preview checks:
 - image and drawing previews are visible in grid cards,
 - all grid cards open via double-click,
 - image/drawing previews do not trigger native browser image drag-copy behavior while dragging cards,
 - image and drawing cards display title text,
+- drawing and image previews scale without stretch/crop; card height expands to fit preview aspect.
 - drawing preview stroke widths/colors match live stroke data without requiring entering edit mode.
 - Delete moves note subtree to recycle bin.
 - Recycle Bin includes deleted descendants even when parent is deleted.
@@ -497,6 +514,8 @@ Verify the product behavior items below:
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
 - App version is visible in sidebar footer.
 - App version display format in UI is `vMAJOR.MINOR`.
+- Normal refresh renders app without white-screen failure when service worker is active.
+- Hard Refresh button clears SW/cache state and reloads app.
 - Card `...` menu actions are correct by context:
 - tree normal cards expose rename/move/change-type/reorder/delete (+expand/collapse when applicable),
 - grid normal cards expose open/move/change-type/reorder/delete,
