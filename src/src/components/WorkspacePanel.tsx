@@ -386,7 +386,8 @@ function DrawingBlockEditor({
   const draftStrokeRef = useRef<DrawingStroke | null>(null);
   const interactionRef = useRef<
     | null
-    | { mode: 'marquee'; start: DrawingPoint; current: DrawingPoint }
+    | { mode: 'pending-hit'; start: DrawingPoint; hitStrokeId: string; additive: boolean }
+    | { mode: 'marquee'; start: DrawingPoint; current: DrawingPoint; additive: boolean }
     | { mode: 'move'; start: DrawingPoint; baseStrokes: DrawingStroke[] }
     | {
         mode: 'resize';
@@ -637,6 +638,7 @@ function DrawingBlockEditor({
     }
 
     if (tool === 'select') {
+      const isAdditiveSelect = event.ctrlKey || event.metaKey || event.shiftKey;
       const { width, height } = getCanvasDrawSize();
       const hitIndexFromTop = [...block.strokes]
         .reverse()
@@ -673,30 +675,46 @@ function DrawingBlockEditor({
           event.currentTarget.setPointerCapture(event.pointerId);
           return;
         }
-        if (
-          point.x >= selectionBounds.left &&
-          point.x <= selectionBounds.right &&
-          point.y >= selectionBounds.top &&
-          point.y <= selectionBounds.bottom
-        ) {
-          interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
-          event.currentTarget.setPointerCapture(event.pointerId);
-          return;
-        }
       }
 
       if (hitStrokeId) {
-        if (!selectedStrokeIds.includes(hitStrokeId) || selectedStrokeIds.length > 1) {
-          setSelectedStrokeIds([hitStrokeId]);
+        if (isAdditiveSelect) {
+          interactionRef.current = { mode: 'pending-hit', start: point, hitStrokeId, additive: true };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          return;
         }
+        if (selectedStrokeIds.includes(hitStrokeId)) {
+          if (selectedStrokeIds.length > 1) {
+            setSelectedStrokeIds([hitStrokeId]);
+          }
+          interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
+        } else {
+          // Allow drag-marquee even when drag starts on an unselected stroke.
+          // Pointer-up without drag still behaves like single-stroke selection.
+          interactionRef.current = { mode: 'pending-hit', start: point, hitStrokeId, additive: false };
+        }
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      if (
+        !isAdditiveSelect &&
+        selectionBounds &&
+        point.x >= selectionBounds.left &&
+        point.x <= selectionBounds.right &&
+        point.y >= selectionBounds.top &&
+        point.y <= selectionBounds.bottom
+      ) {
         interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
         event.currentTarget.setPointerCapture(event.pointerId);
         return;
       }
 
-      interactionRef.current = { mode: 'marquee', start: point, current: point };
+      interactionRef.current = { mode: 'marquee', start: point, current: point, additive: isAdditiveSelect };
       setMarqueeRect(normalizeRect(point, point));
-      setSelectedStrokeIds([]);
+      if (!isAdditiveSelect) {
+        setSelectedStrokeIds([]);
+      }
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
@@ -730,6 +748,23 @@ function DrawingBlockEditor({
     }
 
     if (!interactionRef.current) return;
+
+    if (interactionRef.current.mode === 'pending-hit') {
+      const { width, height } = getCanvasDrawSize();
+      const dx = (point.x - interactionRef.current.start.x) * width;
+      const dy = (point.y - interactionRef.current.start.y) * height;
+      const moved = Math.hypot(dx, dy) >= 6;
+      if (moved) {
+        interactionRef.current = {
+          mode: 'marquee',
+          start: interactionRef.current.start,
+          current: point,
+          additive: interactionRef.current.additive,
+        };
+        setMarqueeRect(normalizeRect(interactionRef.current.start, point));
+      }
+      return;
+    }
 
     if (interactionRef.current.mode === 'marquee') {
       interactionRef.current = { ...interactionRef.current, current: point };
@@ -770,9 +805,28 @@ function DrawingBlockEditor({
       const selected = block.strokes
         .filter((stroke) => strokeIntersectsRect(stroke, marqueeRect))
         .map((s) => s.id);
-      setSelectedStrokeIds(selected);
+      if (interactionRef.current.additive) {
+        setSelectedStrokeIds((prev) => Array.from(new Set([...prev, ...selected])));
+      } else {
+        setSelectedStrokeIds(selected);
+      }
       setMarqueeRect(null);
       interactionRef.current = null;
+      return;
+    }
+
+    if (interactionRef.current?.mode === 'pending-hit') {
+      const hitStrokeId = interactionRef.current.hitStrokeId;
+      if (interactionRef.current.additive) {
+        setSelectedStrokeIds((prev) =>
+          prev.includes(hitStrokeId) ? prev : [...prev, hitStrokeId]
+        );
+      } else {
+        setSelectedStrokeIds([hitStrokeId]);
+      }
+      interactionRef.current = null;
+      setTransientStrokes(null);
+      setMarqueeRect(null);
       return;
     }
 
