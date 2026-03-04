@@ -45,4 +45,4 @@ npm install
 npm run dev
 ```
 
-Note: The manifest link and service worker registration use `__APP_VERSION__` for cache-busting, so a version bump ensures browsers fetch fresh assets without a hard refresh.
+Note: App/runtime version is sourced from `version.json` and loaded at runtime for UI display, export metadata, and service-worker cache versioning.

@@ -1,24 +1,34 @@
 import { defineConfig } from "vite";
+import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
+const versionJsonPath = path.resolve(import.meta.dirname, "version.json");
 
-const packageJsonPath = path.resolve(import.meta.dirname, "package.json");
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
-  version?: string;
-};
-const appVersion = packageJson.version ?? "0.0.0";
-const htmlVersionPlugin = {
-  name: "html-version-plugin",
-  transformIndexHtml(html: string) {
-    return html.replaceAll("__APP_VERSION__", appVersion);
+const versionJsonPlugin = (): Plugin => ({
+  name: "version-json-plugin",
+  configureServer(server) {
+    server.middlewares.use("/version.json", (_req: any, res: any) => {
+      const json = fs.readFileSync(versionJsonPath, "utf8");
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(json);
+    });
   },
-};
+  generateBundle() {
+    const json = fs.readFileSync(versionJsonPath, "utf8");
+    this.emitFile({
+      type: "asset",
+      fileName: "version.json",
+      source: json,
+    });
+  },
+});
 
 export default defineConfig({
   plugins: [
-    htmlVersionPlugin,
+    versionJsonPlugin(),
     react(),
     tailwindcss(),
   ],
@@ -31,9 +41,6 @@ export default defineConfig({
     postcss: {
       plugins: [],
     },
-  },
-  define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
   },
   root: path.resolve(import.meta.dirname, "src"),
   publicDir: path.resolve(import.meta.dirname, "public"),

@@ -29,19 +29,22 @@ Architecture requirements belong in `Architecture.md`.
 ## 1. Versioning Workflow
 
 ### Policy
-- Use semver in `package.json` as `MAJOR.MINOR.PATCH`.
+- Use `version.json` as the single source of truth for app version.
+- No other file may define the version string.
+- UI display format must remain `vMAJOR.MINOR` (two-part display).
+- Source version format in `version.json` must be semver `MAJOR.MINOR.PATCH`.
 - For this project, user-facing behavior changes use a MINOR bump.
 - Keep PATCH at `0` by convention for normal releases.
-- Never manually edit lockfile version fields.
 
 ### Convention and Rationale
-- `package.json` is the single source of truth for app version.
-- Build-time injection (`__APP_VERSION__`) propagates version into UI display, export metadata, and cache-busting query params for manifest/service-worker URLs.
+- `version.json` is the single source of truth for app version.
+- Runtime version loading from `version.json` avoids stale dev-server injected version values after version bumps.
+- All consumers (UI, export metadata, cache-busting, service worker versioning) must read from `version.json`.
 - Minor-only release flow keeps versioning predictable for a local-first app where each user-visible change should produce a clearly distinct release.
-- Avoiding manual lockfile edits prevents version drift between `package.json` and `package-lock.json`.
+- Avoid defining version in multiple places to prevent drift and stale runtime behavior.
 
 ### Commands
-- Minor bump:
+- Minor bump in `version.json`:
 ```bash
 npm run version:minor
 ```
@@ -49,6 +52,11 @@ npm run version:minor
 ```bash
 npm run release:minor
 ```
+
+### Implementation Rule
+- Version bump scripts must update `version.json` only.
+- `package.json` version must not be used as product/app version source.
+- App/version-related code must not read `package.json` for runtime or build-time version identity.
 
 ### Windows PowerShell Note
 - If `npm` script execution is blocked by policy, use:
@@ -110,8 +118,9 @@ npm run build
 
 ## 5. Release Verification Checklist
 
-- Version was bumped using npm version scripts (prefer `npm run version:minor` / `npm run release:minor`).
-- `package.json` and `package-lock.json` version fields are synchronized after bump.
+- Version was bumped in `version.json` (prefer `npm run version:minor` / `npm run release:minor`).
+- Version appears correctly in UI as `vMAJOR.MINOR`.
+- Version consumers (export metadata, cache-busting, service worker versioning) are reading from `version.json`.
 - Type check passes:
 ```bash
 npm run check

@@ -224,13 +224,13 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - If no saved preference exists, initial theme follows system `prefers-color-scheme`.
 
 ### 5.5 Versioning Contract
-- App version source is `package.json` version injected at build time.
-- Version must be controlled in one place only: `package.json` (`version` field).
-- Do not hardcode version strings in source/HTML/config; derive from `package.json` during build.
-- Required package version format: semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
+- App version source is runtime `version.json`.
+- Version must be controlled in one place only: `version.json` (`version` field).
+- Do not hardcode version strings in source/HTML/config; all consumers must read from `version.json`.
+- Required source version format (`version.json`): semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
-- Cache-busting uses `__APP_VERSION__` in `src/index.html` for the manifest link and service worker registration so browser caches update when app version changes. The service worker derives its cache version from the `v` query string.
+- Service worker cache versioning derives from `version.json`.
 
 ## 6. UI Architecture
 

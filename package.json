@@ -7,8 +7,8 @@
     "dev": "vite dev --port 5000",
     "build": "tsx script/build.ts",
     "check": "tsc",
-    "version:patch": "npm version patch --no-git-tag-version",
-    "version:minor": "npm version minor --no-git-tag-version",
+    "version:patch": "tsx script/version-bump.ts patch",
+    "version:minor": "tsx script/version-bump.ts minor",
     "release:patch": "npm run version:patch && npm run build",
     "release:minor": "npm run version:minor && npm run build"
   },
