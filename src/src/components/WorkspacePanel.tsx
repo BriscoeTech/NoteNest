@@ -399,7 +399,7 @@ function DrawingBlockEditor({
   >(null);
   const [tool, setTool] = useState<'pen' | 'line' | 'rectangle' | 'circle' | 'eraser' | 'select'>('select');
   const [color, setColor] = useState('#111827');
-  const [brushSize, setBrushSize] = useState(4);
+  const [brushSize, setBrushSize] = useState(2);
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
   const [marqueeRect, setMarqueeRect] = useState<NormalizedRect | null>(null);
@@ -968,15 +968,17 @@ function DrawingBlockEditor({
             <span className="text-xs text-muted-foreground w-8">{brushSize}</span>
           </div>
 
-          <canvas
-            ref={canvasRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onPointerLeave={handlePointerUp}
-            className="w-full h-72 rounded bg-white border touch-none"
-          />
+          <div className="w-full aspect-square rounded border bg-white overflow-hidden">
+            <canvas
+              ref={canvasRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              className="block w-full h-full touch-none"
+            />
+          </div>
         </div>
       </div>
       {isSelected && (
@@ -1691,7 +1693,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
               <img
                 src={imageBlock.dataUrl}
                 alt="Card image"
-                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
+                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[220px]" : "h-36")}
               />
             </div>
           </div>
