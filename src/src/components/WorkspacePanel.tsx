@@ -1518,10 +1518,6 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-  const [isTitleEditing, setIsTitleEditing] = useState(false);
-  const titleRef = useRef<HTMLDivElement>(null);
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const checkboxBlock = card.cardType === 'checkbox'
     ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
@@ -1552,59 +1548,6 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
 
   const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
   const isFolderCard = card.cardType === 'folder';
-
-  const clearHoldTimer = () => {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => clearHoldTimer();
-  }, []);
-
-  const focusTitleEditor = () => {
-    const node = titleRef.current;
-    if (!node) return;
-    node.focus();
-    const selection = window.getSelection();
-    if (!selection) return;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  };
-
-  useEffect(() => {
-    if (!isTitleEditing) return;
-    // Ensure focus lands after contentEditable=true has rendered.
-    requestAnimationFrame(() => focusTitleEditor());
-  }, [isTitleEditing]);
-
-  const handleTitlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isRecycleBin) return;
-    pointerStartRef.current = { x: e.clientX, y: e.clientY };
-    clearHoldTimer();
-    holdTimerRef.current = setTimeout(() => {
-      setIsTitleEditing(true);
-    }, 350);
-  };
-
-  const handleTitlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!pointerStartRef.current) return;
-    const dx = e.clientX - pointerStartRef.current.x;
-    const dy = e.clientY - pointerStartRef.current.y;
-    if (Math.hypot(dx, dy) > 6) {
-      clearHoldTimer();
-    }
-  };
-
-  const handleTitlePointerEnd = () => {
-    pointerStartRef.current = null;
-    clearHoldTimer();
-  };
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
@@ -1638,19 +1581,15 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         <div className="flex-1 w-full flex flex-col items-center">
         {!isMediaCard && (
           <div
-            ref={titleRef}
             className={cn(
               "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
-              isTitleEditing ? "cursor-text select-text" : "cursor-default select-none",
+              "cursor-text select-text",
               checkboxBlock ? "text-left" : "text-center",
               checkboxBlock?.checked && "line-through text-muted-foreground"
             )}
-            contentEditable={isTitleEditing}
+            contentEditable={!isRecycleBin}
             suppressContentEditableWarning
-            onBlur={(e) => {
-              onRename(e.currentTarget.textContent || "");
-              setIsTitleEditing(false);
-            }}
+            onBlur={(e) => onRename(e.currentTarget.textContent || "")}
             onKeyDown={(e) => {
                if (e.key === 'Enter' && !e.shiftKey) {
                  e.preventDefault();
@@ -1658,11 +1597,11 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                }
                e.stopPropagation();
             }}
-            onPointerDown={handleTitlePointerDown}
-            onPointerMove={handleTitlePointerMove}
-            onPointerUp={handleTitlePointerEnd}
-            onPointerCancel={handleTitlePointerEnd}
-            onPointerLeave={handleTitlePointerEnd}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.currentTarget.focus();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             {card.title}
           </div>
