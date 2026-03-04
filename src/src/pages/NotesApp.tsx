@@ -4,7 +4,7 @@ import { CategoryTree } from '@/components/CategoryTree';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeft } from 'lucide-react';
-import type { Card } from '@/lib/types';
+import type { Card, CardType } from '@/lib/types';
 
 import { RECYCLE_BIN_ID } from '@/lib/types';
 
@@ -95,8 +95,8 @@ export default function NotesApp() {
     setSearchQuery('');
   }, []);
 
-  const handleAddCard = useCallback((parentId: string | null) => {
-    const newId = store.addCard('', parentId);
+  const handleAddCard = useCallback((parentId: string | null, cardType: CardType = 'note') => {
+    const newId = store.addCard('', parentId, cardType);
     return newId;
   }, [store.addCard]);
 
@@ -124,6 +124,7 @@ export default function NotesApp() {
             onMoveCard={store.moveCard}
             onReorderCard={store.moveCardStep}
             onDeleteCard={store.deleteCard}
+            onUpdateCard={store.updateCard}
             onUpdateCardBlocks={store.updateCardBlocks}
             deletedCount={deletedCount}
             onExport={store.exportData}

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Maximize2, Minimize2, Search, X, Moon, Sun, Image as ImageIcon, Brush } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, Type } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, ContentBlock, CheckboxBlock } from '@/lib/types';
+import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock } from '@/lib/types';
+import { generateId } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import { APP_VERSION } from '@/lib/app-version';
 import {
@@ -11,6 +12,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
 
@@ -22,6 +30,7 @@ interface CardTreeProps {
   onMoveCard: (id: string, newParentId: string | null) => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
+  onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   deletedCount: number;
   onExport: () => void;
@@ -44,11 +53,31 @@ interface TreeItemProps {
   onMoveCard: (id: string) => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
+  onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   draggedCardId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDrop: (targetId: string | null) => void;
+}
+
+const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
+const CARD_TYPE_LABELS: Record<CardType, string> = {
+  note: 'Note',
+  checkbox: 'Checkbox',
+  link: 'Link',
+  image: 'Image',
+  drawing: 'Drawing',
+  folder: 'Folder',
+};
+
+function typeIcon(type: CardType) {
+  if (type === 'folder') return <Folder className="w-4 h-4" />;
+  if (type === 'checkbox') return <CheckSquare className="w-4 h-4" />;
+  if (type === 'link') return <LinkIcon className="w-4 h-4" />;
+  if (type === 'image') return <ImageIcon className="w-4 h-4" />;
+  if (type === 'drawing') return <Brush className="w-4 h-4" />;
+  return <FileText className="w-4 h-4" />;
 }
 
 function TreeItem({
@@ -63,6 +92,7 @@ function TreeItem({
   onMoveCard,
   onReorderCard,
   onDeleteCard,
+  onUpdateCard,
   onUpdateCardBlocks,
   draggedCardId,
   onDragStart,
@@ -77,15 +107,52 @@ function TreeItem({
   const [editTitle, setEditTitle] = useState(card.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
 
-  const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
-  const imageBlock = card.blocks.find(b => b.type === 'image');
-  const drawingBlock = card.blocks.find(b => b.type === 'drawing');
+  const checkboxBlock = card.cardType === 'checkbox'
+    ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
+    : undefined;
 
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
       const newBlocks = card.blocks.map(b => b.id === checkboxBlock.id ? { ...b, checked } : b);
       onUpdateCardBlocks(card.id, newBlocks);
+    }
+  };
+
+  const handleChangeCardType = (nextType: CardType) => {
+    if (card.cardType === nextType) return;
+    onUpdateCard(card.id, { cardType: nextType });
+    const hasTypeBlock = card.blocks.some((block) => {
+      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
+      return block.type === nextType;
+    });
+    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
+
+    if (nextType === 'note') {
+      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'text', content: '' }]);
+      return;
+    }
+    if (nextType === 'checkbox') {
+      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'checkbox', checked: false }]);
+      return;
+    }
+    if (nextType === 'link') {
+      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'drawing') {
+      const newBlock: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        redoStrokes: [],
+        previewDataUrl: '',
+        historyPast: [],
+        historyFuture: [],
+      };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
     }
   };
 
@@ -189,15 +256,18 @@ function TreeItem({
           />
         )}
 
-        {/* Icon based on content? or just always folder/file? */}
-        {hasChildren ? (
-           isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+        {card.cardType === 'folder' ? (
+          isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : card.cardType === 'checkbox' ? (
+          <CheckSquare className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : card.cardType === 'link' ? (
+          <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : card.cardType === 'image' ? (
+          <ImageIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+        ) : card.cardType === 'drawing' ? (
+          <Brush className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : (
-           !checkboxBlock && (
-             imageBlock ? <ImageIcon className="w-4 h-4 text-muted-foreground shrink-0" /> :
-             drawingBlock ? <Brush className="w-4 h-4 text-muted-foreground shrink-0" /> :
-             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-           )
+          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
 
         {isEditing ? (
@@ -231,6 +301,11 @@ function TreeItem({
             <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
               <FolderInput className="w-3.5 h-3.5 mr-2" />
               Move to...
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setTypeDialogOpen(true)}>
+              <Type className="w-3.5 h-3.5 mr-2" />
+              Change type...
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onReorderCard(card.id, 'up')}>
@@ -287,6 +362,7 @@ function TreeItem({
               onMoveCard={onMoveCard}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
+              onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
               onExpandRecursively={onExpandRecursively}
               draggedCardId={draggedCardId}
@@ -297,6 +373,32 @@ function TreeItem({
           ))}
         </div>
       )}
+
+      <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change Note Type</DialogTitle>
+            <DialogDescription>Choose a new type. Existing data is kept.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {CARD_TYPE_ORDER.map((type) => (
+              <button
+                key={type}
+                type="button"
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
+                disabled={card.cardType === type}
+                onClick={() => {
+                  handleChangeCardType(type);
+                  setTypeDialogOpen(false);
+                }}
+              >
+                {typeIcon(type)}
+                <span>{CARD_TYPE_LABELS[type]}</span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -309,6 +411,7 @@ export function CategoryTree({
   onMoveCard,
   onReorderCard,
   onDeleteCard,
+  onUpdateCard,
   onUpdateCardBlocks,
   deletedCount,
   onExport,
@@ -503,6 +606,7 @@ export function CategoryTree({
               onMoveCard={handleMoveClick}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
+              onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
               onExpandRecursively={handleExpandRecursively}
               draggedCardId={draggedCardId}

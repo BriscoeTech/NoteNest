@@ -120,3 +120,55 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - Aligned start-script output semantics across `.bat` and `.sh`:
 - explicit "already running ... - ignoring request" messaging,
 - normalized `IP`, `Port`, `URL`, and `Log` output fields.
+
+### Card Type Architecture Refactor
+- Introduced explicit `cardType` on `Card`:
+- `note`, `checkbox`, `link`, `image`, `drawing`, `folder`.
+- Implemented non-destructive type semantics:
+- changing card type is a UI-mode switch,
+- existing blocks and children are retained in data.
+- Added state normalization/migration to infer missing `cardType` values for loaded/imported legacy data.
+- Added `folder` type as a first-class note type.
+
+### Workspace and Tree Type UX
+- Removed per-card add/remove modifier toggles for checkbox/link/image/drawing.
+- Added single `Change type...` menu action in card `...` menus.
+- Added type picker popup dialog for:
+- creating new notes from `New Note`,
+- changing existing note type.
+- Replaced `New Note` dropdown with a single button that opens the type picker popup.
+- Updated tree icon behavior to be type-driven (note/checkbox/link/image/drawing/folder).
+- Updated open-card header to show type icon left of title and removed type text line under title.
+
+### Type-Gated Rendering and Folder Behavior
+- Implemented strict type-based rendering in workspace:
+- `note` shows text/bullet blocks,
+- `checkbox` shows checkbox UI,
+- `link` shows link UI,
+- `image` shows image UI,
+- `drawing` shows drawing UI,
+- `folder` hides block editor.
+- Sub-note grid/actions are shown only for Home/folder/recycle-bin views.
+- Removed folder helper text from open-card content area.
+- Styled folder cards in right-grid with folder-like shape and later aligned color to standard card palette (removed orange tint).
+
+### Interaction and Menu Simplification
+- Removed open-card `...` menus for image and drawing blocks (no per-block delete/reorder actions there).
+- Removed open-card `...` menu for checkbox block.
+- Kept card-level deletion as the primary deletion path.
+- Changed grid card open behavior to double-click for all card types.
+- Removed single-click open behavior on image/drawing previews.
+- Fixed drag/reorder conflict on image/drawing cards:
+- disabled native image drag/copy behavior,
+- ensured card drag gestures reorder cards reliably.
+- Enabled `Shift+Enter` newline in grid card title inline editing (while plain Enter still commits).
+
+### Version and Documentation
+- Bumped app version from `2.28.0` to `2.29.0`.
+- Recompiled production build output after the version bump and UI/model changes.
+- Updated `Architecture.md` contracts to match:
+- explicit card-type model,
+- non-destructive type switching,
+- type picker dialog flows,
+- double-click opening,
+- updated menu contracts and regression checklist.

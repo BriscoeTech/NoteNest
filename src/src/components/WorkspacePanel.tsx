@@ -3,7 +3,7 @@ import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, 
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint } from '@/lib/types';
+import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint } from '@/lib/types';
 import { generateId, getDescendantIds } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
@@ -25,7 +32,7 @@ interface WorkspacePanelProps {
   allCards: Card[]; // used for search/move picker
   isRecycleBin: boolean;
   onNavigateCard: (id: string | null) => void;
-  onAddCard: (parentId: string | null) => string;
+  onAddCard: (parentId: string | null, cardType?: CardType) => string;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
@@ -59,6 +66,27 @@ interface BlockEditorProps {
 
 const DRAWING_PREVIEW_WIDTH = 640;
 const DRAWING_PREVIEW_HEIGHT = 360;
+
+const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
+
+const CARD_TYPE_LABELS: Record<CardType, string> = {
+  note: 'Note',
+  checkbox: 'Checkbox',
+  link: 'Link',
+  image: 'Image',
+  drawing: 'Drawing',
+  folder: 'Folder',
+};
+
+function CardTypeIcon({ cardType, className }: { cardType: CardType; className?: string }) {
+  const iconClass = cn('w-5 h-5 text-muted-foreground shrink-0', className);
+  if (cardType === 'folder') return <Folder className={iconClass} />;
+  if (cardType === 'checkbox') return <CheckSquare className={iconClass} />;
+  if (cardType === 'link') return <LinkIcon className={iconClass} />;
+  if (cardType === 'image') return <Image className={iconClass} />;
+  if (cardType === 'drawing') return <Brush className={iconClass} />;
+  return <FileText className={iconClass} />;
+}
 
 function renderDrawingStrokes(
   ctx: CanvasRenderingContext2D,
@@ -279,6 +307,25 @@ function createDrawingPreviewDataUrl(strokes: DrawingStroke[]): string {
   if (!ctx) return '';
   renderDrawingStrokes(ctx, strokes, DRAWING_PREVIEW_WIDTH, DRAWING_PREVIEW_HEIGHT);
   return canvas.toDataURL('image/png');
+}
+
+function getVisibleBlocksByCardType(card: Card): ContentBlock[] {
+  switch (card.cardType) {
+    case 'note':
+      return card.blocks.filter(block => block.type === 'text' || block.type === 'bullets');
+    case 'checkbox':
+      return card.blocks.filter(block => block.type === 'checkbox');
+    case 'link':
+      return card.blocks.filter(block => block.type === 'link');
+    case 'image':
+      return card.blocks.filter(block => block.type === 'image');
+    case 'drawing':
+      return card.blocks.filter(block => block.type === 'drawing');
+    case 'folder':
+      return [];
+    default:
+      return [];
+  }
 }
 
 function distancePointToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -981,30 +1028,6 @@ function DrawingBlockEditor({
           </div>
         </div>
       </div>
-      {isSelected && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-              <ChevronUp className="w-4 h-4 mr-2" />
-              Move Up
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-              <ChevronDown className="w-4 h-4 mr-2" />
-              Move Down
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
     </div>
   );
 }
@@ -1088,15 +1111,6 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-                <ChevronUp className="w-4 h-4 mr-2" />
-                Move Up
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-                <ChevronDown className="w-4 h-4 mr-2" />
-                Move Down
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete
@@ -1148,30 +1162,6 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
             />
           </div>
         </div>
-        {isSelected && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-                <ChevronUp className="w-4 h-4 mr-2" />
-                Move Up
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-                <ChevronDown className="w-4 h-4 mr-2" />
-                Move Down
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
     );
   }
@@ -1201,30 +1191,6 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
             {checkboxBlock.checked ? "Completed" : "Not completed"}
           </span>
         </div>
-        {isSelected && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-2 text-muted-foreground/60 hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-                <ChevronUp className="w-4 h-4 mr-2" />
-                Move Up
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-                <ChevronDown className="w-4 h-4 mr-2" />
-                Move Down
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
     );
   }
@@ -1477,12 +1443,13 @@ interface GridCardItemProps {
   onRename: (title: string) => void;
   onDelete: () => void;
   onUpdateBlocks: (blocks: ContentBlock[]) => void;
+  onOpenTypePicker: () => void;
   isRecycleBin?: boolean;
   onRestore?: () => void;
   onReorder?: (direction: 'up' | 'down') => void;
 }
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, isRecycleBin, onRestore, onReorder }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -1497,11 +1464,23 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+  const [isTitleEditing, setIsTitleEditing] = useState(false);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const checkboxBlock = card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined;
-  const linkBlock = card.blocks.find(b => b.type === 'link') as LinkBlock | undefined;
-  const imageBlock = card.blocks.find(b => b.type === 'image') as ImageBlock | undefined;
-  const drawingBlock = card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined;
+  const checkboxBlock = card.cardType === 'checkbox'
+    ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
+    : undefined;
+  const linkBlock = card.cardType === 'link'
+    ? card.blocks.find(b => b.type === 'link') as LinkBlock | undefined
+    : undefined;
+  const imageBlock = card.cardType === 'image'
+    ? card.blocks.find(b => b.type === 'image') as ImageBlock | undefined
+    : undefined;
+  const drawingBlock = card.cardType === 'drawing'
+    ? card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined
+    : undefined;
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -1517,101 +1496,81 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     }
   };
 
-  const hasCheckbox = card.blocks.some(b => b.type === 'checkbox');
-  const hasImage = card.blocks.some(b => b.type === 'image');
-  const hasLink = card.blocks.some(b => b.type === 'link');
-  const hasDrawing = card.blocks.some(b => b.type === 'drawing');
-  const isMediaCard = false;
+  const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
+  const isFolderCard = card.cardType === 'folder';
 
-  const toggleCheckbox = () => {
-    if (hasCheckbox) {
-      const newBlocks = card.blocks.filter(b => b.type !== 'checkbox');
-      onUpdateBlocks(newBlocks);
-    } else {
-      // @ts-ignore
-      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateBlocks([...card.blocks, newBlock]);
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
     }
   };
 
-  const toggleLink = () => {
-    if (hasLink) {
-      const newBlocks = card.blocks.filter(b => b.type !== 'link');
-      onUpdateBlocks(newBlocks);
-    } else {
-      // @ts-ignore
-      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateBlocks([...card.blocks, newBlock]);
+  useEffect(() => {
+    return () => clearHoldTimer();
+  }, []);
+
+  const focusTitleEditor = () => {
+    const node = titleRef.current;
+    if (!node) return;
+    node.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  useEffect(() => {
+    if (!isTitleEditing) return;
+    // Ensure focus lands after contentEditable=true has rendered.
+    requestAnimationFrame(() => focusTitleEditor());
+  }, [isTitleEditing]);
+
+  const handleTitlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isRecycleBin) return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(() => {
+      setIsTitleEditing(true);
+    }, 350);
+  };
+
+  const handleTitlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerStartRef.current) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+    if (Math.hypot(dx, dy) > 6) {
+      clearHoldTimer();
     }
   };
 
-  const toggleDrawing = () => {
-    if (hasDrawing) {
-      const newBlocks = card.blocks.filter(b => b.type !== 'drawing');
-      onUpdateBlocks(newBlocks);
-    } else {
-      const newBlock: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        redoStrokes: [],
-        previewDataUrl: createDrawingPreviewDataUrl([]),
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateBlocks([...card.blocks, newBlock]);
-    }
+  const handleTitlePointerEnd = () => {
+    pointerStartRef.current = null;
+    clearHoldTimer();
   };
-
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      // @ts-ignore
-      const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-      // Replace existing image if there is one (we usually only want one image per card), or add?
-      // User said "any combination". But usually multiple images per card is fine.
-      // But for this "grid card" view, we probably just want to append or maybe replace if one exists?
-      // Let's assume append for now to be safe, but typically these cards have 1 main image.
-      // If we want to replace existing image, filter it out.
-      // Let's filter out existing image to keep it clean (1 image per card max usually for cover)
-      const blocksWithoutImage = card.blocks.filter(b => b.type !== 'image');
-      onUpdateBlocks([...blocksWithoutImage, newBlock]);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const removeImage = () => {
-    const newBlocks = card.blocks.filter(b => b.type !== 'image');
-    onUpdateBlocks(newBlocks);
-  };
-
-  // const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  // useEffect(() => {
-  //   if (textareaRef.current) {
-  //     textareaRef.current.style.height = 'auto';
-  //     textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-  //   }
-  // }, [card.title]);
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       <div 
         className={cn(
-          "flex items-center gap-2 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
+          "relative flex items-center gap-2 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
           isMediaCard ? "p-0 overflow-hidden" : "p-4",
-          checkboxBlock ? "justify-start pl-4" : "justify-center"
+          checkboxBlock ? "justify-start pl-4" : "justify-center",
+          isFolderCard && "bg-card border-border hover:bg-accent"
         )}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onNavigate();
+        }}
         {...attributes}
         {...listeners}
       >
+        {isFolderCard && (
+          <div className="absolute -top-2 left-4 h-3 w-14 rounded-t-md border border-b-0 border-border bg-card" />
+        )}
         {checkboxBlock && (
           <input
             type="checkbox"
@@ -1625,26 +1584,31 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         <div className="flex-1 w-full flex flex-col items-center">
         {!isMediaCard && (
           <div
+            ref={titleRef}
             className={cn(
-              "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 cursor-text min-h-[20px] break-words whitespace-pre-wrap outline-none",
+              "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
+              isTitleEditing ? "cursor-text select-text" : "cursor-default select-none",
               checkboxBlock ? "text-left" : "text-center",
               checkboxBlock?.checked && "line-through text-muted-foreground"
             )}
-            contentEditable
+            contentEditable={isTitleEditing}
             suppressContentEditableWarning
-            onBlur={(e) => onRename(e.currentTarget.textContent || "")}
+            onBlur={(e) => {
+              onRename(e.currentTarget.textContent || "");
+              setIsTitleEditing(false);
+            }}
             onKeyDown={(e) => {
-               if (e.key === 'Enter') {
+               if (e.key === 'Enter' && !e.shiftKey) {
                  e.preventDefault();
                  e.currentTarget.blur();
                }
                e.stopPropagation();
             }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.currentTarget.focus();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={handleTitlePointerDown}
+            onPointerMove={handleTitlePointerMove}
+            onPointerUp={handleTitlePointerEnd}
+            onPointerCancel={handleTitlePointerEnd}
+            onPointerLeave={handleTitlePointerEnd}
           >
             {card.title}
           </div>
@@ -1683,50 +1647,45 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         {imageBlock && (
           <div
             className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.preventDefault()}
           >
             <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
               <img
                 src={imageBlock.dataUrl}
                 alt="Card image"
+                draggable={false}
                 className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[220px]" : "h-36")}
               />
             </div>
           </div>
         )}
+        {card.cardType === 'image' && !imageBlock && (
+          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
+            No image yet
+          </div>
+        )}
         {drawingBlock && (
           <div
             className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.preventDefault()}
           >
             <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
               <img
                 src={createDrawingPreviewDataUrl(drawingBlock.strokes)}
                 alt="Drawing preview"
+                draggable={false}
                 className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
               />
             </div>
           </div>
         )}
+        {card.cardType === 'drawing' && !drawingBlock && (
+          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
+            No drawing yet
+          </div>
+        )}
         </div>
       </div>
-
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleImageSelect}
-          className="hidden"
-          onClick={(e) => e.stopPropagation()}
-        />
 
        <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
           <DropdownMenu>
@@ -1762,28 +1721,9 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
                     Move Down
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleCheckbox(); }}>
-                    <CheckSquare className="w-4 h-4 mr-2" />
-                    {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleLink(); }}>
-                    <LinkIcon className="w-4 h-4 mr-2" />
-                    {hasLink ? "Remove link" : "Add link"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleDrawing(); }}>
-                    <Brush className="w-4 h-4 mr-2" />
-                    {hasDrawing ? "Remove drawing" : "Add drawing"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { 
-                    e.stopPropagation(); 
-                    if (hasImage) {
-                      removeImage();
-                    } else {
-                      imageInputRef.current?.click();
-                    }
-                  }}>
-                    <Image className="w-4 h-4 mr-2" />
-                    {hasImage ? "Remove image" : "Add image"}
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenTypePicker(); }}>
+                    <Type className="w-4 h-4 mr-2" />
+                    Change type...
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
@@ -1905,6 +1845,10 @@ export function WorkspacePanel({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [typeDialogMode, setTypeDialogMode] = useState<'create' | 'change'>('create');
+  const [typeDialogParentId, setTypeDialogParentId] = useState<string | null>(null);
+  const [typeDialogCard, setTypeDialogCard] = useState<Card | null>(null);
 
   const handleMoveStart = (id: string) => {
     setCardToMove(id);
@@ -1968,25 +1912,6 @@ export function WorkspacePanel({
     }
   };
 
-  // Block Actions
-  const toggleCheckboxBlock = () => {
-    if (!currentCard) return;
-    
-    // Check if checkbox exists
-    const hasCheckbox = currentCard.blocks.some(b => b.type === 'checkbox');
-    
-    if (hasCheckbox) {
-      // Remove checkbox
-      const newBlocks = currentCard.blocks.filter(b => b.type !== 'checkbox');
-      onUpdateCardBlocks(currentCard.id, newBlocks);
-    } else {
-      // Add checkbox (no mutual exclusivity)
-      // @ts-ignore
-      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
-    }
-  };
-
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentCard) return;
     const file = e.target.files?.[0];
@@ -2008,23 +1933,120 @@ export function WorkspacePanel({
     e.target.value = '';
   };
   
-  const hasCheckbox = currentCard?.blocks.some(b => b.type === 'checkbox');
-  const hasImage = currentCard?.blocks.some(b => b.type === 'image');
-  const hasLink = currentCard?.blocks.some(b => b.type === 'link');
-  const hasDrawing = currentCard?.blocks.some(b => b.type === 'drawing');
+  const applyCardType = (card: Card, nextType: CardType) => {
+    const hasTypeBlock = card.blocks.some((block) => {
+      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
+      return block.type === nextType;
+    });
+    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
 
-  const toggleLinkBlock = () => {
-    if (!currentCard) return;
-    if (hasLink) {
-      const newBlocks = currentCard.blocks.filter(b => b.type !== 'link');
-      onUpdateCardBlocks(currentCard.id, newBlocks);
-    } else {
-      // Add link (no mutual exclusivity)
-      // @ts-ignore
+    if (nextType === 'note') {
+      const newBlock: ContentBlock = { id: generateId(), type: 'text', content: '' };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'checkbox') {
+      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'link') {
       const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'drawing') {
+      const newBlock: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        redoStrokes: [],
+        previewDataUrl: createDrawingPreviewDataUrl([]),
+        historyPast: [],
+        historyFuture: [],
+      };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
     }
   };
+
+  const handleChangeCardType = (card: Card, nextType: CardType) => {
+    if (card.cardType === nextType) return;
+    onUpdateCard(card.id, { cardType: nextType });
+    applyCardType(card, nextType);
+  };
+
+  const createCardByType = (parentId: string | null, type: CardType) => {
+    if (type === 'image') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          const id = onAddCard(parentId, 'image');
+          const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
+          onUpdateCardBlocks(id, [block]);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+
+    const id = onAddCard(parentId, type);
+    if (type === 'checkbox') {
+      const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
+      onUpdateCardBlocks(id, [block]);
+      return;
+    }
+    if (type === 'link') {
+      const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateCardBlocks(id, [block]);
+      return;
+    }
+    if (type === 'drawing') {
+      const block: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        redoStrokes: [],
+        previewDataUrl: createDrawingPreviewDataUrl([]),
+        historyPast: [],
+        historyFuture: [],
+      };
+      onUpdateCardBlocks(id, [block]);
+      onNavigateCard(id);
+      return;
+    }
+  };
+
+  const openCreateTypePicker = (parentId: string | null) => {
+    setTypeDialogMode('create');
+    setTypeDialogParentId(parentId);
+    setTypeDialogCard(null);
+    setTypeDialogOpen(true);
+  };
+
+  const openChangeTypePicker = (card: Card) => {
+    setTypeDialogMode('change');
+    setTypeDialogCard(card);
+    setTypeDialogParentId(null);
+    setTypeDialogOpen(true);
+  };
+
+  const handleTypeSelect = (type: CardType) => {
+    if (typeDialogMode === 'create') {
+      createCardByType(typeDialogParentId, type);
+    } else if (typeDialogCard) {
+      handleChangeCardType(typeDialogCard, type);
+    }
+    setTypeDialogOpen(false);
+  };
+
+  const visibleBlocks = currentCard ? getVisibleBlocksByCardType(currentCard) : [];
 
   const updateBlock = (index: number, block: ContentBlock) => {
     if (!currentCard) return;
@@ -2042,28 +2064,15 @@ export function WorkspacePanel({
   const moveBlock = (index: number, direction: 'up' | 'down') => {
     if (!currentCard) return;
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= currentCard.blocks.length) return;
-    const newBlocks = arrayMove(currentCard.blocks, index, newIndex);
+    if (newIndex < 0 || newIndex >= visibleBlocks.length) return;
+    const source = visibleBlocks[index];
+    const target = visibleBlocks[newIndex];
+    if (!source || !target) return;
+    const sourceIdx = currentCard.blocks.findIndex(b => b.id === source.id);
+    const targetIdx = currentCard.blocks.findIndex(b => b.id === target.id);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+    const newBlocks = arrayMove(currentCard.blocks, sourceIdx, targetIdx);
     onUpdateCardBlocks(currentCard.id, newBlocks);
-  };
-
-  const toggleDrawingBlock = () => {
-    if (!currentCard) return;
-    if (hasDrawing) {
-      const newBlocks = currentCard.blocks.filter(b => b.type !== 'drawing');
-      onUpdateCardBlocks(currentCard.id, newBlocks);
-    } else {
-      const newBlock: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        redoStrokes: [],
-        previewDataUrl: createDrawingPreviewDataUrl([]),
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateCardBlocks(currentCard.id, [...currentCard.blocks, newBlock]);
-    }
   };
 
   const handleEmptyRecycleBin = () => {
@@ -2071,6 +2080,8 @@ export function WorkspacePanel({
       onEmptyRecycleBin();
     }
   };
+
+  const canShowChildrenUI = isRecycleBin || !currentCard || currentCard.cardType === 'folder';
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -2094,100 +2105,25 @@ export function WorkspacePanel({
         {/* Current Card Content (Blocks) */}
         {currentCard && !isRecycleBin && !searchQuery && (
           <div className="max-w-3xl mx-auto space-y-4">
-            <Textarea
-              ref={titleRef}
-              value={currentCard.title}
-              onChange={(e) => onUpdateCard(currentCard.id, { title: e.target.value })}
-              onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
-              placeholder="Untitled"
-              className="text-3xl font-bold border-none shadow-none focus-visible:ring-0 p-0 resize-none min-h-[44px] overflow-hidden placeholder:text-muted-foreground/50 bg-transparent mb-4"
-              rows={1}
-            />
+            <div className="flex items-start gap-3">
+              <CardTypeIcon cardType={currentCard.cardType} className="mt-2" />
+              <Textarea
+                ref={titleRef}
+                value={currentCard.title}
+                onChange={(e) => onUpdateCard(currentCard.id, { title: e.target.value })}
+                onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
+                placeholder="Untitled"
+                className="text-3xl font-bold border-none shadow-none focus-visible:ring-0 p-0 resize-none min-h-[44px] overflow-hidden placeholder:text-muted-foreground/50 bg-transparent mb-4"
+                rows={1}
+              />
+            </div>
 
-            <DndContext
-              sensors={blockSensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleBlockDragEnd}
-            >
-              <SortableContext
-                items={currentCard.blocks.map(b => b.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2">
-                  {currentCard.blocks.map((block, index) => (
-                    <SortableBlock
-                      key={block.id}
-                      id={block.id}
-                      block={block}
-                      isRecycleBin={isRecycleBin}
-                      isSelected={true} // Always selected in this view
-                      onUpdate={(b) => updateBlock(index, b)}
-                      onDelete={() => deleteBlock(index)}
-                      onMoveUp={() => moveBlock(index, 'up')}
-                      onMoveDown={() => moveBlock(index, 'down')}
-                      canMoveUp={index > 0}
-                      canMoveDown={index < currentCard.blocks.length - 1}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-
-            {/* Add Block Buttons */}
-             <div className="flex items-center gap-2 pt-4 flex-wrap">
-                <button
-                  className={cn(
-                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
-                    hasCheckbox 
-                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20" 
-                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
-                  )}
-                  onClick={toggleCheckboxBlock}
-                >
-                  <CheckSquare className="w-3 h-3" /> {hasCheckbox ? "Remove checkbox" : "Add checkbox"}
-                </button>
-                <button
-                  className={cn(
-                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
-                    hasLink
-                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20" 
-                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
-                  )}
-                  onClick={toggleLinkBlock}
-                >
-                  <LinkIcon className="w-3 h-3" /> {hasLink ? "Remove link" : "Add link"}
-                </button>
-                <button
-                  className={cn(
-                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
-                    hasImage
-                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20"
-                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
-                  )}
-                  onClick={() => {
-                     // If it has image, maybe we want to remove it? Or just allow adding new one to replace?
-                     // Let's assume clicking active button removes it (toggle off)
-                     if (hasImage) {
-                        const newBlocks = currentCard?.blocks.filter(b => b.type !== 'image') || [];
-                        if (currentCard) onUpdateCardBlocks(currentCard.id, newBlocks);
-                     } else {
-                        imageInputRef.current?.click();
-                     }
-                  }}
-                >
-                  <Image className="w-3 h-3" /> {hasImage ? "Remove image" : "Add image"}
-                </button>
-                <button
-                  className={cn(
-                    "text-xs flex items-center gap-1 px-2 py-1 rounded border border-dashed transition-colors",
-                    hasDrawing
-                      ? "text-primary border-primary bg-primary/10 hover:bg-primary/20"
-                      : "text-muted-foreground border-muted-foreground/30 hover:text-foreground hover:border-muted-foreground/50"
-                  )}
-                  onClick={toggleDrawingBlock}
-                >
-                  <Brush className="w-3 h-3" /> {hasDrawing ? "Remove drawing" : "Add drawing"}
-                </button>
+            {currentCard.cardType === 'image' && visibleBlocks.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-4">
+                <Button size="sm" onClick={() => imageInputRef.current?.click()}>
+                  <Image className="w-4 h-4 mr-1" />
+                  Upload Image
+                </Button>
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -2196,10 +2132,44 @@ export function WorkspacePanel({
                   className="hidden"
                 />
               </div>
+            ) : (
+              <DndContext
+                sensors={blockSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleBlockDragEnd}
+              >
+                <SortableContext
+                  items={visibleBlocks.map(b => b.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {visibleBlocks.map((block, index) => {
+                      const blockIndex = currentCard.blocks.findIndex(b => b.id === block.id);
+                      return (
+                        <SortableBlock
+                          key={block.id}
+                          id={block.id}
+                          block={block}
+                          isRecycleBin={isRecycleBin}
+                          isSelected={true}
+                          onUpdate={(b) => updateBlock(blockIndex, b)}
+                          onDelete={() => deleteBlock(blockIndex)}
+                          onMoveUp={() => moveBlock(index, 'up')}
+                          onMoveDown={() => moveBlock(index, 'down')}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < visibleBlocks.length - 1}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
           </div>
         )}
 
         {/* Children Cards Grid */}
+        {canShowChildrenUI && (
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -2212,80 +2182,10 @@ export function WorkspacePanel({
                 Empty Recycle Bin
               </Button>
             ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="w-4 h-4 mr-1" />
-                    New Note
-                    <ChevronDown className="w-3 h-3 ml-1 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onAddCard(currentCard?.id || null)}>
-                    <FileText className="w-4 h-4 mr-2" />
-                    Note
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                     const id = onAddCard(currentCard?.id || null);
-                     // @ts-ignore
-                     const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-                     onUpdateCardBlocks(id, [block]);
-                  }}>
-                    <CheckSquare className="w-4 h-4 mr-2" />
-                    Checkbox
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                     const id = onAddCard(currentCard?.id || null);
-                     // @ts-ignore
-                     const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
-                     onUpdateCardBlocks(id, [block]);
-                  }}>
-                    <LinkIcon className="w-4 h-4 mr-2" />
-                    Link
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                     const id = onAddCard(currentCard?.id || null);
-                     const block: DrawingBlock = {
-                       id: generateId(),
-                       type: 'drawing',
-                       strokes: [],
-                       redoStrokes: [],
-                       previewDataUrl: createDrawingPreviewDataUrl([]),
-                       historyPast: [],
-                       historyFuture: [],
-                     };
-                     onUpdateCardBlocks(id, [block]);
-                     onNavigateCard(id);
-                  }}>
-                    <Brush className="w-4 h-4 mr-2" />
-                    Drawing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                     // Trigger file input for new note
-                     const input = document.createElement('input');
-                     input.type = 'file';
-                     input.accept = 'image/*';
-                     input.onchange = (e) => {
-                       const file = (e.target as HTMLInputElement).files?.[0];
-                       if (file) {
-                         const reader = new FileReader();
-                         reader.onload = (event) => {
-                           const dataUrl = event.target?.result as string;
-                           const id = onAddCard(currentCard?.id || null);
-                           // @ts-ignore
-                           const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-                           onUpdateCardBlocks(id, [block]);
-                         };
-                         reader.readAsDataURL(file);
-                       }
-                     };
-                     input.click();
-                  }}>
-                    <Image className="w-4 h-4 mr-2" />
-                    Image
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button size="sm" onClick={() => openCreateTypePicker(currentCard?.id || null)}>
+                <Plus className="w-4 h-4 mr-1" />
+                New Note
+              </Button>
             )}
           </div>
 
@@ -2333,6 +2233,7 @@ export function WorkspacePanel({
                       onRename={(title) => onUpdateCard(card.id, { title })}
                       onDelete={() => isRecycleBin ? onPermanentlyDeleteCard(card.id) : onDeleteCard(card.id)}
                       onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                      onOpenTypePicker={() => openChangeTypePicker(card)}
                       isRecycleBin={isRecycleBin}
                       onRestore={() => onRestoreCard(card.id, null)}
                       onReorder={(dir) => onReorderCard(card.id, dir)}
@@ -2343,6 +2244,7 @@ export function WorkspacePanel({
             </DndContext>
           )}
         </div>
+        )}
       </div>
 
       <CategoryPickerDialog
@@ -2354,6 +2256,34 @@ export function WorkspacePanel({
         excludeIds={moveExcludeIds}
         showRoot={true}
       />
+
+      <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{typeDialogMode === 'create' ? 'Create Note Type' : 'Change Note Type'}</DialogTitle>
+            <DialogDescription>
+              {typeDialogMode === 'create'
+                ? 'Choose the type for your new note.'
+                : 'Choose a new type for this note. Existing data is kept.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {CARD_TYPE_ORDER.map((type) => (
+              <Button
+                key={type}
+                type="button"
+                variant="outline"
+                disabled={typeDialogMode === 'change' && typeDialogCard?.cardType === type}
+                className="justify-start"
+                onClick={() => handleTypeSelect(type)}
+              >
+                <CardTypeIcon cardType={type} className="w-4 h-4" />
+                <span className="ml-2">{CARD_TYPE_LABELS[type]}</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
@@ -20,6 +20,24 @@ const defaultState: AppState = {
   cards: []
 };
 
+function inferCardType(card: Pick<Card, 'blocks' | 'children'> & Partial<Pick<Card, 'cardType'>>): CardType {
+  if (card.cardType) return card.cardType;
+  if (card.children?.length) return 'folder';
+  if (card.blocks.some(b => b.type === 'checkbox')) return 'checkbox';
+  if (card.blocks.some(b => b.type === 'link')) return 'link';
+  if (card.blocks.some(b => b.type === 'image')) return 'image';
+  if (card.blocks.some(b => b.type === 'drawing')) return 'drawing';
+  return 'note';
+}
+
+function normalizeCardTree(cards: Card[]): Card[] {
+  return cards.map(card => ({
+    ...card,
+    cardType: inferCardType(card),
+    children: normalizeCardTree(card.children || [])
+  }));
+}
+
 // Migration helpers (kept for potential legacy localstorage data if we want to migrate it once)
 function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
   const categoryMap = new Map<string, Card>();
@@ -27,6 +45,7 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
   const convertCategory = (cat: any): Card => ({
     id: cat.id,
     title: cat.name,
+    cardType: 'folder',
     blocks: [],
     parentId: cat.parentId,
     children: [],
@@ -48,6 +67,7 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
     return {
       id: card.id,
       title: card.title || 'Untitled',
+      cardType: inferCardType({ blocks, children: [] }),
       blocks,
       parentId: card.categoryId || null,
       children: [],
@@ -127,7 +147,7 @@ export function useNotesStore() {
              const newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
              setState({ cards: newCards });
           } else {
-             setState({ cards: parsed.cards || [] });
+             setState({ cards: normalizeCardTree(parsed.cards || []) });
           }
         } else {
            // Fallback: check localStorage for migration
@@ -141,7 +161,7 @@ export function useNotesStore() {
               } else {
                  newCards = parsed.cards || [];
               }
-              setState({ cards: newCards });
+              setState({ cards: normalizeCardTree(newCards) });
               // Save to IDB immediately
               await set(STORAGE_KEY, JSON.stringify({ cards: newCards }));
            }
@@ -162,10 +182,11 @@ export function useNotesStore() {
     }
   }, [state, isLoaded]);
 
-  const addCard = useCallback((title: string, parentId: string | null): string => {
+  const addCard = useCallback((title: string, parentId: string | null, cardType: CardType = 'note'): string => {
     const newCard: Card = {
       id: generateId(),
       title,
+      cardType,
       blocks: [],
       parentId,
       children: [],
@@ -522,8 +543,9 @@ export function useNotesStore() {
        // Legacy format
        importedCards = migrateLegacyData(data.categories, data.cards || []);
     } else {
-       importedCards = data.cards || [];
+      importedCards = data.cards || [];
     }
+    importedCards = normalizeCardTree(importedCards);
 
     if (mode === 'override') {
       setState({ cards: importedCards });

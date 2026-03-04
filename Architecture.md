@@ -49,9 +49,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Prevent invalid cyclic moves 
 | Notes model | Manual reorder (up/down and drag reorder) 
 | Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety 
-| Notes model | Typed new-note templates (Note, Checkbox, Link, Image, Drawing) 
+| Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `folder` 
+| Notes model | Card type changes are non-destructive UI-mode switches (existing data retained) 
+| Notes model | Typed note creation uses a shared type picker dialog (workspace `New Note`) 
 | Content | Card blocks: text, bullets, image, checkbox, link, drawing 
-| Content | Add/remove/toggle special blocks (checkbox/link/image/drawing) 
+| Content | Strict card-type rendering: only active type UI is shown; other block data remains stored 
 | Content | Reorder blocks with drag and with move up/down 
 | Content | One image block per card in current UI flows (replace existing image on add) 
 | Content | Drawing tools: select, pen, line, rectangle, circle, erase-segment 
@@ -62,7 +64,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | Drawing editor uses a fixed-aspect square viewport to avoid sidebar/stretch distortion 
 | Content | Default drawing brush size is 2 
 | Content | Drawing undo/redo snapshot history; reset on drawing open 
-| Content | Quick checkbox toggle directly in tree/grid when checkbox block exists 
+| Content | Quick checkbox toggle directly in tree/grid for checkbox-type cards 
 | Search | Search by title and textual block content 
 | Search | Recycle Bin search is title-only (deleted cards) 
 | Search | Navigation/selection clears active search query 
@@ -87,10 +89,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin displays deleted-card count badge 
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
-| UX | Grid cards show image/drawing previews and open note on preview click 
+| UX | Grid cards open note on double-click (all card types) 
+| UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
 | UX | Image and drawing cards render title text in grid 
-| UX | Tree leaf icons are specialized for image and drawing notes 
+| UX | Tree icons are driven by card type (folder, note, checkbox, link, image, drawing) 
 | PWA | Manifest + service worker + installable static app 
 | Deploy | Static GitHub Pages build to `docs/` 
 
@@ -98,17 +101,21 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.1 Create and edit note
 1. User creates a new note at root or under current scope.
-2. User may create from templates: plain note, checkbox note, link note, image note, or drawing note.
+2. User selects note type from a type picker dialog: note, checkbox, link, image, drawing, or folder.
 3. New card is inserted under target parent with generated ID and timestamps.
 4. Template note creation can initialize first block based on selected template.
 5. Drawing template creation immediately opens the created note for editing.
-6. User edits card title and blocks.
-7. Changes are persisted to IndexedDB after state updates.
+6. User may change card type from card `...` menus via a type picker dialog.
+7. Type change updates presentation immediately but keeps existing card data (blocks/children) intact.
+8. User edits card title and currently visible type-specific content.
+9. For `folder` type, the content editor is hidden and sub-note area is shown.
+10. Changes are persisted to IndexedDB after state updates.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
-2. App updates current scope (`currentCardId`) and tree selection state.
-3. Workspace shows current card content plus children grid.
+2. In workspace grid, opening cards is triggered by double-click.
+3. App updates current scope (`currentCardId`) and tree selection state.
+4. Workspace shows current card content and, when applicable, children grid.
 
 ### 3.3 Move and reorder
 1. User drags card in tree or uses "Move to..." picker.
@@ -133,7 +140,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 3. Legacy import format with `categories` is migrated to card tree.
 
 ### 3.6 Quick task toggling
-1. If a card contains a checkbox block, user can toggle it directly from tree rows.
+1. If a card is checkbox-type and contains a checkbox block, user can toggle it directly from tree rows.
 2. The same checkbox can be toggled from workspace grid cards.
 3. Toggle updates the underlying checkbox block on that card.
 
@@ -158,7 +165,7 @@ Source of truth: `src/src/lib/types.ts`.
 ### 4.1 Core types
 - `AppState`: `{ cards: Card[] }` where `cards` are root cards.
 - `Card`:
-- `id`, `title`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
+- `id`, `title`, `cardType`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`.
 - Recycle bin sentinel ID: `RECYCLE_BIN_ID = "__recycle_bin__"`.
@@ -168,6 +175,8 @@ Source of truth: `src/src/lib/types.ts`.
 - `state.cards` contains only root nodes; descendants are nested in `children`.
 - `parentId` of root cards is `null`.
 - A card cannot be moved under itself or under any descendant.
+- `cardType` controls visible UI/edit surface; it does not delete hidden blocks or children.
+- Children are allowed under any card in data model; UI gating controls when sub-note area is shown.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.
 - Restore rebuilds subtree parent links consistently under the chosen restore target.
@@ -177,7 +186,7 @@ Source of truth: `src/src/lib/types.ts`.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
 - Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
-- Current image UX keeps at most one image block per card by replacing existing image block on add.
+- Current image creation/edit flows keep at most one image block per card by replacing existing image block on add.
 - Drawing editor opens with Select as default tool.
 - Drawing session undo/redo history is reset when opening a drawing note.
 
@@ -205,6 +214,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 5.3 Migration behavior
 - Supports legacy `categories + cards` schema.
 - Converts categories into card nodes and maps legacy card fields into blocks.
+- Normalizes loaded/imported cards to ensure `cardType` exists (inferred from existing card data when missing).
 - Persists migrated result back into IndexedDB.
 
 ### 5.4 Theme preference persistence
@@ -245,40 +255,43 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 6.2.1 Tree Visual Semantics
 
-- Tree row icon behavior is content/state-driven and part of the UI contract:
-- If card has visible non-deleted children:
-- show folder icon,
-- show open folder when expanded, closed folder when collapsed.
-- If card has no visible children and has a checkbox block:
-- do not show file icon; checkbox acts as the leading visual marker.
-- If card has no visible children and no checkbox block:
-- if image block exists, show image icon,
-- else if drawing block exists, show drawing icon,
-- else show file icon.
+- Tree row icon behavior is card-type-driven and part of the UI contract:
+- `folder`: folder/open-folder icon based on expanded state.
+- `checkbox`: checkbox icon.
+- `link`: link icon.
+- `image`: image icon.
+- `drawing`: brush icon.
+- `note`: file icon.
 
 ### 6.3 Workspace panel
 - `src/src/components/WorkspacePanel.tsx`:
 - Header for current context and parent navigation.
-- Current card editor for title and block list.
+- Current card editor for title and type-gated block list.
+- Title row includes current card type icon.
 - Children displayed as card grid with create/move/reorder/delete actions.
 - Uses `@dnd-kit` for block and child-card drag sorting.
-- New-note dropdown provides typed creation templates (note/checkbox/link/image/drawing).
-- Grid cards allow quick checkbox toggle and link open behavior.
-- Grid cards render image/drawing previews and open note on preview click.
+- `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/folder).
+- Grid cards open on double-click (all types).
+- Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
+- Folder cards in grid use folder-style shape while keeping standard card color theme.
+- Non-folder cards hide sub-note area in workspace.
 - Drawing editor in workspace supports tool-based drawing, stroke selection, transform, and style updates.
 
 ### 6.4 Dialogs
 - `CategoryPickerDialog` for move target selection.
 - Import mode dialog for merge/override choice.
+- Card type picker dialog used for:
+- creating new notes from workspace `New Note`,
+- changing existing note type from card `...` menus.
 - Move target picker excludes self and descendants for the selected moving card.
 - Store validation (`canMoveCard`) remains the final safety guard for invalid targets.
 
 ### 6.5 Card Action Menu Contract (`...`)
 
 - Tree card `...` menu (normal cards):
-- `Rename`, `Move to...`, `Move Up`, `Move Down`, optional `Expand All`/`Collapse All` (when card has visible children), `Delete`.
+- `Rename`, `Move to...`, `Change type...`, `Move Up`, `Move Down`, optional `Expand All`/`Collapse All` (when card has visible children), `Delete`.
 - Workspace grid card `...` menu (normal cards):
-- `Open`, `Move to...`, `Move Up`, `Move Down`, modifier toggles (`Add/Remove checkbox`, `Add/Remove link`, `Add/Remove image`, `Add/Remove drawing`), `Delete`.
+- `Open`, `Move to...`, `Change type...`, `Move Up`, `Move Down`, `Delete`.
 - Recycle Bin right-panel tree row `...` menu:
 - `Restore`, `Delete Forever`.
 - Recycle Bin right-panel tree rows:
@@ -328,17 +341,19 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Marquee selects only when region touches/crosses rendered geometry, not bbox-only overlap.
 - Drawing surface is rendered in a fixed square viewport so resizing surrounding layout does not distort drawing geometry.
 
-## 7.2 Modifier Semantics (Current UI Contract)
+## 7.2 Card Type UI Semantics (Current UI Contract)
 
-- Although blocks are modeled as a list, current UX treats `checkbox`, `link`, `image`, and `drawing` as card-level toggles in normal flows.
-- Modifier behavior in current UI:
-- `checkbox`: toggle add/remove; quick toggle checked state is available from tree/grid when present.
-- `link`: toggle add/remove; edited inline in card/grid contexts.
-- `image`: toggle add/remove; adding image replaces existing image block on the same card.
-- `drawing`: toggle add/remove; drawing notes open immediately when created from drawing template.
-- Template note creation can initialize a card with one modifier/content block (`checkbox`, `link`, `image`, or `drawing`).
-- Regression note:
-- UI semantics above are contract-level behavior even though the data model can technically hold multiple blocks of the same type.
+- Cards have explicit `cardType` and UI is strict by active type.
+- Type change is non-destructive:
+- hidden blocks/children remain in stored data and can reappear when switching back.
+- Visible editor surface by type:
+- `note`: text/bullet blocks,
+- `checkbox`: checkbox block UI,
+- `link`: link block UI,
+- `image`: image block UI,
+- `drawing`: drawing block UI,
+- `folder`: no block editor.
+- Sub-note management UI in workspace is shown for Home and folder-type cards.
 
 ## 8. Import/Export Data Contract
 
@@ -420,28 +435,18 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 Verify the product behavior items below:
 
 - Can create root and nested notes.
-- Can create typed notes from templates: Note, Checkbox, Link, Image, Drawing.
+- Can create typed notes from type picker: Note, Checkbox, Link, Image, Drawing, Folder.
 - Can rename notes from tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.
 - Move picker excludes invalid self/descendant targets and store validation still rejects invalid targets as safety.
 - Can reorder siblings (up/down) in tree and grid drag reorder in workspace.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
-- Can add/edit/remove each block type:
-- text, bullets, image, checkbox, link, drawing.
-- Card modifier semantics are preserved:
-- checkbox is singleton toggle-style in normal UI flows.
-- link is singleton toggle-style in normal UI flows.
-- image is singleton toggle-style in normal UI flows.
-- drawing is singleton toggle-style in normal UI flows.
-- Checkbox can be toggled directly from tree and grid cards when present.
-- Tree icon rules are preserved:
-- folder open/closed for parents with visible children,
-- checkbox-leading rows omit file icon,
-- leaf cards without checkbox show icon by priority:
-- image icon when image block exists,
-- drawing icon when drawing block exists and no image block,
-- otherwise file icon.
+- Card type can be changed from `...` -> `Change type...` in tree and grid.
+- Type-change dialog appears and selecting a new type updates icon/UI immediately.
+- Type change is non-destructive: switching type does not delete hidden blocks/children.
+- Tree icons match card type (`note`, `checkbox`, `link`, `image`, `drawing`, `folder`).
+- Checkbox quick toggle works in tree/grid for checkbox-type cards.
 - Can reorder blocks via drag and up/down actions.
 - Bullet keyboard controls work:
 - Tab/Shift+Tab indent, Enter add bullet, Backspace empty-item behavior.
@@ -467,7 +472,8 @@ Verify the product behavior items below:
 - drawing viewport remains fixed-aspect and does not stretch when sidebar/layout width changes.
 - Card preview checks:
 - image and drawing previews are visible in grid cards,
-- clicking image/drawing preview opens the note,
+- all grid cards open via double-click,
+- image/drawing previews do not trigger native browser image drag-copy behavior while dragging cards,
 - image and drawing cards display title text,
 - drawing preview stroke widths/colors match live stroke data without requiring entering edit mode.
 - Delete moves note subtree to recycle bin.
@@ -492,8 +498,8 @@ Verify the product behavior items below:
 - App version is visible in sidebar footer.
 - App version display format in UI is `vMAJOR.MINOR`.
 - Card `...` menu actions are correct by context:
-- tree normal cards expose rename/move/reorder/delete (+expand/collapse when applicable),
-- grid normal cards expose open/move/reorder/modifier toggles/delete,
+- tree normal cards expose rename/move/change-type/reorder/delete (+expand/collapse when applicable),
+- grid normal cards expose open/move/change-type/reorder/delete,
 - recycle-bin cards/rows expose restore and delete-forever via `...` menu.
 - Recycle Bin row restore/delete actions are menu-based, not always-visible buttons.
 - PWA install prompt/behavior and service worker registration still function.

@@ -60,10 +60,12 @@ export interface DrawingBlock {
 }
 
 export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock;
+export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'folder';
 
 export interface Card {
   id: string;
   title: string;
+  cardType: CardType;
   blocks: ContentBlock[];
   parentId: string | null;
   children: Card[];
