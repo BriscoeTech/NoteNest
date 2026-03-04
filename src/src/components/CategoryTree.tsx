@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, Type } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, Type, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
@@ -668,6 +668,21 @@ export function CategoryTree({
             >
               {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">Dark</span>
+            </button>
+          </div>
+          <div className="mb-2">
+            <button
+              type="button"
+              aria-label="Hard refresh"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', Date.now().toString());
+                window.location.replace(url.toString());
+              }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Hard Refresh</span>
             </button>
           </div>
           <div className="text-[10px] text-muted-foreground/40 text-center select-none">
