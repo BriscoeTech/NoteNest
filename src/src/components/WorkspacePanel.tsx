@@ -64,8 +64,9 @@ interface BlockEditorProps {
   };
 }
 
-const DRAWING_PREVIEW_WIDTH = 640;
-const DRAWING_PREVIEW_HEIGHT = 360;
+// Keep preview aspect aligned with drawing editor viewport (3:4 width:height).
+const DRAWING_PREVIEW_WIDTH = 540;
+const DRAWING_PREVIEW_HEIGHT = 720;
 
 const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
 
@@ -461,6 +462,21 @@ function DrawingBlockEditor({
     circle: 'circle',
   };
 
+  const constrainCirclePoint = (
+    start: DrawingPoint,
+    current: DrawingPoint,
+    width: number,
+    height: number
+  ): DrawingPoint => {
+    const dxPx = (current.x - start.x) * width;
+    const dyPx = (current.y - start.y) * height;
+    const sizePx = Math.max(Math.abs(dxPx), Math.abs(dyPx));
+    return {
+      x: start.x + (dxPx === 0 ? 0 : (Math.sign(dxPx) * sizePx) / width),
+      y: start.y + (dyPx === 0 ? 0 : (Math.sign(dyPx) * sizePx) / height),
+    };
+  };
+
   const getNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): DrawingPoint => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
@@ -786,9 +802,18 @@ function DrawingBlockEditor({
 
     if (draftStrokeRef.current) {
       const kind = draftStrokeRef.current.kind ?? 'freehand';
+      const { width, height } = getCanvasDrawSize();
       draftStrokeRef.current =
         kind === 'freehand'
           ? { ...draftStrokeRef.current, points: [...draftStrokeRef.current.points, point] }
+          : kind === 'circle' && keepAspectRatio
+            ? {
+                ...draftStrokeRef.current,
+                points: [
+                  draftStrokeRef.current.points[0],
+                  constrainCirclePoint(draftStrokeRef.current.points[0], point, width, height),
+                ],
+              }
           : { ...draftStrokeRef.current, points: [draftStrokeRef.current.points[0], point] };
       setTransientStrokes([...block.strokes, draftStrokeRef.current]);
       return;
@@ -917,6 +942,14 @@ function DrawingBlockEditor({
   };
 
   const swatches = ['#111827', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
+  const toolLabelMap: Record<typeof tool, string> = {
+    pen: 'Pen',
+    line: 'Line',
+    rectangle: 'Rectangle',
+    circle: 'Circle',
+    eraser: 'Erase Segment',
+    select: 'Select',
+  };
 
   return (
     <div className="group relative flex items-start gap-1">
@@ -932,39 +965,100 @@ function DrawingBlockEditor({
       <div className="flex-1">
         <div className="rounded border bg-muted/20 p-3 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant={tool === 'pen' ? 'default' : 'outline'} onClick={() => setTool('pen')} disabled={isRecycleBin}>
-              <Brush className="w-4 h-4 mr-1" />
-              Pen
-            </Button>
-            <Button type="button" size="sm" variant={tool === 'line' ? 'default' : 'outline'} onClick={() => setTool('line')} disabled={isRecycleBin}>
-              <Minus className="w-4 h-4 mr-1" />
-              Line
-            </Button>
-            <Button type="button" size="sm" variant={tool === 'rectangle' ? 'default' : 'outline'} onClick={() => setTool('rectangle')} disabled={isRecycleBin}>
-              <Square className="w-4 h-4 mr-1" />
-              Rectangle
-            </Button>
-            <Button type="button" size="sm" variant={tool === 'circle' ? 'default' : 'outline'} onClick={() => setTool('circle')} disabled={isRecycleBin}>
-              <Circle className="w-4 h-4 mr-1" />
-              Circle
-            </Button>
-            <Button type="button" size="sm" variant={tool === 'eraser' ? 'default' : 'outline'} onClick={() => setTool('eraser')} disabled={isRecycleBin}>
-              <Eraser className="w-4 h-4 mr-1" />
-              Erase Segment
-            </Button>
-            <Button type="button" size="sm" variant={tool === 'select' ? 'default' : 'outline'} onClick={() => setTool('select')} disabled={isRecycleBin}>
-              <Move className="w-4 h-4 mr-1" />
-              Select
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={keepAspectRatio ? 'default' : 'outline'}
-              onClick={() => setKeepAspectRatio((v) => !v)}
-              disabled={isRecycleBin || tool !== 'select'}
-            >
-              {keepAspectRatio ? 'Aspect: On' : 'Aspect: Off'}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline" disabled={isRecycleBin}>
+                  <Type className="w-4 h-4 mr-1" />
+                  {`Tools: ${toolLabelMap[tool]}`}
+                  <ChevronDown className="w-3 h-3 ml-1 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setTool('select')}>
+                  <Move className="w-4 h-4 mr-2" />
+                  Select
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool('pen')}>
+                  <Brush className="w-4 h-4 mr-2" />
+                  Pen
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool('line')}>
+                  <Minus className="w-4 h-4 mr-2" />
+                  Line
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool('rectangle')}>
+                  <Square className="w-4 h-4 mr-2" />
+                  Rectangle
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool('circle')}>
+                  <Circle className="w-4 h-4 mr-2" />
+                  Circle
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTool('eraser')}>
+                  <Eraser className="w-4 h-4 mr-2" />
+                  Erase Segment
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <div className="mb-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={keepAspectRatio ? 'default' : 'outline'}
+                      onClick={() => setKeepAspectRatio((v) => !v)}
+                      disabled={isRecycleBin}
+                      className="w-full justify-center"
+                    >
+                      {keepAspectRatio ? 'Aspect: On' : 'Aspect: Off'}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-1">Color</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {swatches.map((swatch) => (
+                      <button
+                        key={swatch}
+                        type="button"
+                        onClick={() => {
+                          setColor(swatch);
+                          if (selectedStrokeIds.length > 0) {
+                            recolorSelectedStrokes(swatch);
+                          }
+                        }}
+                        disabled={isRecycleBin}
+                        className={cn('h-5 w-5 rounded-full border', color === swatch ? 'ring-2 ring-primary ring-offset-1' : 'ring-0')}
+                        style={{ backgroundColor: swatch }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="px-2 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Line Width</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="32"
+                      step="1"
+                      value={brushSize}
+                      onChange={(e) => {
+                        const nextWidth = Number(e.target.value);
+                        setBrushSize(nextWidth);
+                        if (selectedStrokeIds.length > 0) {
+                          resizeSelectedStrokes(nextWidth);
+                        }
+                      }}
+                      disabled={isRecycleBin}
+                      className="w-32 accent-primary"
+                    />
+                    <span className="text-xs text-muted-foreground w-8">{brushSize}</span>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={clearCanvas} disabled={isRecycleBin || !block.strokes.length}>
+                  Clear
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button type="button" size="sm" variant="outline" onClick={undoStroke} disabled={isRecycleBin || !historyPast.length}>
               <Undo2 className="w-4 h-4 mr-1" />
               Undo
@@ -973,49 +1067,9 @@ function DrawingBlockEditor({
               <Redo2 className="w-4 h-4 mr-1" />
               Redo
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={clearCanvas} disabled={isRecycleBin || !block.strokes.length}>
-              Clear
-            </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">Color</span>
-            {swatches.map((swatch) => (
-              <button
-                key={swatch}
-                type="button"
-                onClick={() => {
-                  setColor(swatch);
-                  if (selectedStrokeIds.length > 0) {
-                    recolorSelectedStrokes(swatch);
-                  }
-                }}
-                disabled={isRecycleBin}
-                className={cn('h-6 w-6 rounded-full border', color === swatch ? 'ring-2 ring-primary ring-offset-1' : 'ring-0')}
-                style={{ backgroundColor: swatch }}
-              />
-            ))}
-            <span className="text-xs text-muted-foreground ml-2">Brush</span>
-            <input
-              type="range"
-              min="1"
-              max="32"
-              step="1"
-              value={brushSize}
-              onChange={(e) => {
-                const nextWidth = Number(e.target.value);
-                setBrushSize(nextWidth);
-                if (selectedStrokeIds.length > 0) {
-                  resizeSelectedStrokes(nextWidth);
-                }
-              }}
-              disabled={isRecycleBin}
-              className="w-32 accent-primary"
-            />
-            <span className="text-xs text-muted-foreground w-8">{brushSize}</span>
-          </div>
-
-          <div className="w-full aspect-square rounded border bg-white overflow-hidden">
+          <div className="w-full max-w-[70vh] aspect-[3/4] min-h-[340px] rounded border bg-white overflow-hidden mx-auto">
             <canvas
               ref={canvasRef}
               onPointerDown={handlePointerDown}
@@ -1646,15 +1700,15 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         )}
         {imageBlock && (
           <div
-            className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
+            className={cn("w-full cursor-pointer", isMediaCard ? "" : "mt-2 px-2")}
             onDragStart={(e) => e.preventDefault()}
           >
-            <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
+            <div className={cn("overflow-hidden", isMediaCard ? "bg-muted/20" : "rounded border bg-muted/20")}>
               <img
                 src={imageBlock.dataUrl}
                 alt="Card image"
                 draggable={false}
-                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[220px]" : "h-36")}
+                className={cn("w-full h-auto block object-contain", isMediaCard ? "" : "h-36")}
               />
             </div>
           </div>
@@ -1666,15 +1720,15 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         )}
         {drawingBlock && (
           <div
-            className={cn("w-full cursor-pointer", isMediaCard ? "h-full" : "mt-2 px-2")}
+            className={cn("w-full cursor-pointer", isMediaCard ? "" : "mt-2 px-2")}
             onDragStart={(e) => e.preventDefault()}
           >
-            <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
+            <div className={cn("overflow-hidden", isMediaCard ? "bg-muted/20" : "rounded border bg-muted/20")}>
               <img
                 src={createDrawingPreviewDataUrl(drawingBlock.strokes)}
                 alt="Drawing preview"
                 draggable={false}
-                className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
+                className={cn("w-full h-auto block object-contain", isMediaCard ? "" : "h-24")}
               />
             </div>
           </div>
