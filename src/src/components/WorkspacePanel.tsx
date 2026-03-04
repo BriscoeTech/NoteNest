@@ -1709,7 +1709,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           >
             <div className={cn("overflow-hidden", isMediaCard ? "h-full" : "rounded border bg-muted/20")}>
               <img
-                src={drawingBlock.previewDataUrl || createDrawingPreviewDataUrl(drawingBlock.strokes)}
+                src={createDrawingPreviewDataUrl(drawingBlock.strokes)}
                 alt="Drawing preview"
                 className={cn("w-full object-cover", isMediaCard ? "h-full min-h-[140px]" : "h-24")}
               />

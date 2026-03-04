@@ -36,8 +36,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | One image block per card in current UI flows (replace existing image on add) 
 | Content | Drawing tools: select, pen, line, rectangle, circle, erase-segment 
 | Content | Drawing selection supports direct line-hit + marquee + move + resize 
+| Content | Drawing selection supports additive selection with Ctrl/Shift click and Ctrl/Shift marquee 
 | Content | Drawing selection resize supports aspect-ratio lock toggle 
 | Content | Selected drawing objects support color and width edits 
+| Content | Drawing editor uses a fixed-aspect square viewport to avoid sidebar/stretch distortion 
+| Content | Default drawing brush size is 2 
 | Content | Drawing undo/redo snapshot history; reset on drawing open 
 | Content | Quick checkbox toggle directly in tree/grid when checkbox block exists 
 | Search | Search by title and textual block content 
@@ -65,6 +68,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
 | UX | Grid cards show image/drawing previews and open note on preview click 
+| UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
 | UX | Image and drawing cards render title text in grid 
 | UX | Tree leaf icons are specialized for image and drawing notes 
 | PWA | Manifest + service worker + installable static app 
@@ -299,12 +303,16 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Drawing behavior:
 - Default drawing tool on open: `Select`.
 - Available tools: `Select`, `Pen`, `Line`, `Rectangle`, `Circle`, `Erase Segment`.
+- Default brush size is `2`.
 - Eraser removes whole stroke objects by rendered-line hit.
 - Selection supports marquee and direct click-hit on rendered lines.
+- `Ctrl`/`Shift` + click adds stroke/object to current selection.
+- `Ctrl`/`Shift` + marquee adds intersecting strokes/objects to current selection.
 - Selected strokes support move and corner-handle resize.
 - Resize supports aspect-ratio lock toggle.
 - Color swatches and width slider apply to selected strokes when selection exists.
 - Marquee selects only when region touches/crosses rendered geometry, not bbox-only overlap.
+- Drawing surface is rendered in a fixed square viewport so resizing surrounding layout does not distort drawing geometry.
 
 ## 7.2 Modifier Semantics (Current UI Contract)
 
@@ -438,16 +446,21 @@ Before each release/version bump, verify all items below:
 - drawing template opens created note immediately,
 - drawing opens with `Select` tool by default,
 - tools available: select/pen/line/rectangle/circle/erase-segment,
+- default brush width is 2 on drawing open,
 - direct click-hit and marquee selection both work on rendered geometry,
+- ctrl/shift click adds objects to selection,
+- ctrl/shift marquee adds objects to selection,
 - selected strokes can move/resize,
 - aspect toggle affects resize constraints,
 - selected stroke color and width updates apply via toolbar,
 - undo/redo works across draw/erase/style/transform operations,
 - opening drawing resets undo/redo history session baseline.
+- drawing viewport remains fixed-aspect and does not stretch when sidebar/layout width changes.
 - Card preview checks:
 - image and drawing previews are visible in grid cards,
 - clicking image/drawing preview opens the note,
-- image and drawing cards display title text.
+- image and drawing cards display title text,
+- drawing preview stroke widths/colors match live stroke data without requiring entering edit mode.
 - Delete moves note subtree to recycle bin.
 - Recycle Bin includes deleted descendants even when parent is deleted.
 - Recycle Bin right-panel preserves deleted parent/child hierarchy.
@@ -588,3 +601,40 @@ Implemented in `src/src/components/WorkspacePanel.tsx`:
 
 - TypeScript validation executed repeatedly after each change set:
 - `npm run check` passes with current session changes.
+
+## 17. Session Change Log (2026-03-04)
+
+This section documents all user-facing and architecture-relevant changes implemented in this session.
+
+### 17.1 Drawing Selection Interaction Refinements
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Selection pointer-down flow now prioritizes direct stroke hit-targeting before "move current selection bounds" behavior.
+- Added pending-hit behavior so drag-start on an unselected stroke can transition into marquee selection after movement threshold.
+- Added additive selection modifiers:
+- `Ctrl`/`Shift` + click adds the hit object to current selection.
+- `Ctrl`/`Shift` + marquee adds all intersecting objects to current selection.
+
+### 17.2 Drawing Surface Sizing and Stability
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Replaced fixed-height drawing canvas (`h-72`) with fixed-aspect square viewport (`aspect-square`).
+- Drawing viewport now scales uniformly with available width and avoids non-uniform stretch when sidebar visibility changes.
+- Mobile/stylus usability improved by larger effective drawing area.
+
+### 17.3 Drawing Defaults and Preview Consistency
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Changed default brush size from `4` to `2`.
+- Grid drawing preview now renders directly from current stroke data (`createDrawingPreviewDataUrl(drawingBlock.strokes)`) to avoid stale cached previews showing incorrect line widths.
+
+### 17.4 Image Card Presentation Tuning
+
+Implemented in `src/src/components/WorkspacePanel.tsx`:
+
+- Increased image preview height while keeping width behavior unchanged:
+- media-card image min-height increased (`140px` -> `220px`),
+- non-media image preview height increased (`h-24` -> `h-36`).
