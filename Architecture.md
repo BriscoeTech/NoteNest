@@ -59,6 +59,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | Drawing tools: select, pen, line, rectangle, circle, erase-segment 
 | Content | Drawing selection supports direct line-hit + marquee + move + resize 
 | Content | Drawing selection supports additive selection with Ctrl/Shift click and Ctrl/Shift marquee 
+| Content | Drawing pointer-down prioritizes direct stroke/object hit-selection before marquee/bounds-drag fallback 
 | Content | Drawing selection resize supports aspect-ratio lock toggle 
 | Content | Selected drawing objects support color and width edits 
 | Content | Drawing editor uses a fixed-aspect `3:4` viewport to avoid sidebar/stretch distortion 
@@ -94,7 +95,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
 | UX | Image and drawing cards render title text in grid 
-| UX | Tree icons are driven by card type (folder, note, checkbox, link, image, drawing) 
+| UX | Tree icons are card-type-driven, with checkbox rows as an exception (checkbox control is the marker; no extra icon) 
 | PWA | Manifest + service worker + installable static app 
 | PWA | Normal refresh must render reliably (no white-screen loop) with active service worker 
 | Deploy | Static GitHub Pages build to `docs/` 
@@ -267,7 +268,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 - Tree row icon behavior is card-type-driven and part of the UI contract:
 - `folder`: folder/open-folder icon based on expanded state.
-- `checkbox`: checkbox icon.
+- `checkbox`: no separate type icon in tree rows; the checkbox control is the leading visual marker.
 - `link`: link icon.
 - `image`: image icon.
 - `drawing`: brush icon.
@@ -347,6 +348,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - with aspect lock on, circle draw is constrained to true circles,
 - with aspect lock off, circle draw allows ovals.
 - Selection supports marquee and direct click-hit on rendered lines.
+- Pointer-down behavior prioritizes direct stroke/object hit-selection before marquee/bounds-drag fallback.
+- If pointer-down starts on an unselected stroke/object and drag movement exceeds threshold, interaction transitions to marquee selection.
 - `Ctrl`/`Shift` + click adds stroke/object to current selection.
 - `Ctrl`/`Shift` + marquee adds intersecting strokes/objects to current selection.
 - Selected strokes support move and corner-handle resize.
@@ -459,7 +462,7 @@ Verify the product behavior items below:
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.
 - Type change is non-destructive: switching type does not delete hidden blocks/children.
-- Tree icons match card type (`note`, `checkbox`, `link`, `image`, `drawing`, `folder`).
+- Tree icons match card type (`note`, `link`, `image`, `drawing`, `folder`) with checkbox rows as explicit exception (no extra icon).
 - Checkbox quick toggle works in tree/grid for checkbox-type cards.
 - Can reorder blocks via drag and up/down actions.
 - Bullet keyboard controls work:
@@ -476,6 +479,8 @@ Verify the product behavior items below:
 - tools available: select/pen/line/rectangle/circle/erase-segment,
 - default brush width is 2 on drawing open,
 - direct click-hit and marquee selection both work on rendered geometry,
+- pointer-down prioritizes direct stroke/object hit-selection before marquee/bounds-drag fallback,
+- dragging from hit-target transitions to marquee when drag exceeds threshold on unselected objects,
 - ctrl/shift click adds objects to selection,
 - ctrl/shift marquee adds objects to selection,
 - selected strokes can move/resize,

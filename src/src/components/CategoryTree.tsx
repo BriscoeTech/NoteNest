@@ -259,7 +259,9 @@ function TreeItem({
         {card.cardType === 'folder' ? (
           isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : card.cardType === 'checkbox' ? (
-          <CheckSquare className="w-4 h-4 text-muted-foreground shrink-0" />
+          // Checkbox-type rows use the checkbox control as the leading marker.
+          // Do not render an extra type icon for this row type.
+          null
         ) : card.cardType === 'link' ? (
           <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
         ) : card.cardType === 'image' ? (
