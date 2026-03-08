@@ -5,6 +5,21 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
 const versionJsonPath = path.resolve(import.meta.dirname, "version.json");
+const swTemplatePath = path.resolve(import.meta.dirname, "public", "sw.js");
+
+function getVersionFromJson(): string {
+  const json = fs.readFileSync(versionJsonPath, "utf8");
+  const parsed = JSON.parse(json) as { version?: string };
+  if (!parsed.version || !/^\d+\.\d+\.\d+$/.test(parsed.version)) {
+    throw new Error("version.json must contain semver `version`.");
+  }
+  return parsed.version;
+}
+
+function resolveServiceWorkerTemplate(version: string): string {
+  const swTemplate = fs.readFileSync(swTemplatePath, "utf8");
+  return swTemplate.replaceAll("__APP_VERSION__", version);
+}
 
 const versionJsonPlugin = (): Plugin => ({
   name: "version-json-plugin",
@@ -15,13 +30,27 @@ const versionJsonPlugin = (): Plugin => ({
       res.setHeader("Cache-Control", "no-store");
       res.end(json);
     });
+    server.middlewares.use("/sw.js", (_req: any, res: any) => {
+      const version = getVersionFromJson();
+      const sw = resolveServiceWorkerTemplate(version);
+      res.setHeader("Content-Type", "application/javascript");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(sw);
+    });
   },
   generateBundle() {
     const json = fs.readFileSync(versionJsonPath, "utf8");
+    const version = getVersionFromJson();
+    const sw = resolveServiceWorkerTemplate(version);
     this.emitFile({
       type: "asset",
       fileName: "version.json",
       source: json,
+    });
+    this.emitFile({
+      type: "asset",
+      fileName: "sw.js",
+      source: sw,
     });
   },
 });

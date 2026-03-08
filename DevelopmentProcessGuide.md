@@ -30,7 +30,8 @@ Architecture requirements belong in `Architecture.md`.
 
 ### Policy
 - Use `version.json` as the single source of truth for app version.
-- No other file may define the version string.
+- `version.json` is the sole source of app/product version identity.
+- Other version fields (for example in `package.json`) are metadata only and must not be used for app runtime/build version identity.
 - UI display format must remain `vMAJOR.MINOR` (two-part display).
 - Source version format in `version.json` must be semver `MAJOR.MINOR.PATCH`.
 - For this project, user-facing behavior changes use a MINOR bump.
@@ -100,7 +101,7 @@ script\dev-server-start.bat
 script\dev-server-stop.bat
 ```
 
-### Unix-like Usage
+### Linux Usage
 - Start:
 ```bash
 ./script/dev-server-start.sh

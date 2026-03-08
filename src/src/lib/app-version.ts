@@ -1,9 +1,11 @@
-let rawVersion = "0.0.0";
-export let APP_VERSION = "v0.0";
+let rawVersion = "";
+export let APP_VERSION = "";
 
 function toDisplayVersion(version: string): string {
+  if (!version) return "";
   const normalized = version.replace(/^v/, "");
-  const [major = "0", minor = "0"] = normalized.split(".");
+  const [major = "", minor = ""] = normalized.split(".");
+  if (!major || !minor) return "";
   return `v${major}.${minor}`;
 }
 
@@ -17,7 +19,7 @@ export async function loadAppVersion(): Promise<string> {
       }
     }
   } catch {
-    // Keep fallback version when version.json is unavailable.
+    // Keep empty version if version.json is unavailable.
   }
   APP_VERSION = toDisplayVersion(rawVersion);
   return APP_VERSION;
