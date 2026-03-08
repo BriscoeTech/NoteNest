@@ -85,6 +85,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Persistence | Legacy migration fallback from localStorage format 
 | UX | Sidebar collapse/expand 
 | UX | Dark mode toggle with local preference storage 
+| UX | Sidebar dark mode and Hard Refresh actions are grouped in one shared utility row with separators above and below 
 | UX | Sidebar Hard Refresh action resets service worker + cache storage and reloads app 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
 | UX | Sidebar footer app version display (`APP_VERSION`) 
@@ -92,6 +93,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
 | UX | Grid cards open note on double-click (all card types) 
+| UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
 | UX | Image and drawing cards render title text in grid 
@@ -127,6 +129,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 - clear Cache Storage entries,
 - reload the page.
 3. After Hard Refresh, the app must re-register service worker on next load and continue normal operation.
+4. Sidebar utility controls must present dark mode and Hard Refresh adjacent in a shared row, visually separated from import/export above and version display below.
 
 ### 3.3 Move and reorder
 1. User drags card in tree or uses "Move to..." picker.
@@ -260,7 +263,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - native drag-and-drop parent reassignment.
 - card checkbox quick toggle when card includes checkbox block.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
-- utility section supports export/import and dark mode toggle.
+- utility section supports export/import plus a shared row containing dark mode and Hard Refresh actions.
+- utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
 - utility section displays current app version (`APP_VERSION`).
 - Recycle Bin row shows a count badge for deleted cards when count > 0.
 
@@ -279,10 +283,12 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Header for current context and parent navigation.
 - Current card editor for title and type-gated block list.
 - Title row includes current card type icon.
-- Children displayed as card grid with create/move/reorder/delete actions.
+- Children displayed as a masonry-packed card grid with create/move/reorder/delete actions.
 - Uses `@dnd-kit` for block and child-card drag sorting.
 - `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/folder).
 - Grid cards open on double-click (all types).
+- Masonry layout must preserve the existing responsive column-count rules; it changes vertical packing only.
+- Child-card drag reorder semantics and store reorder logic must remain unchanged under masonry layout.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
 - Folder cards in grid use folder-style shape while keeping standard card color theme.
 - Non-folder cards hide sub-note area in workspace.
