@@ -660,23 +660,22 @@ export function CategoryTree({
               className="hidden"
             />
           </div>
-          <div className="mb-2">
+          <div className="mb-2 border-t border-border" />
+          <div className="mb-2 grid grid-cols-2 gap-2">
             <button
               type="button"
               aria-label={isDarkMode ? 'Disable dark mode' : 'Enable dark mode'}
               aria-pressed={isDarkMode}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
               onClick={onToggleDarkMode}
             >
               {isDarkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">Dark</span>
             </button>
-          </div>
-          <div className="mb-2">
             <button
               type="button"
               aria-label="Hard refresh"
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
               onClick={async () => {
                 try {
                   if ('serviceWorker' in navigator) {
@@ -696,6 +695,7 @@ export function CategoryTree({
               <span className="hidden sm:inline">Hard Refresh</span>
             </button>
           </div>
+          <div className="mb-2 border-t border-border" />
           <div className="text-[10px] text-muted-foreground/40 text-center select-none">
             {APP_VERSION}
           </div>

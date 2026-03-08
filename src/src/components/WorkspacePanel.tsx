@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
@@ -1503,6 +1503,9 @@ interface GridCardItemProps {
   onReorder?: (direction: 'up' | 'down') => void;
 }
 
+const MASONRY_ROW_HEIGHT = 4;
+const MASONRY_GAP = 8;
+
 function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder }: GridCardItemProps) {
   const {
     attributes,
@@ -1512,11 +1515,41 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     transition,
     isDragging,
   } = useSortable({ id: card.id });
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [rowSpan, setRowSpan] = useState(1);
+
+  useLayoutEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+
+    const updateRowSpan = () => {
+      const height = node.getBoundingClientRect().height;
+      const nextSpan = Math.max(1, Math.ceil((height + MASONRY_GAP) / (MASONRY_ROW_HEIGHT + MASONRY_GAP)));
+      setRowSpan((prev) => (prev === nextSpan ? prev : nextSpan));
+    };
+
+    updateRowSpan();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateRowSpan);
+      return () => window.removeEventListener('resize', updateRowSpan);
+    }
+
+    const observer = new ResizeObserver(() => updateRowSpan());
+    observer.observe(node);
+    window.addEventListener('resize', updateRowSpan);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateRowSpan);
+    };
+  }, [card.id, card.title, card.blocks, card.children.length, isDragging]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    gridRowEnd: `span ${rowSpan}`,
   };
 
   const checkboxBlock = card.cardType === 'checkbox'
@@ -1551,7 +1584,8 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
-      <div 
+      <div
+        ref={contentRef}
         className={cn(
           "relative flex items-center gap-2 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
           isMediaCard ? "p-0 overflow-hidden" : "p-4",
@@ -2213,7 +2247,7 @@ export function WorkspacePanel({
                 strategy={rectSortingStrategy}
               >
                 <div className={cn(
-                  "grid gap-4 transition-all",
+                  "grid auto-rows-[4px] gap-2 transition-all",
                   sidebarOpen 
                     ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" 
                     : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
