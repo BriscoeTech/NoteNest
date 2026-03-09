@@ -47,16 +47,28 @@ export interface DrawingStroke {
   tool: 'pen' | 'eraser';
   kind?: 'freehand' | 'line' | 'rectangle' | 'circle';
   points: DrawingPoint[];
+  parentGroupId?: string | null;
+}
+
+export interface DrawingGroup {
+  id: string;
+  parentGroupId: string | null;
+}
+
+export interface DrawingSnapshot {
+  strokes: DrawingStroke[];
+  groups: DrawingGroup[];
 }
 
 export interface DrawingBlock {
   id: string;
   type: 'drawing';
   strokes: DrawingStroke[];
+  groups?: DrawingGroup[];
   redoStrokes: DrawingStroke[];
   previewDataUrl: string;
-  historyPast?: DrawingStroke[][];
-  historyFuture?: DrawingStroke[][];
+  historyPast?: DrawingSnapshot[];
+  historyFuture?: DrawingSnapshot[];
 }
 
 export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock;

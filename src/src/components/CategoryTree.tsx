@@ -147,6 +147,7 @@ function TreeItem({
         id: generateId(),
         type: 'drawing',
         strokes: [],
+        groups: [],
         redoStrokes: [],
         previewDataUrl: '',
         historyPast: [],

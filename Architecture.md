@@ -59,6 +59,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | Drawing tools: select, pen, line, rectangle, circle, erase-segment 
 | Content | Drawing selection supports direct line-hit + marquee + move + resize 
 | Content | Drawing selection supports additive selection with Ctrl/Shift click and Ctrl/Shift marquee 
+| Content | Drawing supports persistent hierarchical groups with group/ungroup actions 
+| Content | Selecting a grouped member selects its containing top-level group; grouped move/resize transforms all descendant objects together 
 | Content | Drawing pointer-down prioritizes direct stroke/object hit-selection before marquee/bounds-drag fallback 
 | Content | Drawing selection resize supports aspect-ratio lock toggle 
 | Content | Selected drawing objects support color and width edits 
@@ -182,6 +184,8 @@ Source of truth: `src/src/lib/types.ts`.
 - `id`, `title`, `cardType`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`.
+- `DrawingBlock` scene data:
+- `strokes` plus persistent `groups`, with undo/redo snapshot history storing both.
 - Recycle bin sentinel ID: `RECYCLE_BIN_ID = "__recycle_bin__"`.
 
 ### 4.2 Invariants
@@ -203,6 +207,10 @@ Source of truth: `src/src/lib/types.ts`.
 - Current image creation/edit flows keep at most one image block per card by replacing existing image block on add.
 - Drawing editor opens with Select as default tool.
 - Drawing session undo/redo history is reset when opening a drawing note.
+- Drawing groups may be nested.
+- Selecting any stroke inside a grouped hierarchy resolves to the containing top-level selected group in the current interaction scope.
+- Group transforms operate on descendant strokes while preserving persisted group membership.
+- Ungroup dissolves only the selected group node and promotes its direct children to the removed group's parent.
 
 ### 4.3 Generated fields
 - IDs generated via `generateId()`.
@@ -292,7 +300,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
 - Folder cards in grid use folder-style shape while keeping standard card color theme.
 - Non-folder cards hide sub-note area in workspace.
-- Drawing editor in workspace supports tool-based drawing, stroke selection, transform, and style updates.
+- Drawing editor in workspace supports tool-based drawing, persistent group selection, transform, and style updates.
 
 ### 6.4 Dialogs
 - `CategoryPickerDialog` for move target selection.
@@ -358,9 +366,12 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - If pointer-down starts on an unselected stroke/object and drag movement exceeds threshold, interaction transitions to marquee selection.
 - `Ctrl`/`Shift` + click adds stroke/object to current selection.
 - `Ctrl`/`Shift` + marquee adds intersecting strokes/objects to current selection.
-- Selected strokes support move and corner-handle resize.
+- Drawing toolbar exposes `Group` and `Ungroup` actions for current selection.
+- Groups may contain other groups and are persisted in drawing note data.
+- Clicking any grouped member selects the containing top-level group in scope.
+- Selected strokes/groups support move and corner-handle resize.
 - Resize supports aspect-ratio lock toggle.
-- Color swatches and width slider apply to selected strokes when selection exists.
+- Color swatches and width slider apply to all descendant strokes in the current selection.
 - Marquee selects only when region touches/crosses rendered geometry, not bbox-only overlap.
 - Drawing surface is rendered in a fixed-aspect viewport (`3:4`) so resizing surrounding layout does not distort drawing geometry.
 

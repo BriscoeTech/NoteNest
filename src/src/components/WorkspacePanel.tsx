@@ -3,7 +3,7 @@ import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, 
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint } from '@/lib/types';
+import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot } from '@/lib/types';
 import { generateId, getDescendantIds } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -418,6 +418,130 @@ function getSelectionBounds(strokes: DrawingStroke[], ids: string[]): Normalized
   return { left, right, top, bottom };
 }
 
+function getDrawingSnapshot(block: DrawingBlock): DrawingSnapshot {
+  return {
+    strokes: block.strokes,
+    groups: block.groups ?? [],
+  };
+}
+
+function coerceDrawingSnapshot(snapshot: DrawingSnapshot | DrawingStroke[]): DrawingSnapshot {
+  if (Array.isArray(snapshot)) {
+    return { strokes: snapshot, groups: [] };
+  }
+  return snapshot;
+}
+
+function snapshotsEqual(a: DrawingSnapshot, b: DrawingSnapshot): boolean {
+  if (a.strokes.length !== b.strokes.length || a.groups.length !== b.groups.length) return false;
+  for (let i = 0; i < a.strokes.length; i += 1) {
+    const left = a.strokes[i];
+    const right = b.strokes[i];
+    if (!right) return false;
+    if (left.id !== right.id) return false;
+    if ((left.kind ?? 'freehand') !== (right.kind ?? 'freehand')) return false;
+    if (left.color !== right.color || left.width !== right.width || left.tool !== right.tool) return false;
+    if ((left.parentGroupId ?? null) !== (right.parentGroupId ?? null)) return false;
+    if (left.points.length !== right.points.length) return false;
+    for (let p = 0; p < left.points.length; p += 1) {
+      if (left.points[p].x !== right.points[p].x || left.points[p].y !== right.points[p].y) return false;
+    }
+  }
+  for (let i = 0; i < a.groups.length; i += 1) {
+    const left = a.groups[i];
+    const right = b.groups[i];
+    if (!right) return false;
+    if (left.id !== right.id || left.parentGroupId !== right.parentGroupId) return false;
+  }
+  return true;
+}
+
+function getGroupChildrenIds(strokes: DrawingStroke[], groups: DrawingGroup[], groupId: string): string[] {
+  return [
+    ...groups.filter((group) => group.parentGroupId === groupId).map((group) => group.id),
+    ...strokes.filter((stroke) => (stroke.parentGroupId ?? null) === groupId).map((stroke) => stroke.id),
+  ];
+}
+
+function getGroupDescendantStrokeIds(strokes: DrawingStroke[], groups: DrawingGroup[], itemId: string): string[] {
+  if (strokes.some((stroke) => stroke.id === itemId)) return [itemId];
+  return getGroupChildrenIds(strokes, groups, itemId).flatMap((childId) =>
+    getGroupDescendantStrokeIds(strokes, groups, childId)
+  );
+}
+
+function getTopLevelSelectionId(strokes: DrawingStroke[], groups: DrawingGroup[], itemId: string): string {
+  const stroke = strokes.find((candidate) => candidate.id === itemId);
+  if (stroke) {
+    let parentGroupId = stroke.parentGroupId ?? null;
+    let topLevelId = stroke.id;
+    while (parentGroupId) {
+      topLevelId = parentGroupId;
+      parentGroupId = groups.find((group) => group.id === parentGroupId)?.parentGroupId ?? null;
+    }
+    return topLevelId;
+  }
+
+  let currentId = itemId;
+  let parentGroupId = groups.find((group) => group.id === currentId)?.parentGroupId ?? null;
+  while (parentGroupId) {
+    currentId = parentGroupId;
+    parentGroupId = groups.find((group) => group.id === currentId)?.parentGroupId ?? null;
+  }
+  return currentId;
+}
+
+function getDescendantItemIds(strokes: DrawingStroke[], groups: DrawingGroup[], groupId: string): string[] {
+  return getGroupChildrenIds(strokes, groups, groupId);
+}
+
+function getSelectionBoundsForItems(strokes: DrawingStroke[], groups: DrawingGroup[], itemIds: string[]): NormalizedRect | null {
+  const strokeIds = Array.from(new Set(itemIds.flatMap((itemId) => getGroupDescendantStrokeIds(strokes, groups, itemId))));
+  return getSelectionBounds(strokes, strokeIds);
+}
+
+function dedupeIds(ids: string[]): string[] {
+  return Array.from(new Set(ids));
+}
+
+function normalizeDrawingSnapshot(snapshotInput: DrawingSnapshot | DrawingStroke[]): DrawingSnapshot {
+  const snapshot = coerceDrawingSnapshot(snapshotInput);
+  let groups = snapshot.groups.map((group) => ({ ...group }));
+  let strokes = snapshot.strokes.map((stroke) => ({ ...stroke, parentGroupId: stroke.parentGroupId ?? null }));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const groupIds = new Set(groups.map((group) => group.id));
+
+    const nextStrokes = strokes.map((stroke) => ({
+      ...stroke,
+      parentGroupId: stroke.parentGroupId && groupIds.has(stroke.parentGroupId) ? stroke.parentGroupId : null,
+    }));
+    if (nextStrokes.some((stroke, index) => (stroke.parentGroupId ?? null) !== (strokes[index].parentGroupId ?? null))) {
+      strokes = nextStrokes;
+      changed = true;
+    }
+
+    const nextGroups = groups
+      .filter((group) =>
+        groups.some((candidate) => candidate.parentGroupId === group.id)
+        || strokes.some((stroke) => (stroke.parentGroupId ?? null) === group.id)
+      )
+      .map((group) => ({
+        ...group,
+        parentGroupId: group.parentGroupId && groupIds.has(group.parentGroupId) ? group.parentGroupId : null,
+      }));
+
+    if (nextGroups.length !== groups.length || nextGroups.some((group, index) => group.parentGroupId !== groups[index]?.parentGroupId || group.id !== groups[index]?.id)) {
+      groups = nextGroups;
+      changed = true;
+    }
+  }
+
+  return { strokes, groups };
+}
+
 function DrawingBlockEditor({
   block,
   isRecycleBin,
@@ -434,13 +558,13 @@ function DrawingBlockEditor({
   const draftStrokeRef = useRef<DrawingStroke | null>(null);
   const interactionRef = useRef<
     | null
-    | { mode: 'pending-hit'; start: DrawingPoint; hitStrokeId: string; additive: boolean }
+    | { mode: 'pending-hit'; start: DrawingPoint; hitItemId: string; additive: boolean }
     | { mode: 'marquee'; start: DrawingPoint; current: DrawingPoint; additive: boolean }
-    | { mode: 'move'; start: DrawingPoint; baseStrokes: DrawingStroke[] }
+    | { mode: 'move'; start: DrawingPoint; baseSnapshot: DrawingSnapshot }
     | {
         mode: 'resize';
         handle: SelectionHandle;
-        baseStrokes: DrawingStroke[];
+        baseSnapshot: DrawingSnapshot;
         anchor: DrawingPoint;
         initialVector: { x: number; y: number };
       }
@@ -449,11 +573,14 @@ function DrawingBlockEditor({
   const [color, setColor] = useState('#111827');
   const [brushSize, setBrushSize] = useState(2);
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
-  const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [marqueeRect, setMarqueeRect] = useState<NormalizedRect | null>(null);
-  const [transientStrokes, setTransientStrokes] = useState<DrawingStroke[] | null>(null);
+  const [transientSnapshot, setTransientSnapshot] = useState<DrawingSnapshot | null>(null);
 
-  const displayedStrokes = transientStrokes ?? block.strokes;
+  const normalizedSnapshot = normalizeDrawingSnapshot(getDrawingSnapshot(block));
+  const displayedSnapshot = transientSnapshot ?? normalizedSnapshot;
+  const displayedStrokes = displayedSnapshot.strokes;
+  const displayedGroups = displayedSnapshot.groups;
   const historyPast = block.historyPast ?? [];
   const historyFuture = block.historyFuture ?? [];
   const shapeToolKind: Record<'line' | 'rectangle' | 'circle', DrawingStroke['kind']> = {
@@ -557,67 +684,54 @@ function DrawingBlockEditor({
     }
   };
 
-  const commitStrokes = (nextStrokes: DrawingStroke[]) => {
-    const same =
-      nextStrokes.length === block.strokes.length &&
-      nextStrokes.every((s, i) => {
-        const current = block.strokes[i];
-        if (!current) return false;
-        if (s.id !== current.id) return false;
-        if ((s.kind ?? 'freehand') !== (current.kind ?? 'freehand')) return false;
-        if (s.color !== current.color || s.width !== current.width || s.tool !== current.tool) return false;
-        if (s.points.length !== current.points.length) return false;
-        for (let p = 0; p < s.points.length; p += 1) {
-          const a = s.points[p];
-          const b = current.points[p];
-          if (!b) return false;
-          if (a.x !== b.x || a.y !== b.y) return false;
-        }
-        return true;
-      });
-    if (same) return;
+  const commitSnapshot = (nextSnapshotInput: DrawingSnapshot) => {
+    const nextSnapshot = normalizeDrawingSnapshot(nextSnapshotInput);
+    if (snapshotsEqual(nextSnapshot, normalizedSnapshot)) return;
     const maxHistory = 50;
-    const nextPast = [...historyPast, block.strokes].slice(-maxHistory);
+    const nextPast = [...historyPast, normalizedSnapshot].slice(-maxHistory);
     onUpdate({
       ...block,
-      strokes: nextStrokes,
+      strokes: nextSnapshot.strokes,
+      groups: nextSnapshot.groups,
       redoStrokes: [],
       historyPast: nextPast,
       historyFuture: [],
-      previewDataUrl: createDrawingPreviewDataUrl(nextStrokes),
+      previewDataUrl: createDrawingPreviewDataUrl(nextSnapshot.strokes),
     });
   };
 
   const undoStroke = () => {
     if (!historyPast.length || isRecycleBin) return;
-    const previous = historyPast[historyPast.length - 1];
+    const previous = normalizeDrawingSnapshot(historyPast[historyPast.length - 1]);
     onUpdate({
       ...block,
-      strokes: previous,
+      strokes: previous.strokes,
+      groups: previous.groups,
       redoStrokes: [],
       historyPast: historyPast.slice(0, -1),
-      historyFuture: [...historyFuture, block.strokes],
-      previewDataUrl: createDrawingPreviewDataUrl(previous),
+      historyFuture: [...historyFuture, normalizedSnapshot],
+      previewDataUrl: createDrawingPreviewDataUrl(previous.strokes),
     });
   };
 
   const redoStroke = () => {
     if (!historyFuture.length || isRecycleBin) return;
-    const restored = historyFuture[historyFuture.length - 1];
+    const restored = normalizeDrawingSnapshot(historyFuture[historyFuture.length - 1]);
     onUpdate({
       ...block,
-      strokes: restored,
+      strokes: restored.strokes,
+      groups: restored.groups,
       redoStrokes: [],
-      historyPast: [...historyPast, block.strokes],
+      historyPast: [...historyPast, normalizedSnapshot],
       historyFuture: historyFuture.slice(0, -1),
-      previewDataUrl: createDrawingPreviewDataUrl(restored),
+      previewDataUrl: createDrawingPreviewDataUrl(restored.strokes),
     });
   };
 
   useEffect(() => {
-    const selectionBounds = getSelectionBounds(displayedStrokes, selectedStrokeIds);
+    const selectionBounds = getSelectionBoundsForItems(displayedStrokes, displayedGroups, selectedItemIds);
     drawOnCanvas(displayedStrokes, selectionBounds, marqueeRect);
-  }, [displayedStrokes, selectedStrokeIds, marqueeRect, tool]);
+  }, [displayedStrokes, displayedGroups, selectedItemIds, marqueeRect, tool]);
 
   useEffect(() => {
     if ((block.historyPast?.length ?? 0) === 0 && (block.historyFuture?.length ?? 0) === 0 && (block.redoStrokes?.length ?? 0) === 0) {
@@ -633,32 +747,45 @@ function DrawingBlockEditor({
 
   useEffect(() => {
     const onResize = () => {
-      const selectionBounds = getSelectionBounds(displayedStrokes, selectedStrokeIds);
+      const selectionBounds = getSelectionBoundsForItems(displayedStrokes, displayedGroups, selectedItemIds);
       drawOnCanvas(displayedStrokes, selectionBounds, marqueeRect);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [displayedStrokes, selectedStrokeIds, marqueeRect, tool]);
+  }, [displayedStrokes, displayedGroups, selectedItemIds, marqueeRect, tool]);
 
   useEffect(() => {
-    setSelectedStrokeIds((prev) => prev.filter((id) => block.strokes.some((s) => s.id === id)));
-  }, [block.strokes]);
-
-  const applyMove = (base: DrawingStroke[], ids: string[], dx: number, dy: number): DrawingStroke[] =>
-    base.map((stroke) =>
-      ids.includes(stroke.id)
-        ? { ...stroke, points: stroke.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
-        : stroke
+    setSelectedItemIds((prev) =>
+      prev.filter((id) =>
+        normalizedSnapshot.strokes.some((stroke) => stroke.id === id)
+        || normalizedSnapshot.groups.some((group) => group.id === id)
+      )
     );
+  }, [block.strokes, block.groups]);
+
+  const getSelectedStrokeIds = (itemIds: string[], snapshot: DrawingSnapshot) =>
+    dedupeIds(itemIds.flatMap((itemId) => getGroupDescendantStrokeIds(snapshot.strokes, snapshot.groups, itemId)));
+
+  const applyMove = (baseSnapshot: DrawingSnapshot, itemIds: string[], dx: number, dy: number): DrawingSnapshot => {
+    const movingStrokeIds = new Set(getSelectedStrokeIds(itemIds, baseSnapshot));
+    return {
+      strokes: baseSnapshot.strokes.map((stroke) =>
+        movingStrokeIds.has(stroke.id)
+          ? { ...stroke, points: stroke.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+          : stroke
+      ),
+      groups: baseSnapshot.groups,
+    };
+  };
 
   const applyResize = (
-    base: DrawingStroke[],
-    ids: string[],
+    baseSnapshot: DrawingSnapshot,
+    itemIds: string[],
     anchor: DrawingPoint,
     initialVector: { x: number; y: number },
     currentPoint: DrawingPoint,
     constrainAspect: boolean
-  ): DrawingStroke[] => {
+  ): DrawingSnapshot => {
     const targetVector = { x: currentPoint.x - anchor.x, y: currentPoint.y - anchor.y };
     let sx = Math.abs(initialVector.x) < 1e-5 ? 1 : targetVector.x / initialVector.x;
     let sy = Math.abs(initialVector.y) < 1e-5 ? 1 : targetVector.y / initialVector.y;
@@ -669,17 +796,21 @@ function DrawingBlockEditor({
       sy = (sy < 0 ? -1 : 1) * uniform;
     }
 
-    return base.map((stroke) =>
-      ids.includes(stroke.id)
-        ? {
-            ...stroke,
-            points: stroke.points.map((p) => ({
-              x: anchor.x + (p.x - anchor.x) * sx,
-              y: anchor.y + (p.y - anchor.y) * sy,
-            })),
-          }
-        : stroke
-    );
+    const resizingStrokeIds = new Set(getSelectedStrokeIds(itemIds, baseSnapshot));
+    return {
+      strokes: baseSnapshot.strokes.map((stroke) =>
+        resizingStrokeIds.has(stroke.id)
+          ? {
+              ...stroke,
+              points: stroke.points.map((p) => ({
+                x: anchor.x + (p.x - anchor.x) * sx,
+                y: anchor.y + (p.y - anchor.y) * sy,
+              })),
+            }
+          : stroke
+      ),
+      groups: baseSnapshot.groups,
+    };
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -689,13 +820,17 @@ function DrawingBlockEditor({
 
     if (tool === 'eraser') {
       const { width, height } = getCanvasDrawSize();
-      const hitIndexFromTop = [...block.strokes]
+      const hitIndexFromTop = [...normalizedSnapshot.strokes]
         .reverse()
         .findIndex((stroke) => strokeContainsPoint(stroke, point, width, height));
       if (hitIndexFromTop !== -1) {
-        const actualIndex = block.strokes.length - 1 - hitIndexFromTop;
-        const next = block.strokes.filter((_, i) => i !== actualIndex);
-        commitStrokes(next);
+        const actualIndex = normalizedSnapshot.strokes.length - 1 - hitIndexFromTop;
+        const remainingStrokes = normalizedSnapshot.strokes.filter((_, i) => i !== actualIndex);
+        const nextSnapshot = normalizeDrawingSnapshot({
+          strokes: remainingStrokes,
+          groups: normalizedSnapshot.groups,
+        });
+        commitSnapshot(nextSnapshot);
       }
       return;
     }
@@ -703,13 +838,14 @@ function DrawingBlockEditor({
     if (tool === 'select') {
       const isAdditiveSelect = event.ctrlKey || event.metaKey || event.shiftKey;
       const { width, height } = getCanvasDrawSize();
-      const hitIndexFromTop = [...block.strokes]
+      const hitIndexFromTop = [...normalizedSnapshot.strokes]
         .reverse()
         .findIndex((stroke) => strokeContainsPoint(stroke, point, width, height));
-      const hitStrokeIndex = hitIndexFromTop !== -1 ? block.strokes.length - 1 - hitIndexFromTop : -1;
-      const hitStrokeId = hitStrokeIndex !== -1 ? block.strokes[hitStrokeIndex].id : null;
+      const hitStrokeIndex = hitIndexFromTop !== -1 ? normalizedSnapshot.strokes.length - 1 - hitIndexFromTop : -1;
+      const hitStrokeId = hitStrokeIndex !== -1 ? normalizedSnapshot.strokes[hitStrokeIndex].id : null;
+      const hitItemId = hitStrokeId ? getTopLevelSelectionId(normalizedSnapshot.strokes, normalizedSnapshot.groups, hitStrokeId) : null;
 
-      const selectionBounds = getSelectionBounds(block.strokes, selectedStrokeIds);
+      const selectionBounds = getSelectionBoundsForItems(normalizedSnapshot.strokes, normalizedSnapshot.groups, selectedItemIds);
       if (selectionBounds) {
         const handles = getHandlePositions(selectionBounds);
         const px = point.x * width;
@@ -731,7 +867,7 @@ function DrawingBlockEditor({
           interactionRef.current = {
             mode: 'resize',
             handle: handleName,
-            baseStrokes: block.strokes,
+            baseSnapshot: normalizedSnapshot,
             anchor: opposite[handleName],
             initialVector: { x: corner.x - opposite[handleName].x, y: corner.y - opposite[handleName].y },
           };
@@ -740,21 +876,21 @@ function DrawingBlockEditor({
         }
       }
 
-      if (hitStrokeId) {
+      if (hitItemId) {
         if (isAdditiveSelect) {
-          interactionRef.current = { mode: 'pending-hit', start: point, hitStrokeId, additive: true };
+          interactionRef.current = { mode: 'pending-hit', start: point, hitItemId, additive: true };
           event.currentTarget.setPointerCapture(event.pointerId);
           return;
         }
-        if (selectedStrokeIds.includes(hitStrokeId)) {
-          if (selectedStrokeIds.length > 1) {
-            setSelectedStrokeIds([hitStrokeId]);
+        if (selectedItemIds.includes(hitItemId)) {
+          if (selectedItemIds.length > 1) {
+            setSelectedItemIds([hitItemId]);
           }
-          interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
+          interactionRef.current = { mode: 'move', start: point, baseSnapshot: normalizedSnapshot };
         } else {
           // Allow drag-marquee even when drag starts on an unselected stroke.
           // Pointer-up without drag still behaves like single-stroke selection.
-          interactionRef.current = { mode: 'pending-hit', start: point, hitStrokeId, additive: false };
+          interactionRef.current = { mode: 'pending-hit', start: point, hitItemId, additive: false };
         }
         event.currentTarget.setPointerCapture(event.pointerId);
         return;
@@ -768,7 +904,7 @@ function DrawingBlockEditor({
         point.y >= selectionBounds.top &&
         point.y <= selectionBounds.bottom
       ) {
-        interactionRef.current = { mode: 'move', start: point, baseStrokes: block.strokes };
+        interactionRef.current = { mode: 'move', start: point, baseSnapshot: normalizedSnapshot };
         event.currentTarget.setPointerCapture(event.pointerId);
         return;
       }
@@ -776,7 +912,7 @@ function DrawingBlockEditor({
       interactionRef.current = { mode: 'marquee', start: point, current: point, additive: isAdditiveSelect };
       setMarqueeRect(normalizeRect(point, point));
       if (!isAdditiveSelect) {
-        setSelectedStrokeIds([]);
+        setSelectedItemIds([]);
       }
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -791,9 +927,10 @@ function DrawingBlockEditor({
       tool: 'pen',
       kind: isShapeTool ? shapeToolKind[tool] : 'freehand',
       points: isShapeTool ? [point, point] : [point],
+      parentGroupId: null,
     };
     draftStrokeRef.current = stroke;
-    setTransientStrokes([...block.strokes, stroke]);
+    setTransientSnapshot({ strokes: [...normalizedSnapshot.strokes, stroke], groups: normalizedSnapshot.groups });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -815,7 +952,7 @@ function DrawingBlockEditor({
                 ],
               }
           : { ...draftStrokeRef.current, points: [draftStrokeRef.current.points[0], point] };
-      setTransientStrokes([...block.strokes, draftStrokeRef.current]);
+      setTransientSnapshot({ strokes: [...normalizedSnapshot.strokes, draftStrokeRef.current], groups: normalizedSnapshot.groups });
       return;
     }
 
@@ -827,13 +964,15 @@ function DrawingBlockEditor({
       const dy = (point.y - interactionRef.current.start.y) * height;
       const moved = Math.hypot(dx, dy) >= 6;
       if (moved) {
+        const start = interactionRef.current.start;
+        const additive = interactionRef.current.additive;
         interactionRef.current = {
           mode: 'marquee',
-          start: interactionRef.current.start,
+          start,
           current: point,
-          additive: interactionRef.current.additive,
+          additive,
         };
-        setMarqueeRect(normalizeRect(interactionRef.current.start, point));
+        setMarqueeRect(normalizeRect(start, point));
       }
       return;
     }
@@ -847,20 +986,20 @@ function DrawingBlockEditor({
     if (interactionRef.current.mode === 'move') {
       const dx = point.x - interactionRef.current.start.x;
       const dy = point.y - interactionRef.current.start.y;
-      setTransientStrokes(applyMove(interactionRef.current.baseStrokes, selectedStrokeIds, dx, dy));
+      setTransientSnapshot(applyMove(interactionRef.current.baseSnapshot, selectedItemIds, dx, dy));
       return;
     }
 
     if (interactionRef.current.mode === 'resize') {
-      const resized = applyResize(
-        interactionRef.current.baseStrokes,
-        selectedStrokeIds,
+      const resizedSnapshot = applyResize(
+        interactionRef.current.baseSnapshot,
+        selectedItemIds,
         interactionRef.current.anchor,
         interactionRef.current.initialVector,
         point,
         keepAspectRatio
       );
-      setTransientStrokes(resized);
+      setTransientSnapshot(resizedSnapshot);
     }
   };
 
@@ -868,19 +1007,20 @@ function DrawingBlockEditor({
     if (draftStrokeRef.current) {
       const stroke = draftStrokeRef.current;
       draftStrokeRef.current = null;
-      setTransientStrokes(null);
-      commitStrokes([...block.strokes, stroke]);
+      setTransientSnapshot(null);
+      commitSnapshot({ strokes: [...normalizedSnapshot.strokes, stroke], groups: normalizedSnapshot.groups });
       return;
     }
 
     if (interactionRef.current?.mode === 'marquee' && marqueeRect) {
-      const selected = block.strokes
+      const selected = normalizedSnapshot.strokes
         .filter((stroke) => strokeIntersectsRect(stroke, marqueeRect))
-        .map((s) => s.id);
+        .map((stroke) => getTopLevelSelectionId(normalizedSnapshot.strokes, normalizedSnapshot.groups, stroke.id));
+      const nextIds = dedupeIds(selected);
       if (interactionRef.current.additive) {
-        setSelectedStrokeIds((prev) => Array.from(new Set([...prev, ...selected])));
+        setSelectedItemIds((prev) => dedupeIds([...prev, ...nextIds]));
       } else {
-        setSelectedStrokeIds(selected);
+        setSelectedItemIds(nextIds);
       }
       setMarqueeRect(null);
       interactionRef.current = null;
@@ -888,57 +1028,116 @@ function DrawingBlockEditor({
     }
 
     if (interactionRef.current?.mode === 'pending-hit') {
-      const hitStrokeId = interactionRef.current.hitStrokeId;
+      const hitItemId = interactionRef.current.hitItemId;
       if (interactionRef.current.additive) {
-        setSelectedStrokeIds((prev) =>
-          prev.includes(hitStrokeId) ? prev : [...prev, hitStrokeId]
+        setSelectedItemIds((prev) =>
+          prev.includes(hitItemId) ? prev : [...prev, hitItemId]
         );
       } else {
-        setSelectedStrokeIds([hitStrokeId]);
+        setSelectedItemIds([hitItemId]);
       }
       interactionRef.current = null;
-      setTransientStrokes(null);
+      setTransientSnapshot(null);
       setMarqueeRect(null);
       return;
     }
 
-    if ((interactionRef.current?.mode === 'move' || interactionRef.current?.mode === 'resize') && transientStrokes) {
-      const next = transientStrokes;
-      setTransientStrokes(null);
+    if ((interactionRef.current?.mode === 'move' || interactionRef.current?.mode === 'resize') && transientSnapshot) {
+      const next = transientSnapshot;
+      setTransientSnapshot(null);
       interactionRef.current = null;
-      commitStrokes(next);
+      commitSnapshot(next);
       return;
     }
 
     interactionRef.current = null;
-    setTransientStrokes(null);
+    setTransientSnapshot(null);
     setMarqueeRect(null);
   };
 
   const clearCanvas = () => {
     if (isRecycleBin) return;
-    setSelectedStrokeIds([]);
-    commitStrokes([]);
+    setSelectedItemIds([]);
+    commitSnapshot({ strokes: [], groups: [] });
   };
 
   const recolorSelectedStrokes = (nextColor: string) => {
-    if (!selectedStrokeIds.length) return;
-    const next = block.strokes.map((stroke) =>
-      selectedStrokeIds.includes(stroke.id)
+    if (!selectedItemIds.length) return;
+    const selectedStrokeIds = new Set(getSelectedStrokeIds(selectedItemIds, normalizedSnapshot));
+    const next = normalizedSnapshot.strokes.map((stroke) =>
+      selectedStrokeIds.has(stroke.id)
         ? { ...stroke, color: nextColor, tool: 'pen' as const }
         : stroke
     );
-    commitStrokes(next);
+    commitSnapshot({ strokes: next, groups: normalizedSnapshot.groups });
   };
 
   const resizeSelectedStrokes = (nextWidth: number) => {
-    if (!selectedStrokeIds.length) return;
-    const next = block.strokes.map((stroke) =>
-      selectedStrokeIds.includes(stroke.id)
+    if (!selectedItemIds.length) return;
+    const selectedStrokeIds = new Set(getSelectedStrokeIds(selectedItemIds, normalizedSnapshot));
+    const next = normalizedSnapshot.strokes.map((stroke) =>
+      selectedStrokeIds.has(stroke.id)
         ? { ...stroke, width: nextWidth }
         : stroke
     );
-    commitStrokes(next);
+    commitSnapshot({ strokes: next, groups: normalizedSnapshot.groups });
+  };
+
+  const selectedGroupIds = selectedItemIds.filter((itemId) => normalizedSnapshot.groups.some((group) => group.id === itemId));
+
+  const groupSelection = () => {
+    if (isRecycleBin) return;
+    const topLevelIds = dedupeIds(selectedItemIds);
+    if (topLevelIds.length < 2) return;
+    const firstParentId = normalizedSnapshot.strokes.find((stroke) => stroke.id === topLevelIds[0])?.parentGroupId
+      ?? normalizedSnapshot.groups.find((group) => group.id === topLevelIds[0])?.parentGroupId
+      ?? null;
+    const commonParentId = topLevelIds.every((itemId) => {
+      const parentId = normalizedSnapshot.strokes.find((stroke) => stroke.id === itemId)?.parentGroupId
+        ?? normalizedSnapshot.groups.find((group) => group.id === itemId)?.parentGroupId
+        ?? null;
+      return parentId === firstParentId;
+    }) ? firstParentId : null;
+
+    const newGroupId = generateId();
+    const nextStrokes = normalizedSnapshot.strokes.map((stroke) =>
+      topLevelIds.includes(stroke.id) ? { ...stroke, parentGroupId: newGroupId } : stroke
+    );
+    const nextGroups = [
+      ...normalizedSnapshot.groups.map((group) =>
+        topLevelIds.includes(group.id) ? { ...group, parentGroupId: newGroupId } : group
+      ),
+      { id: newGroupId, parentGroupId: commonParentId },
+    ];
+    commitSnapshot({ strokes: nextStrokes, groups: nextGroups });
+    setSelectedItemIds([newGroupId]);
+  };
+
+  const ungroupSelection = () => {
+    if (isRecycleBin || !selectedGroupIds.length) return;
+    let nextSnapshot = normalizedSnapshot;
+    let nextSelection: string[] = [];
+
+    for (const groupId of selectedGroupIds) {
+      const targetGroup = nextSnapshot.groups.find((group) => group.id === groupId);
+      if (!targetGroup) continue;
+      const childrenIds = getDescendantItemIds(nextSnapshot.strokes, nextSnapshot.groups, groupId);
+      nextSelection = [...nextSelection, ...childrenIds];
+      nextSnapshot = {
+        strokes: nextSnapshot.strokes.map((stroke) =>
+          stroke.parentGroupId === groupId ? { ...stroke, parentGroupId: targetGroup.parentGroupId } : stroke
+        ),
+        groups: nextSnapshot.groups
+          .filter((group) => group.id !== groupId)
+          .map((group) =>
+            group.parentGroupId === groupId ? { ...group, parentGroupId: targetGroup.parentGroupId } : group
+          ),
+      };
+    }
+
+    nextSnapshot = normalizeDrawingSnapshot(nextSnapshot);
+    commitSnapshot(nextSnapshot);
+    setSelectedItemIds(dedupeIds(nextSelection));
   };
 
   const swatches = ['#111827', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
@@ -1020,7 +1219,7 @@ function DrawingBlockEditor({
                         type="button"
                         onClick={() => {
                           setColor(swatch);
-                          if (selectedStrokeIds.length > 0) {
+                          if (selectedItemIds.length > 0) {
                             recolorSelectedStrokes(swatch);
                           }
                         }}
@@ -1043,7 +1242,7 @@ function DrawingBlockEditor({
                       onChange={(e) => {
                         const nextWidth = Number(e.target.value);
                         setBrushSize(nextWidth);
-                        if (selectedStrokeIds.length > 0) {
+                        if (selectedItemIds.length > 0) {
                           resizeSelectedStrokes(nextWidth);
                         }
                       }}
@@ -1066,6 +1265,12 @@ function DrawingBlockEditor({
             <Button type="button" size="sm" variant="outline" onClick={redoStroke} disabled={isRecycleBin || !historyFuture.length}>
               <Redo2 className="w-4 h-4 mr-1" />
               Redo
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={groupSelection} disabled={isRecycleBin || selectedItemIds.length < 2}>
+              Group
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={ungroupSelection} disabled={isRecycleBin || !selectedGroupIds.length}>
+              Ungroup
             </Button>
           </div>
 
@@ -1988,6 +2193,7 @@ export function WorkspacePanel({
         id: generateId(),
         type: 'drawing',
         strokes: [],
+        groups: [],
         redoStrokes: [],
         previewDataUrl: createDrawingPreviewDataUrl([]),
         historyPast: [],
@@ -2040,6 +2246,7 @@ export function WorkspacePanel({
         id: generateId(),
         type: 'drawing',
         strokes: [],
+        groups: [],
         redoStrokes: [],
         previewDataUrl: createDrawingPreviewDataUrl([]),
         historyPast: [],
