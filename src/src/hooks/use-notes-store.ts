@@ -228,6 +228,65 @@ export function useNotesStore() {
     });
   }, []);
 
+  const reorderCardRelative = useCallback((cardId: string, targetId: string, position: 'before' | 'after') => {
+    setState(prev => {
+      const movingCard = findCardById(prev.cards, cardId);
+      const targetCard = findCardById(prev.cards, targetId);
+      if (!movingCard || !targetCard || movingCard.id === targetCard.id) return prev;
+
+      const targetParentId = targetCard.parentId;
+      if (!canMoveCard(prev.cards, cardId, targetParentId)) {
+        return prev;
+      }
+
+      let detachedCard: Card | null = null;
+      const detachCard = (cards: Card[]): Card[] => {
+        const next: Card[] = [];
+        for (const card of cards) {
+          if (card.id === cardId) {
+            detachedCard = { ...card, parentId: targetParentId, updatedAt: Date.now() };
+            continue;
+          }
+          next.push({ ...card, children: detachCard(card.children) });
+        }
+        return next;
+      };
+
+      const withoutCard = detachCard(prev.cards);
+      if (!detachedCard) return prev;
+      const movedCard = detachedCard;
+
+      const insertIntoList = (list: Card[]): Card[] => {
+        const targetIndex = list.findIndex(card => card.id === targetId);
+        if (targetIndex === -1) return list;
+        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+        const next = [...list];
+        next.splice(insertIndex, 0, movedCard);
+        const now = Date.now();
+        const len = next.length;
+        return next.map((card, index) => ({
+          ...card,
+          parentId: targetParentId,
+          sortOrder: now + (len - index),
+        }));
+      };
+
+      if (targetParentId === null) {
+        return { ...prev, cards: insertIntoList(withoutCard) };
+      }
+
+      const updateParentChildren = (cards: Card[]): Card[] =>
+        cards.map(card => {
+          if (card.id === targetParentId) {
+            return { ...card, children: insertIntoList(card.children) };
+          }
+          return { ...card, children: updateParentChildren(card.children) };
+        });
+
+      return { ...prev, cards: updateParentChildren(withoutCard) };
+    });
+  }, []);
+
   const reorderChildren = useCallback((parentId: string | null, childIds: string[]) => {
     setState(prev => {
       // Helper to reorder a list based on IDs
@@ -564,6 +623,7 @@ export function useNotesStore() {
     updateCard,
     updateCardBlocks,
     moveCard,
+    reorderCardRelative,
     reorderChildren,
     moveCardStep,
     deleteCard,

@@ -28,6 +28,7 @@ interface CardTreeProps {
   onSelectCard: (id: string | null) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
+  onInsertCardRelative: (id: string, targetId: string, position: 'before' | 'after') => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
@@ -51,6 +52,7 @@ interface TreeItemProps {
   onSelectCard: (id: string) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string) => void;
+  onInsertCardRelative: (id: string, targetId: string, position: 'before' | 'after') => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
@@ -58,7 +60,7 @@ interface TreeItemProps {
   draggedCardId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
-  onDrop: (targetId: string | null) => void;
+  onDrop: (targetId: string, position: 'before' | 'after') => void;
 }
 
 const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
@@ -90,6 +92,7 @@ function TreeItem({
   onSelectCard,
   onRenameCard,
   onMoveCard,
+  onInsertCardRelative,
   onReorderCard,
   onDeleteCard,
   onUpdateCard,
@@ -106,7 +109,7 @@ function TreeItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(card.title);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
 
   const checkboxBlock = card.cardType === 'checkbox'
@@ -193,27 +196,34 @@ function TreeItem({
     onDragStart(card.id);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const getDropPosition = (e: React.DragEvent<HTMLDivElement>): 'before' | 'after' => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    return offsetY < rect.height / 2 ? 'before' : 'after';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (draggedCardId && draggedCardId !== card.id) {
-       setIsDragOver(true);
-       e.dataTransfer.dropEffect = 'move';
+      setDropPosition(getDropPosition(e));
+      e.dataTransfer.dropEffect = 'move';
     }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
+    setDropPosition(null);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
+    const nextPosition = getDropPosition(e);
+    setDropPosition(null);
     if (draggedCardId && draggedCardId !== card.id) {
-      onDrop(card.id);
+      onDrop(card.id, nextPosition);
     }
   };
 
@@ -226,14 +236,22 @@ function TreeItem({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
+          "relative flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
           isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent text-foreground",
           isDragging && "opacity-50",
-          isDragOver && "bg-primary/20 ring-2 ring-primary/50"
+          dropPosition && "bg-primary/10"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => onSelectCard(card.id)}
       >
+        {dropPosition && (
+          <div
+            className={cn(
+              "pointer-events-none absolute left-2 right-2 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]",
+              dropPosition === 'before' ? "top-0" : "bottom-0"
+            )}
+          />
+        )}
         <button
           className={cn(
             "w-4 h-4 flex items-center justify-center rounded hover:bg-accent-foreground/10 z-20 shrink-0",
@@ -363,6 +381,7 @@ function TreeItem({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={onMoveCard}
+              onInsertCardRelative={onInsertCardRelative}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}
@@ -412,6 +431,7 @@ export function CategoryTree({
   onSelectCard,
   onRenameCard,
   onMoveCard,
+  onInsertCardRelative,
   onReorderCard,
   onDeleteCard,
   onUpdateCard,
@@ -477,9 +497,9 @@ export function CategoryTree({
     setRootDragOver(false);
   };
 
-  const handleDrop = (targetId: string | null) => {
+  const handleDrop = (targetId: string, position: 'before' | 'after') => {
     if (draggedCardId && draggedCardId !== targetId) {
-      onMoveCard(draggedCardId, targetId);
+      onInsertCardRelative(draggedCardId, targetId, position);
     }
     setDraggedCardId(null);
   };
@@ -492,7 +512,10 @@ export function CategoryTree({
   const handleRootDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setRootDragOver(false);
-    handleDrop(null); // Drop to root
+    if (draggedCardId) {
+      onMoveCard(draggedCardId, null);
+      setDraggedCardId(null);
+    }
   };
 
   const handleMoveClick = (id: string) => {
@@ -607,6 +630,7 @@ export function CategoryTree({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={handleMoveClick}
+              onInsertCardRelative={onInsertCardRelative}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
-import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot } from '@/lib/types';
@@ -1706,12 +1706,13 @@ interface GridCardItemProps {
   isRecycleBin?: boolean;
   onRestore?: () => void;
   onReorder?: (direction: 'up' | 'down') => void;
+  dropIndicator?: 'before' | 'after' | null;
 }
 
 const MASONRY_ROW_HEIGHT = 4;
 const MASONRY_GAP = 8;
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder, dropIndicator }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -1789,6 +1790,14 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
 
   return (
     <div ref={setNodeRef} style={style} className="relative group">
+      {dropIndicator && !isDragging && (
+        <div
+          className={cn(
+            "pointer-events-none absolute left-0 right-0 z-30 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]",
+            dropIndicator === 'before' ? "top-[-4px]" : "bottom-[-4px]"
+          )}
+        />
+      )}
       <div
         ref={contentRef}
         className={cn(
@@ -2081,6 +2090,8 @@ export function WorkspacePanel({
   const [typeDialogMode, setTypeDialogMode] = useState<'create' | 'change'>('create');
   const [typeDialogParentId, setTypeDialogParentId] = useState<string | null>(null);
   const [typeDialogCard, setTypeDialogCard] = useState<Card | null>(null);
+  const [activeChildId, setActiveChildId] = useState<string | null>(null);
+  const [overChildId, setOverChildId] = useState<string | null>(null);
 
   const handleMoveStart = (id: string) => {
     setCardToMove(id);
@@ -2133,8 +2144,19 @@ export function WorkspacePanel({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const handleChildDragStart = (event: DragStartEvent) => {
+    setActiveChildId(String(event.active.id));
+    setOverChildId(null);
+  };
+
+  const handleChildDragOver = (event: DragOverEvent) => {
+    setOverChildId(event.over ? String(event.over.id) : null);
+  };
+
   const handleChildDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveChildId(null);
+    setOverChildId(null);
     if (over && active.id !== over.id) {
        // Reorder children
        const oldIndex = childrenCards.findIndex(c => c.id === active.id);
@@ -2143,6 +2165,21 @@ export function WorkspacePanel({
        const ids = newOrder.map(c => c.id);
        onReorderCardsByIndex(ids);
     }
+  };
+
+  const handleChildDragCancel = () => {
+    setActiveChildId(null);
+    setOverChildId(null);
+  };
+
+  const getChildDropIndicator = (cardId: string): 'before' | 'after' | null => {
+    if (!activeChildId || !overChildId || cardId !== overChildId || activeChildId === overChildId) {
+      return null;
+    }
+    const activeIndex = childrenCards.findIndex(card => card.id === activeChildId);
+    const overIndex = childrenCards.findIndex(card => card.id === overChildId);
+    if (activeIndex === -1 || overIndex === -1) return null;
+    return activeIndex < overIndex ? 'after' : 'before';
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2447,7 +2484,10 @@ export function WorkspacePanel({
             <DndContext
               sensors={childSensors}
               collisionDetection={closestCenter}
+              onDragStart={handleChildDragStart}
+              onDragOver={handleChildDragOver}
               onDragEnd={handleChildDragEnd}
+              onDragCancel={handleChildDragCancel}
             >
               <SortableContext
                 items={childrenCards.map(c => c.id)}
@@ -2472,6 +2512,7 @@ export function WorkspacePanel({
                       isRecycleBin={isRecycleBin}
                       onRestore={() => onRestoreCard(card.id, null)}
                       onReorder={(dir) => onReorderCard(card.id, dir)}
+                      dropIndicator={getChildDropIndicator(card.id)}
                     />
                   ))}
                 </div>

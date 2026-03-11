@@ -122,6 +122,7 @@ export default function NotesApp() {
             onSelectCard={handleSelectCardInTree}
             onRenameCard={handleRenameCard}
             onMoveCard={store.moveCard}
+            onInsertCardRelative={store.reorderCardRelative}
             onReorderCard={store.moveCardStep}
             onDeleteCard={store.deleteCard}
             onUpdateCard={store.updateCard}

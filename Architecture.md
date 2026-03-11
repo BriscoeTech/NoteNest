@@ -134,11 +134,12 @@ This section is the authoritative feature contract. Changes must be reflected he
 4. Sidebar utility controls must present dark mode and Hard Refresh adjacent in a shared row, visually separated from import/export above and version display below.
 
 ### 3.3 Move and reorder
-1. User drags card in tree or uses "Move to..." picker.
+1. User uses "Move to..." picker to move a card to another parent or to root.
 2. Store validates move (`canMoveCard`) to avoid self/descendant loops.
 3. Store updates parent linkage and timestamps.
-4. User can reorder within siblings (up/down or drag reindex).
-5. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
+4. User can reorder within siblings from the tree (up/down or drag reindex) and from the workspace grid (drag reindex).
+5. Tree and workspace drag-reorder UI show an insertion line indicating the before/after drop position.
+6. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
 
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
@@ -268,7 +269,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - expand/collapse + recursive expand/collapse,
 - inline rename,
 - move/reorder/delete,
-- native drag-and-drop parent reassignment.
+- drag-and-drop sibling/root reordering with before/after insertion indicator.
+- parent reassignment via `Move to...` picker.
 - card checkbox quick toggle when card includes checkbox block.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Hard Refresh actions.
@@ -297,6 +299,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Grid cards open on double-click (all types).
 - Masonry layout must preserve the existing responsive column-count rules; it changes vertical packing only.
 - Child-card drag reorder semantics and store reorder logic must remain unchanged under masonry layout.
+- Child-card drag reorder UI shows a before/after insertion indicator while dragging.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
 - Folder cards in grid use folder-style shape while keeping standard card color theme.
 - Non-folder cards hide sub-note area in workspace.
@@ -475,6 +478,8 @@ Verify the product behavior items below:
 - Cannot move note into itself/descendants.
 - Move picker excludes invalid self/descendant targets and store validation still rejects invalid targets as safety.
 - Can reorder siblings (up/down) in tree and grid drag reorder in workspace.
+- Tree drag reorder does not nest into cards/folders; parent changes use `Move to...`.
+- Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.
