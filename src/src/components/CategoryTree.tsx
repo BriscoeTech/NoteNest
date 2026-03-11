@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
-import { APP_VERSION } from '@/lib/app-version';
+import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -722,7 +722,7 @@ export function CategoryTree({
           </div>
           <div className="mb-2 border-t border-border" />
           <div className="text-[10px] text-muted-foreground/40 text-center select-none">
-            {APP_VERSION}
+            {RUNTIME_VERSION_DISPLAY}
           </div>
         </div>
       </div>

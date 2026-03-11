@@ -15,7 +15,7 @@ function readVersion(versionFilePath: string): string {
 
 function buildServiceWorkerFromTemplate(templatePath: string, version: string): string {
   const template = fs.readFileSync(templatePath, "utf8");
-  return template.replaceAll("__APP_VERSION__", version);
+  return template.replaceAll("__VERSION_JSON_SEMVER__", version);
 }
 
 async function buildAll() {

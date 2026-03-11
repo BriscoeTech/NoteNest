@@ -1,5 +1,5 @@
-let rawVersion = "";
-export let APP_VERSION = "";
+let runtimeVersionJsonSemver = "";
+export let RUNTIME_VERSION_DISPLAY = "";
 
 function toDisplayVersion(version: string): string {
   if (!version) return "";
@@ -15,12 +15,12 @@ export async function loadAppVersion(): Promise<string> {
     if (response.ok) {
       const data = (await response.json()) as { version?: string };
       if (data.version && /^\d+\.\d+\.\d+$/.test(data.version)) {
-        rawVersion = data.version;
+        runtimeVersionJsonSemver = data.version;
       }
     }
   } catch {
     // Keep empty version if version.json is unavailable.
   }
-  APP_VERSION = toDisplayVersion(rawVersion);
-  return APP_VERSION;
+  RUNTIME_VERSION_DISPLAY = toDisplayVersion(runtimeVersionJsonSemver);
+  return RUNTIME_VERSION_DISPLAY;
 }

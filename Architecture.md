@@ -90,7 +90,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Sidebar dark mode and Hard Refresh actions are grouped in one shared utility row with separators above and below 
 | UX | Sidebar Hard Refresh action resets service worker + cache storage and reloads app 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
-| UX | Sidebar footer app version display (`APP_VERSION`) 
+| UX | Sidebar footer app version display (runtime-derived from `version.json`) 
 | UX | Recycle Bin displays deleted-card count badge 
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
@@ -275,7 +275,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Hard Refresh actions.
 - utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
-- utility section displays current app version (`APP_VERSION`).
+- utility section displays current app version derived from runtime `version.json`.
 - Recycle Bin row shows a count badge for deleted cards when count > 0.
 
 ### 6.2.1 Tree Visual Semantics
@@ -396,7 +396,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 8.1 Export payload
 - Shape:
-- `version`: app version (from `APP_VERSION`),
+- `version`: app version (derived from runtime `version.json`),
 - `exportedAt`: ISO timestamp,
 - `cards`: full root card array including nested children.
 

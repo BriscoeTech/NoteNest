@@ -81,6 +81,14 @@ npm run build
 - Normal browser refresh must render app shell correctly.
 - Sidebar `Hard Refresh` must clear service workers/cache and recover to a working app state.
 
+### 2.2 Line Ending Policy
+- `.gitattributes` is the repository source of truth for line-ending behavior.
+- This project is edited and synced across Linux and Windows machines using syncing software.
+- Source files, config files, docs, JSON, CSS, HTML, and shell scripts must use `LF`.
+- Windows command files (`.bat`, `.cmd`) must use `CRLF`.
+- Do not remove or weaken `.gitattributes` rules unless replacing them with an equally explicit cross-platform policy.
+- If line-ending noise reappears, prefer fixing repo policy and normalization rather than committing mixed-EOL churn.
+
 ## 3. Local Dev Server Workflow
 
 ### Required Scripts

@@ -230,3 +230,65 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - `2.36.0`,
 - `2.37.0`,
 - `2.38.0`.
+
+### Reconstructed Release Notes
+- The entries below for `2.39.0`, `2.41.0`, and `2.42.0` were derived after the fact by reading the code and Git commit history.
+- They were added because the session log had fallen behind and did not contain direct contemporaneous notes for those releases.
+
+### Release `2.39.0` (Reconstructed)
+- Restored direct single-click title editing for workspace grid cards after an intermediate long-press editing interaction had been introduced.
+- Removed delayed hold-to-edit pointer logic from grid card titles and returned to immediate focus/edit behavior.
+- Preserved double-click card opening while making inline rename faster and more predictable.
+
+### Release `2.41.0` (Reconstructed)
+- Added masonry-style packing for workspace child cards so mixed-height cards use vertical space more efficiently.
+- Implemented dynamic grid row spans based on measured rendered card height.
+- Aligned sidebar utility controls so dark mode and Hard Refresh sit together in a shared row, with dividers separating them from import/export above and version display below.
+
+### Release `2.42.0` (Reconstructed)
+- Added persistent grouping support for drawing objects.
+- Extended the drawing model with group membership and snapshot-based history that stores both strokes and groups.
+- Updated drawing selection, move, resize, undo/redo, and editing flows to operate on grouped drawing objects.
+- Added explicit group/ungroup actions in the drawing editor UI.
+
+## 2026-03-11
+
+### Release `2.43.0`
+
+### Tree Drag/Reorder Behavior
+- Changed sidebar tree drag behavior so dragging a card reorders among visible siblings/root instead of dropping the card inside another card/folder.
+- Added before/after insertion targeting in tree drag handling.
+- Added visible insertion-line feedback in tree rows while dragging.
+- Preserved parent reassignment through the existing `Move to...` picker flow.
+
+### Workspace Grid Drag Feedback
+- Kept existing child-card reorder semantics in the workspace masonry/grid view.
+- Added visible before/after insertion-line feedback while dragging cards in the right-hand workspace grid.
+
+### Store and Wiring Updates
+- Added store support for relative sibling insertion/reordering against a target card.
+- Wired tree drag reorder to the new relative-insert flow while leaving parent moves on the explicit move action.
+
+### Release `2.44.0`
+
+### Documentation Alignment
+- Updated `Architecture.md` to match current behavior:
+- tree drag is reorder-focused,
+- parent changes happen via `Move to...`,
+- tree and workspace drag both show insertion-line feedback.
+- Removed ambiguous architecture wording around version display/export source and made the file state explicitly that displayed/exported version values are derived from runtime `version.json`.
+- Added `.gitattributes` line-ending policy notes to `DevelopmentProcessGuide.md` for Linux/Windows/Syncthing workflows.
+
+### Cross-Platform Line Ending Policy
+- Added tracked `.gitattributes` rules to reduce cross-platform line-ending churn between Linux and Windows machines.
+- Policy now keeps source/docs/config files on `LF` and Windows command files on `CRLF`.
+
+### Version Variable Naming Cleanup
+- Renamed version-related implementation identifiers to reduce confusion about source-of-truth semantics.
+- Replaced generic UI/export version naming with runtime-derived display naming.
+- Replaced service-worker build placeholder naming so it clearly refers to semver injected from `version.json`.
+- This cleanup was intended to make it obvious that these values are derived variables, not hard-coded version literals.
+
+### Version and Release
+- Bumped the app version to `2.44.0`.
+- Rebuilt production `docs/` artifacts after the version bump.
