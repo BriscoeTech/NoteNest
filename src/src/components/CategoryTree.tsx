@@ -699,25 +699,14 @@ export function CategoryTree({
             </button>
             <button
               type="button"
-              aria-label="Hard refresh"
+              aria-label="Refresh app"
               className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary/50 hover:bg-secondary text-secondary-foreground rounded-md transition-colors"
-              onClick={async () => {
-                try {
-                  if ('serviceWorker' in navigator) {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(regs.map((reg) => reg.unregister()));
-                  }
-                  if ('caches' in window) {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map((key) => caches.delete(key)));
-                  }
-                } finally {
-                  window.location.reload();
-                }
+              onClick={() => {
+                window.location.reload();
               }}
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Hard Refresh</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
           <div className="mb-2 border-t border-border" />

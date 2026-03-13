@@ -40,7 +40,10 @@ Architecture requirements belong in `Architecture.md`.
 ### Convention and Rationale
 - `version.json` is the single source of truth for app version.
 - Runtime version loading from `version.json` avoids stale dev-server injected version values after version bumps.
-- All consumers (UI, export metadata, cache-busting, service worker versioning) must read from `version.json`.
+- `version.json` is the authoritative runtime version source.
+- Service-worker/cache versioning must derive from `version.json`.
+- UI and export metadata should use the live runtime version from `version.json` when available, and may fall back to the last successfully loaded cached runtime version if live retrieval fails.
+- If neither live nor cached runtime version is available, UI/export may degrade to an explicit unknown value.
 - Minor-only release flow keeps versioning predictable for a local-first app where each user-visible change should produce a clearly distinct release.
 - Avoid defining version in multiple places to prevent drift and stale runtime behavior.
 
@@ -79,7 +82,8 @@ npm run build
 ### 2.1 Runtime Refresh Verification
 - Validate both refresh paths after service-worker related changes:
 - Normal browser refresh must render app shell correctly.
-- Sidebar `Hard Refresh` must clear service workers/cache and recover to a working app state.
+- Sidebar `Refresh` must reload without clearing service workers/cache.
+- Offline startup must still load the cached app shell with no network available.
 
 ### 2.2 Line Ending Policy
 - `.gitattributes` is the repository source of truth for line-ending behavior.

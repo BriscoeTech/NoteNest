@@ -292,3 +292,61 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 ### Version and Release
 - Bumped the app version to `2.44.0`.
 - Rebuilt production `docs/` artifacts after the version bump.
+
+## 2026-03-13
+
+### Release `2.45.0`
+
+### Offline/PWA Reliability Fixes
+- Reworked the service worker so offline operation supports actual app startup instead of only opportunistic asset caching.
+- Changed navigation handling from network-only to network-first with cache fallback, allowing the last working app shell to load with no internet connection.
+- Added root-shell precaching and build-time injection of hashed JS/CSS bundle paths into the generated service worker so installed PWAs can boot offline after a successful online load.
+- Changed `version.json` handling to use network-first with cache fallback instead of failing outright offline.
+
+### Refresh Control Behavior
+- Replaced the destructive sidebar `Hard Refresh` action with a plain `Refresh` action.
+- Removed service-worker unregister and Cache Storage deletion from the sidebar control because that behavior could strand the PWA offline on the next reload.
+- Kept the refresh affordance for normal reloads without breaking offline-readiness.
+
+### Offline Dependency Cleanup
+- Removed Google Fonts requests from app startup HTML.
+- Switched the app font stacks to local/system fonts so initial render no longer depends on external font CDNs.
+
+### Version Metadata Robustness
+- Fixed export metadata so it no longer emits a blank app version when `version.json` is temporarily unavailable at startup.
+- Added runtime version fallback caching so the last successfully loaded app version can still be used for export metadata and UI display when fresh version fetches fail.
+- Preserved explicit final fallback to `unknown` when neither live nor cached runtime version is available.
+- Why: this keeps export metadata and version display resilient in offline/degraded-network scenarios without inventing a false version value.
+
+### Version Source Clarification
+- Set `package.json`'s npm `version` field to placeholder `0.0.0` so it no longer appears to be a stale real app release number.
+- Documented explicitly that `package.json` is not an application version source and that runtime/UI/export/service-worker version consumers must use `version.json`.
+- Updated package scripts so patch-release commands no longer create off-protocol releases and instead fail fast with guidance to use the minor-release flow.
+- Why: the repo's tooling now enforces the documented release process instead of merely describing it.
+
+### Release Protocol Correction
+- Corrected the version bump for this change set from patch-style `2.44.1` to minor release `2.45.0` to match the project rule that user-facing behavior changes use a MINOR bump.
+- Rebuilt production artifacts so generated files, service-worker cache naming, and `docs/version.json` all match `2.45.0`.
+- Why: the earlier patch bump conflicted with the documented process in `DevelopmentProcessGuide.md`.
+
+### Documentation Alignment
+- Updated `Architecture.md` so current contracts now describe:
+- sidebar `Refresh` instead of `Hard Refresh`,
+- required offline startup from cached app shell,
+- service-worker navigation fallback behavior,
+- removal of third-party font dependency from app-shell startup,
+- non-authoritative placeholder status of `package.json` version metadata,
+- runtime version fallback semantics for UI/export metadata when live `version.json` retrieval fails.
+- Updated `DevelopmentProcessGuide.md` so its versioning rationale now distinguishes:
+- `version.json` as the authoritative runtime version source,
+- service-worker/cache versioning as strictly derived from `version.json`,
+- UI/export as allowed to use cached last-known runtime version fallback and explicit unknown fallback when live retrieval fails.
+- Updated `README.md` to:
+- use the current product name `NoteNest`,
+- summarize the current typed-note/offline/PWA feature set more accurately,
+- remove internal version-policy details that belong in the process guide instead.
+- Why: root markdown files should agree on product naming, scope, and versioning responsibilities.
+
+### Version and Release
+- Bumped the app version to `2.45.0`.
+- Rebuilt production `docs/` artifacts after the version bump and offline/PWA fixes.

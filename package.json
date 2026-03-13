@@ -1,15 +1,15 @@
 {
   "name": "rest-express",
-  "version": "2.35.0",
+  "version": "0.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "vite dev --port 5000",
     "build": "tsx script/build.ts",
     "check": "tsc",
-    "version:patch": "tsx script/version-bump.ts patch",
+    "version:patch": "node -e \"console.error('Patch releases are not part of this project\\'s versioning protocol. Use npm run version:minor instead.'); process.exit(1)\"",
     "version:minor": "tsx script/version-bump.ts minor",
-    "release:patch": "npm run version:patch && npm run build",
+    "release:patch": "node -e \"console.error('Patch releases are not part of this project\\'s release protocol. Use npm run release:minor instead.'); process.exit(1)\"",
     "release:minor": "npm run version:minor && npm run build"
   },
   "dependencies": {

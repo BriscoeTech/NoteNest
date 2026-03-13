@@ -18,7 +18,9 @@ function getVersionFromJson(): string {
 
 function resolveServiceWorkerTemplate(version: string): string {
   const swTemplate = fs.readFileSync(swTemplatePath, "utf8");
-  return swTemplate.replaceAll("__APP_VERSION__", version);
+  return swTemplate
+    .replaceAll("__VERSION_JSON_SEMVER__", version)
+    .replaceAll("__APP_ASSET_LIST__", "");
 }
 
 const versionJsonPlugin = (): Plugin => ({

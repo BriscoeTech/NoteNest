@@ -87,8 +87,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Persistence | Legacy migration fallback from localStorage format 
 | UX | Sidebar collapse/expand 
 | UX | Dark mode toggle with local preference storage 
-| UX | Sidebar dark mode and Hard Refresh actions are grouped in one shared utility row with separators above and below 
-| UX | Sidebar Hard Refresh action resets service worker + cache storage and reloads app 
+| UX | Sidebar dark mode and Refresh actions are grouped in one shared utility row with separators above and below 
+| UX | Sidebar Refresh action reloads the app without clearing service worker or Cache Storage state 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
 | UX | Sidebar footer app version display (runtime-derived from `version.json`) 
 | UX | Recycle Bin displays deleted-card count badge 
@@ -102,6 +102,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Tree icons are card-type-driven, with checkbox rows as an exception (checkbox control is the marker; no extra icon) 
 | PWA | Manifest + service worker + installable static app 
 | PWA | Normal refresh must render reliably (no white-screen loop) with active service worker 
+| PWA | Offline startup must succeed from a previously cached app shell after at least one successful online load 
 | Deploy | Static GitHub Pages build to `docs/` 
 
 ## 3. User Flows
@@ -126,12 +127,9 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.9 Refresh and recovery behavior
 1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
-2. Hard Refresh action in sidebar must:
-- unregister service workers,
-- clear Cache Storage entries,
-- reload the page.
-3. After Hard Refresh, the app must re-register service worker on next load and continue normal operation.
-4. Sidebar utility controls must present dark mode and Hard Refresh adjacent in a shared row, visually separated from import/export above and version display below.
+2. Sidebar Refresh action must reload the app without unregistering service workers or clearing Cache Storage.
+3. Offline startup must succeed from a previously cached app shell even when navigation requests cannot reach the network.
+4. Sidebar utility controls must present dark mode and Refresh adjacent in a shared row, visually separated from import/export above and version display below.
 
 ### 3.3 Move and reorder
 1. User uses "Move to..." picker to move a card to another parent or to root.
@@ -249,7 +247,10 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 5.5 Versioning Contract
 - App version source is runtime `version.json`.
 - Version must be controlled in one place only: `version.json` (`version` field).
-- Do not hardcode version strings in source/HTML/config; all consumers must read from `version.json`.
+- Runtime/UI/export/service-worker version consumers must read from `version.json`.
+- If live runtime version retrieval fails, UI/export may fall back to the last successfully loaded runtime version cached locally.
+- If neither live nor cached runtime version is available, version display/export may degrade to an explicit unknown value rather than fabricating a version.
+- `package.json`'s npm `version` field is not used as an application version source and may remain an inert placeholder value.
 - Required source version format (`version.json`): semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
 - Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
 - Version is shown in sidebar footer and included in export metadata.
@@ -273,7 +274,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - parent reassignment via `Move to...` picker.
 - card checkbox quick toggle when card includes checkbox block.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
-- utility section supports export/import plus a shared row containing dark mode and Hard Refresh actions.
+- utility section supports export/import plus a shared row containing dark mode and Refresh actions.
 - utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
 - utility section displays current app version derived from runtime `version.json`.
 - Recycle Bin row shows a count badge for deleted cards when count > 0.
@@ -396,7 +397,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 8.1 Export payload
 - Shape:
-- `version`: app version (derived from runtime `version.json`),
+- `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
 - `cards`: full root card array including nested children.
 
@@ -416,8 +417,11 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Manifest: `public/manifest.json`.
 - Service worker: `public/sw.js`, registered in `src/index.html`.
 - Caching model:
-- navigation requests fetched with `no-store` to avoid stale shell,
-- GET assets served cache-first with runtime cache fill.
+- install precaches the root app shell plus build output assets required for offline boot,
+- navigation requests use network-first with cache fallback so the last working shell still loads offline,
+- `version.json` uses network-first with cache fallback,
+- GET assets are served cache-first with runtime cache fill.
+- App shell startup should not depend on third-party font CDNs.
 
 ### 9.2 Build and deploy
 - The build pipeline is static-site oriented and produces deploy artifacts in `docs/`.
@@ -542,7 +546,8 @@ Verify the product behavior items below:
 - App version is visible in sidebar footer.
 - App version display format in UI is `vMAJOR.MINOR`.
 - Normal refresh renders app without white-screen failure when service worker is active.
-- Hard Refresh button clears SW/cache state and reloads app.
+- Sidebar Refresh button reloads without clearing SW/cache state.
+- Previously cached PWA startup succeeds with no internet connection.
 - Card `...` menu actions are correct by context:
 - tree normal cards expose rename/move/change-type/reorder/delete (+expand/collapse when applicable),
 - grid normal cards expose open/move/change-type/reorder/delete,

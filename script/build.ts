@@ -18,6 +18,25 @@ function buildServiceWorkerFromTemplate(templatePath: string, version: string): 
   return template.replaceAll("__VERSION_JSON_SEMVER__", version);
 }
 
+function collectBuiltAssetEntries(assetsRoot: string): string[] {
+  if (!fs.existsSync(assetsRoot)) {
+    return [];
+  }
+
+  const entries = fs.readdirSync(assetsRoot, { withFileTypes: true });
+  const assetFiles = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => `./assets/${entry.name}`)
+    .sort();
+
+  return assetFiles;
+}
+
+function injectBuiltAssets(swSource: string, assetEntries: string[]): string {
+  const serializedAssets = assetEntries.map((entry) => `  '${entry}',`).join("\n");
+  return swSource.replaceAll("__APP_ASSET_LIST__", serializedAssets);
+}
+
 async function buildAll() {
   console.log("building client for GitHub Pages...");
   const projectRoot = path.resolve(import.meta.dirname, "..");
@@ -37,7 +56,9 @@ async function buildAll() {
   });
 
   const version = readVersion(versionPath);
-  const resolvedSw = buildServiceWorkerFromTemplate(swTemplatePath, version);
+  const builtAssetEntries = collectBuiltAssetEntries(path.resolve(docsRoot, "assets"));
+  const swTemplate = buildServiceWorkerFromTemplate(swTemplatePath, version);
+  const resolvedSw = injectBuiltAssets(swTemplate, builtAssetEntries);
   fs.writeFileSync(path.resolve(docsRoot, "sw.js"), resolvedSw, "utf8");
 }
 

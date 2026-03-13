@@ -1,12 +1,14 @@
-// Minimal Service Worker for PWA installability with safer updates.
+// Offline-first service worker for the NoteNest app shell.
 const CACHE_PREFIX = 'notenest-v';
 const CACHE_NAME = `${CACHE_PREFIX}__VERSION_JSON_SEMVER__`;
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
+  './',
   './icons/pwa-icon.png',
   './manifest.json',
   './icons/favicon.ico',
   './version.json',
+  __APP_ASSET_LIST__
 ];
 
 self.addEventListener('install', (event) => {
@@ -37,9 +39,27 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
 
   if (request.mode === 'navigate') {
-    // Always fetch the latest HTML to avoid stale shell/hashed assets.
+    // Prefer a fresh shell online, but keep the last working shell offline.
     event.respondWith(
-      fetch(request, { cache: 'no-store' })
+      (async () => {
+        try {
+          const response = await fetch(request, { cache: 'no-store' });
+          if (response && response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
+            await cache.put('./', response.clone());
+          }
+          return response;
+        } catch {
+          const cachedResponse =
+            (await caches.match(request)) ||
+            (await caches.match('./'));
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          throw new Error('Offline and no cached app shell available.');
+        }
+      })()
     );
     return;
   }
@@ -50,7 +70,24 @@ self.addEventListener('fetch', (event) => {
 
   // Always fetch latest runtime version file.
   if (request.url.includes('/version.json')) {
-    event.respondWith(fetch(request, { cache: 'no-store' }));
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(request, { cache: 'no-store' });
+          if (response && response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          const cachedResponse = await caches.match(request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          throw new Error('Offline and no cached version metadata available.');
+        }
+      })()
+    );
     return;
   }
 

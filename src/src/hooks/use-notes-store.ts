@@ -12,7 +12,7 @@ import {
   findCardById,
   getDescendantIds
 } from '@/lib/types';
-import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
+import { RUNTIME_VERSION_DISPLAY, ensureAppVersionLoaded } from '@/lib/app-version';
 
 const STORAGE_KEY = 'notecards_data';
 
@@ -571,9 +571,10 @@ export function useNotesStore() {
     return deleted;
   }, [state.cards]);
 
-  const exportData = useCallback(() => {
+  const exportData = useCallback(async () => {
+    const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
     const data = {
-      version: RUNTIME_VERSION_DISPLAY,
+      version: resolvedVersion,
       exportedAt: new Date().toISOString(),
       cards: state.cards
     };

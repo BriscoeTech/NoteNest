@@ -1,15 +1,15 @@
-# NoteCards App
+# NoteNest
 
-A hierarchical notes application built with React, Vite, and IndexedDB.
+A local-first hierarchical notes application built with React, Vite, and IndexedDB.
 
 ## Features
 
-*   **Hierarchical Structure**: Organize notes in a nested tree.
-*   **Rich Content**: Support for text, checkboxes, links, and images in every note.
-*   **Offline First**: Data is stored locally using IndexedDB, so it works without an internet connection.
-*   **Import/Export**: Backup your notes to JSON and restore them anytime.
+*   **Hierarchical Workspace**: Organize notes in a nested card tree with root and child notes.
+*   **Typed Notes**: Create and switch between note, checkbox, link, image, drawing, and folder note types.
+*   **Offline First**: Notes are stored locally and the installed PWA is designed to keep working offline after a successful load.
+*   **Import/Export**: Backup your notes to JSON and restore them with merge or override flows.
 *   **PWA**: Installable on mobile and desktop.
-*   **Drag & Drop**: Reorder blocks and notes easily.
+*   **Drag & Drop**: Reorder notes in the tree and workspace, and reorder content blocks inside notes.
 
 ## Deployment to GitHub Pages
 
@@ -44,5 +44,3 @@ To run locally:
 npm install
 npm run dev
 ```
-
-Note: App/runtime version is sourced from `version.json` and loaded at runtime for UI display, export metadata, and service-worker cache versioning.
