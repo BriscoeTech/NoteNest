@@ -350,3 +350,12 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 ### Version and Release
 - Bumped the app version to `2.45.0`.
 - Rebuilt production `docs/` artifacts after the version bump and offline/PWA fixes.
+
+## 2026-03-16
+
+### Line Ending Normalization
+- Added repository-wide LF enforcement in [`.gitattributes`](/C:/Users/Tron/Desktop/Website/NoteNest/.gitattributes) by changing the default rule from `* text=auto` to `* text=auto eol=lf`.
+- Kept explicit overrides for Windows-native script files so `.bat` and `.cmd` still use `CRLF`.
+- Renormalized tracked text files that had Windows line endings in the working tree, which cleared false diffs in `package-lock.json`, `src/src/components/WorkspacePanel.tsx`, and `src/src/pages/NotesApp.tsx`.
+- Set the repo-local Git setting `core.autocrlf=false` so checkout behavior now follows `.gitattributes` instead of Windows auto-conversion.
+- Why: this prevents repeated line-ending churn when syncing the same repo between Linux and Windows machines.
