@@ -620,6 +620,7 @@ export function useNotesStore() {
 
   return {
     cards: state.cards,
+    isLoaded,
     addCard,
     updateCard,
     updateCardBlocks,

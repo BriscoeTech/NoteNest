@@ -22,8 +22,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
 
+const TREE_EXPANDED_STORAGE_KEY = 'notenest-tree-expanded';
+
 interface CardTreeProps {
   cards: Card[];
+  isLoaded: boolean;
   selectedCardId: string | null;
   onSelectCard: (id: string | null) => void;
   onRenameCard: (id: string, title: string) => void;
@@ -427,6 +430,7 @@ function TreeItem({
 
 export function CategoryTree({
   cards,
+  isLoaded,
   selectedCardId,
   onSelectCard,
   onRenameCard,
@@ -445,7 +449,18 @@ export function CategoryTree({
   onToggleDarkMode,
   className
 }: CardTreeProps & { className?: string }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = window.localStorage.getItem(TREE_EXPANDED_STORAGE_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set();
+      return new Set(parsed.filter((value): value is string => typeof value === 'string'));
+    } catch {
+      return new Set();
+    }
+  });
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
@@ -453,6 +468,30 @@ export function CategoryTree({
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const validIds = new Set(getAllCardIds(cards));
+    setExpandedIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+      if (next.size === prev.size) {
+        let changed = false;
+        for (const id of prev) {
+          if (!next.has(id)) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) return prev;
+      }
+      return next;
+    });
+  }, [cards, isLoaded]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(TREE_EXPANDED_STORAGE_KEY, JSON.stringify(Array.from(expandedIds)));
+  }, [expandedIds]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {

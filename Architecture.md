@@ -87,6 +87,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Persistence | Legacy migration fallback from localStorage format 
 | UX | Sidebar collapse/expand 
 | UX | Dark mode toggle with local preference storage 
+| UX | Sidebar tree expand/collapse state persists across refresh and restores the last expanded folders 
 | UX | Sidebar dark mode and Refresh actions are grouped in one shared utility row with separators above and below 
 | UX | Sidebar Refresh action reloads the app without clearing service worker or Cache Storage state 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
@@ -128,8 +129,10 @@ This section is the authoritative feature contract. Changes must be reflected he
 ### 3.9 Refresh and recovery behavior
 1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
 2. Sidebar Refresh action must reload the app without unregistering service workers or clearing Cache Storage.
-3. Offline startup must succeed from a previously cached app shell even when navigation requests cannot reach the network.
-4. Sidebar utility controls must present dark mode and Refresh adjacent in a shared row, visually separated from import/export above and version display below.
+3. Sidebar tree expand/collapse state must survive normal browser refresh and sidebar Refresh action reloads.
+4. On startup, the tree must restore the last persisted expanded-folder state for cards that still exist.
+5. Offline startup must succeed from a previously cached app shell even when navigation requests cannot reach the network.
+6. Sidebar utility controls must present dark mode and Refresh adjacent in a shared row, visually separated from import/export above and version display below.
 
 ### 3.3 Move and reorder
 1. User uses "Move to..." picker to move a card to another parent or to root.
@@ -244,6 +247,19 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Applied by toggling `document.documentElement.classList` with `dark`.
 - If no saved preference exists, initial theme follows system `prefers-color-scheme`.
 
+### 5.4.1 Tree expansion persistence
+- Tree expansion state is persisted locally in browser storage.
+- Persisted value records expanded card IDs only.
+- Expanded tree restoration must wait until the card tree has finished loading from IndexedDB.
+- On load, the tree restores expanded state only for card IDs that still exist in the current tree.
+- Removed/import-replaced card IDs must be pruned from persisted expansion state.
+
+### 5.4.2 Left-panel UI persistence
+- Sidebar UI state is persisted locally in browser storage.
+- Persisted left-panel state includes current navigation scope, selected tree item, search query, sidebar open/closed state, and tree expansion state.
+- Scope and selection restoration must wait until the card tree has finished loading from IndexedDB so startup does not clear saved values.
+- Saved scope and selection IDs that no longer exist in the loaded tree must be cleared.
+
 ### 5.5 Versioning Contract
 - App version source is runtime `version.json`.
 - Version must be controlled in one place only: `version.json` (`version` field).
@@ -262,12 +278,15 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - `src/src/pages/NotesApp.tsx`:
 - Bridges store to UI components.
 - Owns current navigation scope, selection, search query, sidebar visibility, and dark mode state.
+- Restores persisted left-panel UI state after store load and prunes stale saved IDs.
 
 ### 6.2 Sidebar tree
 - `src/src/components/CategoryTree.tsx`:
 - Displays Home, card tree, and Recycle Bin.
 - Tree supports:
 - expand/collapse + recursive expand/collapse,
+- persisted expand/collapse restoration across refresh,
+- persisted expansion restoration only after store load completes,
 - inline rename,
 - move/reorder/delete,
 - drag-and-drop sibling/root reordering with before/after insertion indicator.
@@ -540,12 +559,17 @@ Verify the product behavior items below:
 - Import path is parse-validated; structurally weak but parseable payloads are minimally validated in current implementation.
 - App reload preserves data from IndexedDB.
 - Dark mode persists after refresh.
+- Sidebar open/closed state persists after refresh.
+- Sidebar scope and tree selection persist after refresh when the referenced cards still exist.
+- Sidebar search query persists after refresh.
+- Expanded tree state persists after refresh.
 - Initial theme follows system preference when no saved theme exists.
 - Recycle Bin shows deleted-item count badge when non-zero.
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
 - App version is visible in sidebar footer.
 - App version display format in UI is `vMAJOR.MINOR`.
 - Normal refresh renders app without white-screen failure when service worker is active.
+- Local dev origins unregister existing app service workers and clear Cache Storage before boot so localhost does not reuse the production offline shell.
 - Sidebar Refresh button reloads without clearing SW/cache state.
 - Previously cached PWA startup succeeds with no internet connection.
 - Card `...` menu actions are correct by context:

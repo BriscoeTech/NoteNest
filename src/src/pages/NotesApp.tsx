@@ -8,12 +8,31 @@ import type { Card, CardType } from '@/lib/types';
 
 import { RECYCLE_BIN_ID } from '@/lib/types';
 
+const TREE_SCOPE_STORAGE_KEY = 'notenest-tree-scope';
+const TREE_SELECTION_STORAGE_KEY = 'notenest-tree-selection';
+const TREE_SEARCH_STORAGE_KEY = 'notenest-tree-search';
+const TREE_SIDEBAR_OPEN_STORAGE_KEY = 'notenest-tree-sidebar-open';
+
 export default function NotesApp() {
   const store = useNotesStore();
-  const [currentCardId, setCurrentCardId] = useState<string | null>(null); // The scope we are in
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null); // The card selected in the tree (highlighted)
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentCardId, setCurrentCardId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem(TREE_SCOPE_STORAGE_KEY);
+  }); // The scope we are in
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem(TREE_SELECTION_STORAGE_KEY);
+  }); // The card selected in the tree (highlighted)
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem(TREE_SEARCH_STORAGE_KEY) || '';
+  });
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = window.localStorage.getItem(TREE_SIDEBAR_OPEN_STORAGE_KEY);
+    if (saved === null) return true;
+    return saved === 'true';
+  });
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const savedTheme = window.localStorage.getItem('notenest-theme');
@@ -111,6 +130,60 @@ export default function NotesApp() {
     window.localStorage.setItem('notenest-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!store.isLoaded) return;
+
+    const validIds = new Set<string>();
+    const collectIds = (cards: Card[]) => {
+      for (const card of cards) {
+        validIds.add(card.id);
+        collectIds(card.children);
+      }
+    };
+    collectIds(store.cards);
+
+    setSelectedCardId((prev) => {
+      if (prev === null) return prev;
+      if (prev === RECYCLE_BIN_ID || validIds.has(prev)) return prev;
+      return null;
+    });
+
+    setCurrentCardId((prev) => {
+      if (prev === null) return prev;
+      if (validIds.has(prev)) return prev;
+      return null;
+    });
+  }, [store.cards, store.isLoaded]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedCardId === null) {
+      window.localStorage.removeItem(TREE_SELECTION_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(TREE_SELECTION_STORAGE_KEY, selectedCardId);
+  }, [selectedCardId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentCardId === null) {
+      window.localStorage.removeItem(TREE_SCOPE_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(TREE_SCOPE_STORAGE_KEY, currentCardId);
+  }, [currentCardId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(TREE_SEARCH_STORAGE_KEY, searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(TREE_SIDEBAR_OPEN_STORAGE_KEY, String(sidebarOpen));
+  }, [sidebarOpen]);
+
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -118,6 +191,7 @@ export default function NotesApp() {
           <CategoryTree
             className="flex-1 min-h-0"
             cards={store.cards}
+            isLoaded={store.isLoaded}
             selectedCardId={selectedCardId}
             onSelectCard={handleSelectCardInTree}
             onRenameCard={handleRenameCard}

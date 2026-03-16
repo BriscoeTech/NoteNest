@@ -359,3 +359,15 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - Renormalized tracked text files that had Windows line endings in the working tree, which cleared false diffs in `package-lock.json`, `src/src/components/WorkspacePanel.tsx`, and `src/src/pages/NotesApp.tsx`.
 - Set the repo-local Git setting `core.autocrlf=false` so checkout behavior now follows `.gitattributes` instead of Windows auto-conversion.
 - Why: this prevents repeated line-ending churn when syncing the same repo between Linux and Windows machines.
+
+### Tree Expansion Persistence
+- Persisted sidebar tree expand/collapse state in browser local storage so folder expansion survives normal page refresh and the sidebar Refresh action.
+- Restored saved expanded folder IDs on load and pruned IDs that no longer exist after deletes or import/override changes.
+- Updated the architecture specification and regression checklist to make expanded-tree restoration part of the product contract.
+
+### Left-Panel Persistence and Dev Refresh Stability
+- Persisted the rest of the sidebar state in browser local storage: current scope, selected tree item, search query, and sidebar open/closed state.
+- Fixed startup ordering so saved scope, selection, and expanded-folder state are restored only after IndexedDB finishes loading the card tree.
+- Prevented startup from clearing saved tree state by pruning stale saved IDs only after the loaded tree is available.
+- Added a localhost-only service-worker guard so local dev loads unregister existing app service workers and clear Cache Storage before boot.
+- Why: this eliminates white-screen/stale-shell behavior in local dev and makes normal refresh restore the full left-panel state instead of collapsing the tree during startup.
