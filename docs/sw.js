@@ -8,8 +8,8 @@ const PRECACHE_ASSETS = [
   './manifest.json',
   './icons/favicon.ico',
   './version.json',
-    './assets/index-BMRRiQid.css',
-  './assets/index-BYW9f-jm.js',
+    './assets/index-fCgPUKaM.css',
+  './assets/index-ryXYn0pA.js',
 ];
 
 self.addEventListener('install', (event) => {

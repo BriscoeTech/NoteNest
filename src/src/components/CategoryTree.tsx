@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, Pencil, FolderInput, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, Type, RefreshCw } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { CardOptionsMenu } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
 
 const TREE_EXPANDED_STORAGE_KEY = 'notenest-tree-expanded';
@@ -29,6 +30,7 @@ interface CardTreeProps {
   isLoaded: boolean;
   selectedCardId: string | null;
   onSelectCard: (id: string | null) => void;
+  onAddCard: (parentId: string | null, cardType?: CardType) => string;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string, newParentId: string | null) => void;
   onInsertCardRelative: (id: string, targetId: string, position: 'before' | 'after') => void;
@@ -55,6 +57,7 @@ interface TreeItemProps {
   onSelectCard: (id: string) => void;
   onRenameCard: (id: string, title: string) => void;
   onMoveCard: (id: string) => void;
+  onAddChildNote: (parentId: string) => void;
   onInsertCardRelative: (id: string, targetId: string, position: 'before' | 'after') => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onDeleteCard: (id: string) => void;
@@ -95,6 +98,7 @@ function TreeItem({
   onSelectCard,
   onRenameCard,
   onMoveCard,
+  onAddChildNote,
   onInsertCardRelative,
   onReorderCard,
   onDeleteCard,
@@ -114,6 +118,8 @@ function TreeItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
 
   const checkboxBlock = card.cardType === 'checkbox'
     ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
@@ -230,6 +236,13 @@ function TreeItem({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuAnchorPoint({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  };
+
   return (
     <div>
       <div
@@ -246,6 +259,7 @@ function TreeItem({
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => onSelectCard(card.id)}
+        onContextMenu={handleContextMenu}
       >
         {dropPosition && (
           <div
@@ -308,61 +322,33 @@ function TreeItem({
           <span className={cn("text-xs font-medium break-words whitespace-normal flex-1", checkboxBlock?.checked && "line-through text-muted-foreground")}>{card.title || "Untitled"}</span>
         )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <CardOptionsMenu
+          isFolder={card.cardType === 'folder'}
+          hasChildren={hasChildren}
+          open={menuOpen}
+          onOpenChange={(open) => {
+            setMenuOpen(open);
+            if (!open) setMenuAnchorPoint(null);
+          }}
+          anchorPoint={menuAnchorPoint}
+          contentClassName="w-44"
+          trigger={
             <button
               className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-accent-foreground/10"
-              onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="w-3 h-3" />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={handleStartRename}>
-              <Pencil className="w-3.5 h-3.5 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onMoveCard(card.id)}>
-              <FolderInput className="w-3.5 h-3.5 mr-2" />
-              Move to...
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setTypeDialogOpen(true)}>
-              <Type className="w-3.5 h-3.5 mr-2" />
-              Change type...
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onReorderCard(card.id, 'up')}>
-              <ArrowUp className="w-3.5 h-3.5 mr-2" />
-              Move Up
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onReorderCard(card.id, 'down')}>
-              <ChevronDown className="w-3.5 h-3.5 mr-2" />
-              Move Down
-            </DropdownMenuItem>
-            {hasChildren && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onExpandRecursively(card.id, true)}>
-                  <ChevronsUpDown className="w-3.5 h-3.5 mr-2" />
-                  Expand All
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onExpandRecursively(card.id, false)}>
-                  <ChevronsDownUp className="w-3.5 h-3.5 mr-2" />
-                  Collapse All
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              onClick={() => onDeleteCard(card.id)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          }
+          onAddNote={card.cardType === 'folder' ? () => onAddChildNote(card.id) : undefined}
+          onRename={handleStartRename}
+          onMove={() => onMoveCard(card.id)}
+          onChangeType={() => setTypeDialogOpen(true)}
+          onMoveUp={() => onReorderCard(card.id, 'up')}
+          onMoveDown={() => onReorderCard(card.id, 'down')}
+          onExpandAll={hasChildren ? () => onExpandRecursively(card.id, true) : undefined}
+          onCollapseAll={hasChildren ? () => onExpandRecursively(card.id, false) : undefined}
+          onDelete={() => onDeleteCard(card.id)}
+        />
       </div>
 
       {isExpanded && hasChildren && (
@@ -384,6 +370,7 @@ function TreeItem({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={onMoveCard}
+              onAddChildNote={onAddChildNote}
               onInsertCardRelative={onInsertCardRelative}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
@@ -433,6 +420,7 @@ export function CategoryTree({
   isLoaded,
   selectedCardId,
   onSelectCard,
+  onAddCard,
   onRenameCard,
   onMoveCard,
   onInsertCardRelative,
@@ -464,6 +452,8 @@ export function CategoryTree({
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [cardToMove, setCardToMove] = useState<string | null>(null);
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [typeDialogParentId, setTypeDialogParentId] = useState<string | null>(null);
   const [rootDragOver, setRootDragOver] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any>(null);
@@ -574,6 +564,90 @@ export function CategoryTree({
     ? [cardToMove, ...getDescendantIds(cards, cardToMove)]
     : [];
 
+  const handleAddChildNote = (parentId: string) => {
+    setTypeDialogParentId(parentId);
+    setTypeDialogOpen(true);
+  };
+
+  const handleChangeCardType = (card: Card, nextType: CardType) => {
+    if (card.cardType === nextType) return;
+    onUpdateCard(card.id, { cardType: nextType });
+    const hasTypeBlock = card.blocks.some((block) => {
+      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
+      return block.type === nextType;
+    });
+    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
+
+    if (nextType === 'note') {
+      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'text', content: '' }]);
+      return;
+    }
+    if (nextType === 'checkbox') {
+      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'checkbox', checked: false }]);
+      return;
+    }
+    if (nextType === 'link') {
+      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'drawing') {
+      const newBlock: DrawingBlock = {
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        groups: [],
+        redoStrokes: [],
+        previewDataUrl: '',
+        historyPast: [],
+        historyFuture: [],
+      };
+      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+    }
+  };
+
+  const createCardByType = (parentId: string | null, type: CardType) => {
+    if (type === 'image') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (event) => {
+        const file = (event.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (loadEvent) => {
+          const dataUrl = loadEvent.target?.result as string;
+          const id = onAddCard(parentId, 'image');
+          const block = { id: generateId(), type: 'image', dataUrl, width: 100 } as ContentBlock;
+          onUpdateCardBlocks(id, [block]);
+          onSelectCard(id);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+
+    const id = onAddCard(parentId, type);
+    if (type === 'checkbox') {
+      onUpdateCardBlocks(id, [{ id: generateId(), type: 'checkbox', checked: false }]);
+    } else if (type === 'link') {
+      onUpdateCardBlocks(id, [{ id: generateId(), type: 'link', url: '' }]);
+    } else if (type === 'drawing') {
+      onUpdateCardBlocks(id, [{
+        id: generateId(),
+        type: 'drawing',
+        strokes: [],
+        groups: [],
+        redoStrokes: [],
+        previewDataUrl: '',
+        historyPast: [],
+        historyFuture: [],
+      }]);
+    }
+    onSelectCard(id);
+  };
+
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -669,6 +743,7 @@ export function CategoryTree({
               onSelectCard={onSelectCard}
               onRenameCard={onRenameCard}
               onMoveCard={handleMoveClick}
+              onAddChildNote={handleAddChildNote}
               onInsertCardRelative={onInsertCardRelative}
               onReorderCard={onReorderCard}
               onDeleteCard={onDeleteCard}
@@ -765,6 +840,31 @@ export function CategoryTree({
         excludeIds={moveExcludeIds}
         showRoot={true}
       />
+
+      <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create Note Type</DialogTitle>
+            <DialogDescription>Choose the type for your new note.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {CARD_TYPE_ORDER.map((type) => (
+              <button
+                key={type}
+                type="button"
+                className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+                onClick={() => {
+                  createCardByType(typeDialogParentId, type);
+                  setTypeDialogOpen(false);
+                }}
+              >
+                {typeIcon(type)}
+                <span>{CARD_TYPE_LABELS[type]}</span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Dialog */}
       {importDialogOpen && (

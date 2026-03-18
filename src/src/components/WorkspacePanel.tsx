@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { CardOptionsMenu } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
 
 interface WorkspacePanelProps {
@@ -1698,6 +1699,7 @@ function SortableBlock({ id, ...props }: SortableBlockProps) {
 interface GridCardItemProps {
   card: Card;
   onNavigate: () => void;
+  onAddNote: () => void;
   onMoveStart: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
@@ -1712,7 +1714,7 @@ interface GridCardItemProps {
 const MASONRY_ROW_HEIGHT = 4;
 const MASONRY_GAP = 8;
 
-function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder, dropIndicator }: GridCardItemProps) {
+function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder, dropIndicator }: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -1722,7 +1724,10 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
     isDragging,
   } = useSortable({ id: card.id });
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const titleRef = useRef<HTMLDivElement | null>(null);
   const [rowSpan, setRowSpan] = useState(1);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
 
   useLayoutEffect(() => {
     const node = contentRef.current;
@@ -1788,6 +1793,25 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
   const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
   const isFolderCard = card.cardType === 'folder';
 
+  const handleRenameStart = () => {
+    const node = titleRef.current;
+    if (!node || isRecycleBin) return;
+    node.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuAnchorPoint({ x: event.clientX, y: event.clientY });
+    setMenuOpen(true);
+  };
+
   return (
     <div ref={setNodeRef} style={style} className="relative group">
       {dropIndicator && !isDragging && (
@@ -1797,7 +1821,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
             dropIndicator === 'before' ? "top-[-4px]" : "bottom-[-4px]"
           )}
         />
-      )}
+        )}
       <div
         ref={contentRef}
         className={cn(
@@ -1810,6 +1834,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
           e.stopPropagation();
           onNavigate();
         }}
+        onContextMenu={handleContextMenu}
         {...attributes}
         {...listeners}
       >
@@ -1829,6 +1854,7 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
         <div className="flex-1 w-full flex flex-col items-center">
         {!isMediaCard && (
           <div
+            ref={titleRef}
             className={cn(
               "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
               "cursor-text select-text",
@@ -1929,64 +1955,26 @@ function GridCardItem({ card, onNavigate, onMoveStart, onRename, onDelete, onUpd
       </div>
 
        <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {!isRecycleBin ? (
-                <>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNavigate(); }}>
-                    <FolderOpen className="w-4 h-4 mr-2" />
-                    Open
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveStart(); }}>
-                    <FolderInput className="w-4 h-4 mr-2" />
-                    Move to...
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReorder?.('up'); }}>
-                    <ArrowUp className="w-4 h-4 mr-2" />
-                    Move Up
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onReorder?.('down'); }}>
-                    <ChevronDown className="w-4 h-4 mr-2" />
-                    Move Down
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenTypePicker(); }}>
-                    <Type className="w-4 h-4 mr-2" />
-                    Change type...
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRestore?.(); }}>
-                    <ArrowUp className="w-4 h-4 mr-2" />
-                    Restore
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Forever
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <CardOptionsMenu
+            isFolder={isFolderCard}
+            isRecycleBin={isRecycleBin}
+            align="start"
+            open={menuOpen}
+            onOpenChange={(open) => {
+              setMenuOpen(open);
+              if (!open) setMenuAnchorPoint(null);
+            }}
+            anchorPoint={menuAnchorPoint}
+            onOpen={onNavigate}
+            onAddNote={onAddNote}
+            onRename={handleRenameStart}
+            onMove={onMoveStart}
+            onMoveUp={onReorder ? () => onReorder('up') : undefined}
+            onMoveDown={onReorder ? () => onReorder('down') : undefined}
+            onChangeType={onOpenTypePicker}
+            onRestore={onRestore}
+            onDelete={onDelete}
+          />
        </div>
     </div>
   );
@@ -2504,6 +2492,7 @@ export function WorkspacePanel({
                       key={card.id}
                       card={card}
                       onNavigate={() => onNavigateCard(card.id)}
+                      onAddNote={() => openCreateTypePicker(card.id)}
                       onMoveStart={() => handleMoveStart(card.id)}
                       onRename={(title) => onUpdateCard(card.id, { title })}
                       onDelete={() => isRecycleBin ? onPermanentlyDeleteCard(card.id) : onDeleteCard(card.id)}

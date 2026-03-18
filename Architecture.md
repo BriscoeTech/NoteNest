@@ -94,7 +94,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Sidebar footer app version display (runtime-derived from `version.json`) 
 | UX | Recycle Bin displays deleted-card count badge 
 | UX | Recycle Bin view is read-only for content editing and note creation 
-| UX | Card actions are context-driven through `...` menus (normal vs recycle-bin) 
+| UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
+| UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
@@ -119,6 +120,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 8. User edits card title and currently visible type-specific content.
 9. For `folder` type, the content editor is hidden and sub-note area is shown.
 10. Changes are persisted to IndexedDB after state updates.
+11. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
@@ -292,6 +294,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - drag-and-drop sibling/root reordering with before/after insertion indicator.
 - parent reassignment via `Move to...` picker.
 - card checkbox quick toggle when card includes checkbox block.
+- normal tree card action menus are available from both `...` and right-click.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Refresh actions.
 - utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
@@ -317,6 +320,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Uses `@dnd-kit` for block and child-card drag sorting.
 - `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/folder).
 - Grid cards open on double-click (all types).
+- Grid-card action menus are available from both `...` and right-click.
 - Masonry layout must preserve the existing responsive column-count rules; it changes vertical packing only.
 - Child-card drag reorder semantics and store reorder logic must remain unchanged under masonry layout.
 - Child-card drag reorder UI shows a before/after insertion indicator while dragging.
@@ -334,19 +338,56 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Move target picker excludes self and descendants for the selected moving card.
 - Store validation (`canMoveCard`) remains the final safety guard for invalid targets.
 
-### 6.5 Card Action Menu Contract (`...`)
+### 6.5 Card Action Menu Contract
 
-- Tree card `...` menu (normal cards):
-- `Rename`, `Move to...`, `Change type...`, `Move Up`, `Move Down`, optional `Expand All`/`Collapse All` (when card has visible children), `Delete`.
-- Workspace grid card `...` menu (normal cards):
-- `Open`, `Move to...`, `Change type...`, `Move Up`, `Move Down`, `Delete`.
-- Recycle Bin right-panel tree row `...` menu:
-- `Restore`, `Delete Forever`.
-- Recycle Bin right-panel tree rows:
-- actions are menu-based under `...` (not always-visible action buttons),
-- menu provides `Restore` and `Delete Forever`.
+- Normal card actions in the tree and workspace grid are defined by a shared action-menu contract.
+- For normal cards, the same action set must be available from both the visible `...` trigger and right-click.
+- Recycle Bin actions remain menu-based and are intentionally narrower than normal-card actions.
 - Menu visibility pattern:
-- context actions are revealed via `...` trigger (typically hover-revealed on desktop), preserving compact card layout.
+- desktop layouts may reveal the `...` trigger on hover to preserve compact card layouts,
+- right-click must still expose the same normal-card action set without requiring the trigger.
+
+### 6.5.1 Normal Card Action Matrix
+
+This table is the canonical source for subtle action/menu/card-type combinations. Future menu changes must update this matrix and the shared menu implementation together.
+
+| Action Type | Menu / Surface | Card Type Applicability |
+|---|---|---|
+| Add Note | Tree normal card menu | `folder` only |
+| Add Note | Workspace grid normal card menu | `folder` only |
+| Open | Workspace grid normal card menu | all card types |
+| Rename | Tree normal card menu | all card types |
+| Rename | Workspace grid normal card menu | all card types |
+| Move to... | Tree normal card menu | all card types |
+| Move to... | Workspace grid normal card menu | all card types |
+| Move Up | Tree normal card menu | all card types |
+| Move Up | Workspace grid normal card menu | all card types |
+| Move Down | Tree normal card menu | all card types |
+| Move Down | Workspace grid normal card menu | all card types |
+| Change type... | Tree normal card menu | all card types |
+| Change type... | Workspace grid normal card menu | all card types |
+| Expand All | Tree normal card menu | cards with visible non-deleted children only |
+| Collapse All | Tree normal card menu | cards with visible non-deleted children only |
+| Delete | Tree normal card menu | all card types |
+| Delete | Workspace grid normal card menu | all card types |
+
+### 6.5.2 Folder Menu Ordering Contract
+
+- In normal-card menus, folder cards must place `Add Note` first.
+- `Add Note` must be followed immediately by a divider before the remaining folder actions.
+- Tree and workspace grid folder menus must preserve this ordering consistently.
+
+### 6.5.3 Recycle Bin Menu Matrix
+
+| Action Type | Menu / Surface | Card Type Applicability |
+|---|---|---|
+| Restore | Recycle Bin right-panel item menu | deleted cards of any card type |
+| Delete Forever | Recycle Bin right-panel item menu | deleted cards of any card type |
+
+### 6.5.4 Current Shared-Implementation Boundary
+
+- The shared normal-card action menu implementation currently governs tree normal-card menus and workspace grid normal-card menus.
+- Recycle Bin item menus are still menu-based but are a separate implementation path with their own narrower recovery/cleanup contract.
 
 ## 7. Search Architecture
 
@@ -497,6 +538,8 @@ Verify the product behavior items below:
 - Can create root and nested notes.
 - Can create typed notes from type picker: Note, Checkbox, Link, Image, Drawing, Folder.
 - Can rename notes from tree and workspace.
+- Tree and workspace normal-card menus can be opened from both `...` and right-click.
+- Folder menus place `Add Note` first, followed by a divider, in both tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.
 - Move picker excludes invalid self/descendant targets and store validation still rejects invalid targets as safety.
@@ -505,6 +548,7 @@ Verify the product behavior items below:
 - Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
+- Tree and workspace normal-card menu ordering stays in sync for shared actions (`Add Note`, `Rename`, `Move to...`, `Move Up`, `Move Down`, `Change type...`, `Delete`).
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.
 - Type change is non-destructive: switching type does not delete hidden blocks/children.
 - Tree icons match card type (`note`, `link`, `image`, `drawing`, `folder`) with checkbox rows as explicit exception (no extra icon).

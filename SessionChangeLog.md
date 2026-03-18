@@ -371,3 +371,43 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - Prevented startup from clearing saved tree state by pruning stale saved IDs only after the loaded tree is available.
 - Added a localhost-only service-worker guard so local dev loads unregister existing app service workers and clear Cache Storage before boot.
 - Why: this eliminates white-screen/stale-shell behavior in local dev and makes normal refresh restore the full left-panel state instead of collapsing the tree during startup.
+
+## 2026-03-18
+
+### Release `2.47.0`
+
+### Shared Card Menu Refactor
+- Extracted normal card actions into a shared `CardOptionsMenu` component used by both:
+- sidebar tree card menus,
+- workspace grid card menus.
+- Preserved narrower recycle-bin item menus as a separate implementation path rather than incorrectly forcing them into the normal-card menu contract.
+- Why: this reduces drift between tree and workspace menus while keeping the deleted-card recovery flow intentionally distinct.
+
+### Folder Menu Behavior
+- Added `Add Note` to folder menus in both the tree and the workspace grid.
+- Wired folder `Add Note` to the existing typed note creation popup flow instead of creating a second creation path.
+- Standardized folder-menu ordering so `Add Note` appears first, followed immediately by a divider before the remaining folder actions.
+- Why: folder actions now expose child-note creation consistently wherever folders appear.
+
+### Right-Click Menu Access
+- Added right-click support for normal card menus in both:
+- sidebar tree rows,
+- workspace grid cards.
+- Right-click now opens the same action set as the visible `...` trigger for normal cards.
+- Why: this improves discoverability and speed without creating a second menu definition.
+
+### Menu Consistency Improvements
+- Added `Rename` to workspace grid card menus and hooked it into the existing inline title-editing surface.
+- Kept tree-only actions (`Expand All` / `Collapse All`) scoped to tree menus where they are meaningful.
+- Why: the shared menu renderer is now driven by a clearer action contract, while surface-specific capabilities remain explicit.
+
+### Architecture Documentation
+- Updated `Architecture.md` to reflect:
+- shared normal-card menu behavior,
+- right-click support for tree/grid normal-card menus,
+- folder menu ordering requirements,
+- a canonical menu action matrix covering action type, menu/surface, and card-type applicability.
+- Why: the menu combinations had become subtle enough that they needed an explicit tracking table to prevent future regressions or overlooked differences.
+
+### Version
+- Bumped the app version from `2.46.0` to `2.47.0` using the documented minor-version workflow (`version.json` as the only app version source).
