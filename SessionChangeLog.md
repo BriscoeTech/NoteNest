@@ -411,3 +411,35 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ### Version
 - Bumped the app version from `2.46.0` to `2.47.0` using the documented minor-version workflow (`version.json` as the only app version source).
+
+### Release `2.48.0`
+
+### Treemap Rendering and Interaction Consolidation
+- Refactored workspace treemap mode to reuse the same `GridCardItem` card renderer used by the normal workspace grid instead of maintaining a separate treemap card implementation.
+- Pulled shared workspace card-grid drag behavior into a reusable `SortableCardGrid` wrapper and reused it for:
+- the normal workspace child grid,
+- the treemap top-level grid,
+- inline child lists rendered inside treemap folders.
+- Why: this reduces mode drift and makes shared card behavior land through one implementation path instead of being re-created per mode.
+
+### Treemap Reorder Behavior
+- Enabled drag-reorder in treemap mode for each visible sibling group.
+- Top-level treemap cards now reorder among top-level siblings.
+- Cards shown inline inside a folder now reorder within that folder's visible child list.
+- Why: treemap now preserves the same organizing affordances as the standard workspace without flattening the hierarchy into one ambiguous global drag surface.
+
+### Treemap Preference Persistence
+- Persisted the workspace child-view mode (`grid` vs `treemap`) in browser local storage.
+- Refreshing the page now restores the user's last selected workspace mode instead of always resetting to `grid`.
+- Why: this aligns treemap with the app's other persisted UI preferences and prevents refresh from silently discarding user state.
+
+### Architecture Documentation
+- Updated `Architecture.md` to add:
+- treemap as an explicit workspace-view contract,
+- treemap mode persistence across refresh,
+- treemap drag behavior by visible sibling group,
+- a shared renderer/interaction reuse contract that emphasizes extending shared code paths instead of duplicating features across modes.
+- Why: this makes code reuse an explicit architecture requirement so future menu/render/interaction work is less likely to regress by being implemented twice.
+
+### Version
+- Bumped the app version from `2.47.0` to `2.48.0` using the documented minor-version workflow (`version.json` as the only app version source).

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot } from '@/lib/types';
 import { generateId, getDescendantIds } from '@/lib/types';
@@ -42,11 +42,13 @@ interface WorkspacePanelProps {
   onPermanentlyDeleteCard: (id: string) => void;
   onEmptyRecycleBin: () => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
-  onReorderCardsByIndex: (ids: string[]) => void; // For children reordering
+  onReorderChildren: (parentId: string | null, ids: string[]) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   sidebarOpen?: boolean;
 }
+
+const CHILDREN_VIEW_MODE_STORAGE_KEY = 'notenest-children-view-mode';
 
 // ... BlockEditor ... (Reusing existing component, need to define it)
 interface BlockEditorProps {
@@ -1709,12 +1711,135 @@ interface GridCardItemProps {
   onRestore?: () => void;
   onReorder?: (direction: 'up' | 'down') => void;
   dropIndicator?: 'before' | 'after' | null;
+  inlineChildren?: boolean;
+  sortable?: boolean;
+  nestedGapClassName?: string;
+  onNavigateCardById?: (id: string | null) => void;
+  onOpenCreateTypePicker?: (parentId: string | null) => void;
+  onMoveStartById?: (id: string) => void;
+  onUpdateCardTitleById?: (id: string, title: string) => void;
+  onDeleteCardById?: (id: string) => void;
+  onUpdateBlocksById?: (id: string, blocks: ContentBlock[]) => void;
+  onOpenChangeTypePickerByCard?: (card: Card) => void;
+  onReorderCardById?: (id: string, direction: 'up' | 'down') => void;
+  onReorderChildren?: (parentId: string | null, ids: string[]) => void;
+}
+
+interface SortableCardGridProps {
+  cards: Card[];
+  className: string;
+  strategy: SortingStrategy;
+  onReorderIds: (ids: string[]) => void;
+  renderCard: (card: Card, dropIndicator: 'before' | 'after' | null) => React.ReactNode;
 }
 
 const MASONRY_ROW_HEIGHT = 4;
 const MASONRY_GAP = 8;
+const NESTED_FOLDER_CHILDREN_CLASS = "space-y-2";
 
-function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDelete, onUpdateBlocks, onOpenTypePicker, isRecycleBin, onRestore, onReorder, dropIndicator }: GridCardItemProps) {
+function getChildrenGridClassName(sidebarOpen: boolean) {
+  return cn(
+    "grid auto-rows-[4px] gap-2 transition-all",
+    sidebarOpen
+      ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+      : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+  );
+}
+
+function SortableCardGrid({
+  cards,
+  className,
+  strategy,
+  onReorderIds,
+  renderCard,
+}: SortableCardGridProps) {
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [overCardId, setOverCardId] = useState<string | null>(null);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveCardId(String(event.active.id));
+    setOverCardId(null);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverCardId(event.over ? String(event.over.id) : null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCardId(null);
+    setOverCardId(null);
+    if (!over || active.id === over.id) return;
+    const oldIndex = cards.findIndex((card) => card.id === active.id);
+    const newIndex = cards.findIndex((card) => card.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onReorderIds(arrayMove(cards, oldIndex, newIndex).map((card) => card.id));
+  };
+
+  const handleDragCancel = () => {
+    setActiveCardId(null);
+    setOverCardId(null);
+  };
+
+  const getDropIndicator = (cardId: string): 'before' | 'after' | null => {
+    if (!activeCardId || !overCardId || cardId !== overCardId || activeCardId === overCardId) {
+      return null;
+    }
+    const activeIndex = cards.findIndex((card) => card.id === activeCardId);
+    const overIndex = cards.findIndex((card) => card.id === overCardId);
+    if (activeIndex === -1 || overIndex === -1) return null;
+    return activeIndex < overIndex ? 'after' : 'before';
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <SortableContext items={cards.map((card) => card.id)} strategy={strategy}>
+        <div className={className}>
+          {cards.map((card) => renderCard(card, getDropIndicator(card.id)))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function GridCardItem({
+  card,
+  onNavigate,
+  onAddNote,
+  onMoveStart,
+  onRename,
+  onDelete,
+  onUpdateBlocks,
+  onOpenTypePicker,
+  isRecycleBin,
+  onRestore,
+  onReorder,
+  dropIndicator,
+  inlineChildren = false,
+  sortable = true,
+  nestedGapClassName = NESTED_FOLDER_CHILDREN_CLASS,
+  onNavigateCardById,
+  onOpenCreateTypePicker,
+  onMoveStartById,
+  onUpdateCardTitleById,
+  onDeleteCardById,
+  onUpdateBlocksById,
+  onOpenChangeTypePickerByCard,
+  onReorderCardById,
+  onReorderChildren,
+}: GridCardItemProps) {
   const {
     attributes,
     listeners,
@@ -1722,7 +1847,7 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: card.id });
+  } = useSortable({ id: card.id, disabled: !sortable });
   const contentRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
   const [rowSpan, setRowSpan] = useState(1);
@@ -1775,6 +1900,9 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
   const drawingBlock = card.cardType === 'drawing'
     ? card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined
     : undefined;
+  const visibleChildren = card.children
+    .filter((child) => !child.isDeleted)
+    .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -1792,6 +1920,7 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
 
   const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
   const isFolderCard = card.cardType === 'folder';
+  const showInlineChildren = inlineChildren && isFolderCard && !isRecycleBin;
 
   const handleRenameStart = () => {
     const node = titleRef.current;
@@ -1825,9 +1954,14 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
       <div
         ref={contentRef}
         className={cn(
-          "relative flex items-center gap-2 rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors justify-center min-h-[96px]",
-          isMediaCard ? "p-0 overflow-hidden" : "p-4",
-          checkboxBlock ? "justify-start pl-4" : "justify-center",
+          "relative rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors min-h-[96px]",
+          showInlineChildren
+            ? "p-4"
+            : cn(
+                "flex items-center gap-2 justify-center",
+                isMediaCard ? "p-0 overflow-hidden" : "p-4",
+                checkboxBlock ? "justify-start pl-4" : "justify-center"
+              ),
           isFolderCard && "bg-card border-border hover:bg-accent"
         )}
         onDoubleClick={(e) => {
@@ -1835,13 +1969,13 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
           onNavigate();
         }}
         onContextMenu={handleContextMenu}
-        {...attributes}
-        {...listeners}
+        {...(sortable ? attributes : {})}
+        {...(sortable ? listeners : {})}
       >
         {isFolderCard && (
           <div className="absolute -top-2 left-4 h-3 w-14 rounded-t-md border border-b-0 border-border bg-card" />
         )}
-        {checkboxBlock && (
+        {!showInlineChildren && checkboxBlock && (
           <input
             type="checkbox"
             checked={checkboxBlock.checked}
@@ -1853,31 +1987,44 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
         )}
         <div className="flex-1 w-full flex flex-col items-center">
         {!isMediaCard && (
-          <div
-            ref={titleRef}
-            className={cn(
-              "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
-              "cursor-text select-text",
-              checkboxBlock ? "text-left" : "text-center",
-              checkboxBlock?.checked && "line-through text-muted-foreground"
+          <div className={cn("w-full", showInlineChildren && checkboxBlock && "flex items-start gap-2")}>
+            {showInlineChildren && checkboxBlock && (
+              <input
+                type="checkbox"
+                checked={checkboxBlock.checked}
+                onChange={(e) => handleCheckboxChange(e.target.checked)}
+                className="mt-0.5 h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0 z-10"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              />
             )}
-            contentEditable={!isRecycleBin}
-            suppressContentEditableWarning
-            onBlur={(e) => onRename(e.currentTarget.textContent || "")}
-            onKeyDown={(e) => {
-               if (e.key === 'Enter' && !e.shiftKey) {
-                 e.preventDefault();
-                 e.currentTarget.blur();
-               }
-               e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              e.currentTarget.focus();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {card.title}
+            <div
+              ref={titleRef}
+              className={cn(
+                "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
+                "cursor-text select-text",
+                checkboxBlock ? "text-left" : "text-center",
+                checkboxBlock?.checked && "line-through text-muted-foreground"
+              )}
+              contentEditable={!isRecycleBin}
+              suppressContentEditableWarning
+              onBlur={(e) => onRename(e.currentTarget.textContent || "")}
+              onKeyDown={(e) => {
+                 if (e.key === 'Enter' && !e.shiftKey) {
+                   e.preventDefault();
+                   e.currentTarget.blur();
+                 }
+                 e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.currentTarget.focus();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
+              {card.title}
+            </div>
           </div>
         )}
         {linkBlock && (
@@ -1951,6 +2098,44 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
             No drawing yet
           </div>
         )}
+        {showInlineChildren && (
+          <div className="w-full mt-4">
+            {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onReorderCardById && onReorderChildren && (
+              <SortableCardGrid
+                cards={visibleChildren}
+                className={nestedGapClassName}
+                strategy={verticalListSortingStrategy}
+                onReorderIds={(ids) => onReorderChildren(card.id, ids)}
+                renderCard={(child, childDropIndicator) => (
+                  <GridCardItem
+                    key={child.id}
+                    card={child}
+                    onNavigate={() => onNavigateCardById(child.id)}
+                    onAddNote={() => onOpenCreateTypePicker(child.id)}
+                    onMoveStart={() => onMoveStartById(child.id)}
+                    onRename={(title) => onUpdateCardTitleById(child.id, title)}
+                    onDelete={() => onDeleteCardById(child.id)}
+                    onUpdateBlocks={(blocks) => onUpdateBlocksById(child.id, blocks)}
+                    onOpenTypePicker={() => onOpenChangeTypePickerByCard(child)}
+                    onReorder={(dir) => onReorderCardById(child.id, dir)}
+                    dropIndicator={childDropIndicator}
+                    inlineChildren={true}
+                    nestedGapClassName={nestedGapClassName}
+                    onNavigateCardById={onNavigateCardById}
+                    onOpenCreateTypePicker={onOpenCreateTypePicker}
+                    onMoveStartById={onMoveStartById}
+                    onUpdateCardTitleById={onUpdateCardTitleById}
+                    onDeleteCardById={onDeleteCardById}
+                    onUpdateBlocksById={onUpdateBlocksById}
+                    onOpenChangeTypePickerByCard={onOpenChangeTypePickerByCard}
+                    onReorderCardById={onReorderCardById}
+                    onReorderChildren={onReorderChildren}
+                  />
+                )}
+              />
+            )}
+          </div>
+        )}
         </div>
       </div>
 
@@ -1964,6 +2149,7 @@ function GridCardItem({ card, onNavigate, onAddNote, onMoveStart, onRename, onDe
               setMenuOpen(open);
               if (!open) setMenuAnchorPoint(null);
             }}
+            onAnchorPointChange={setMenuAnchorPoint}
             anchorPoint={menuAnchorPoint}
             onOpen={onNavigate}
             onAddNote={onAddNote}
@@ -2050,6 +2236,7 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
   );
 }
 
+
 export function WorkspacePanel({
   currentCard,
   childrenCards,
@@ -2065,7 +2252,7 @@ export function WorkspacePanel({
   onPermanentlyDeleteCard,
   onEmptyRecycleBin,
   onReorderCard,
-  onReorderCardsByIndex,
+  onReorderChildren,
   onSearch,
   searchQuery,
   sidebarOpen = true
@@ -2078,8 +2265,11 @@ export function WorkspacePanel({
   const [typeDialogMode, setTypeDialogMode] = useState<'create' | 'change'>('create');
   const [typeDialogParentId, setTypeDialogParentId] = useState<string | null>(null);
   const [typeDialogCard, setTypeDialogCard] = useState<Card | null>(null);
-  const [activeChildId, setActiveChildId] = useState<string | null>(null);
-  const [overChildId, setOverChildId] = useState<string | null>(null);
+  const [childrenViewMode, setChildrenViewMode] = useState<'grid' | 'treemap'>(() => {
+    if (typeof window === 'undefined') return 'grid';
+    const saved = window.localStorage.getItem(CHILDREN_VIEW_MODE_STORAGE_KEY);
+    return saved === 'treemap' ? 'treemap' : 'grid';
+  });
 
   const handleMoveStart = (id: string) => {
     setCardToMove(id);
@@ -2108,6 +2298,10 @@ export function WorkspacePanel({
     if (titleRef.current) autoResize(titleRef.current);
   }, [currentCard?.title]);
 
+  useEffect(() => {
+    window.localStorage.setItem(CHILDREN_VIEW_MODE_STORAGE_KEY, childrenViewMode);
+  }, [childrenViewMode]);
+
   // Block Dnd
   const blockSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -2123,51 +2317,6 @@ export function WorkspacePanel({
       const newBlocks = arrayMove(currentCard.blocks, oldIndex, newIndex);
       onUpdateCardBlocks(currentCard.id, newBlocks);
     }
-  };
-
-  // Card Children Dnd
-  const childSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const handleChildDragStart = (event: DragStartEvent) => {
-    setActiveChildId(String(event.active.id));
-    setOverChildId(null);
-  };
-
-  const handleChildDragOver = (event: DragOverEvent) => {
-    setOverChildId(event.over ? String(event.over.id) : null);
-  };
-
-  const handleChildDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveChildId(null);
-    setOverChildId(null);
-    if (over && active.id !== over.id) {
-       // Reorder children
-       const oldIndex = childrenCards.findIndex(c => c.id === active.id);
-       const newIndex = childrenCards.findIndex(c => c.id === over.id);
-       const newOrder = arrayMove(childrenCards, oldIndex, newIndex);
-       const ids = newOrder.map(c => c.id);
-       onReorderCardsByIndex(ids);
-    }
-  };
-
-  const handleChildDragCancel = () => {
-    setActiveChildId(null);
-    setOverChildId(null);
-  };
-
-  const getChildDropIndicator = (cardId: string): 'before' | 'after' | null => {
-    if (!activeChildId || !overChildId || cardId !== overChildId || activeChildId === overChildId) {
-      return null;
-    }
-    const activeIndex = childrenCards.findIndex(card => card.id === activeChildId);
-    const overIndex = childrenCards.findIndex(card => card.id === overChildId);
-    if (activeIndex === -1 || overIndex === -1) return null;
-    return activeIndex < overIndex ? 'after' : 'before';
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2342,6 +2491,8 @@ export function WorkspacePanel({
   };
 
   const canShowChildrenUI = isRecycleBin || !currentCard || currentCard.cardType === 'folder';
+  const canUseTreemap = !isRecycleBin && !searchQuery && canShowChildrenUI;
+  const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -2436,17 +2587,28 @@ export function WorkspacePanel({
               {currentCard ? "Sub-notes" : "Notes"}
             </h3>
 
-            {isRecycleBin ? (
-              <Button variant="destructive" size="sm" onClick={handleEmptyRecycleBin}>
-                <Trash2 className="w-4 h-4 mr-1" />
-                Empty Recycle Bin
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => openCreateTypePicker(currentCard?.id || null)}>
-                <Plus className="w-4 h-4 mr-1" />
-                New Note
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {canUseTreemap && (
+                <Button
+                  size="sm"
+                  variant={childrenViewMode === 'treemap' ? 'default' : 'outline'}
+                  onClick={() => setChildrenViewMode((mode) => mode === 'grid' ? 'treemap' : 'grid')}
+                >
+                  {childrenViewMode === 'treemap' ? 'Treemap On' : 'Treemap Off'}
+                </Button>
+              )}
+              {isRecycleBin ? (
+                <Button variant="destructive" size="sm" onClick={handleEmptyRecycleBin}>
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Empty Recycle Bin
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => openCreateTypePicker(currentCard?.id || null)}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  New Note
+                </Button>
+              )}
+            </div>
           </div>
 
           {childrenCards.length === 0 ? (
@@ -2468,45 +2630,63 @@ export function WorkspacePanel({
                   />
                 ))}
             </div>
+          ) : childrenViewMode === 'treemap' && canUseTreemap ? (
+            <SortableCardGrid
+              cards={sortedChildrenCards}
+              className={getChildrenGridClassName(sidebarOpen)}
+              strategy={rectSortingStrategy}
+              onReorderIds={(ids) => onReorderChildren(currentCard?.id ?? null, ids)}
+              renderCard={(card, dropIndicator) => (
+                <GridCardItem
+                  key={card.id}
+                  card={card}
+                  onNavigate={() => onNavigateCard(card.id)}
+                  onAddNote={() => openCreateTypePicker(card.id)}
+                  onMoveStart={() => handleMoveStart(card.id)}
+                  onRename={(title) => onUpdateCard(card.id, { title })}
+                  onDelete={() => onDeleteCard(card.id)}
+                  onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                  onOpenTypePicker={() => openChangeTypePicker(card)}
+                  onReorder={(dir) => onReorderCard(card.id, dir)}
+                  dropIndicator={dropIndicator}
+                  inlineChildren={true}
+                  nestedGapClassName={NESTED_FOLDER_CHILDREN_CLASS}
+                  onNavigateCardById={onNavigateCard}
+                  onOpenCreateTypePicker={openCreateTypePicker}
+                  onMoveStartById={handleMoveStart}
+                  onUpdateCardTitleById={(id, title) => onUpdateCard(id, { title })}
+                  onDeleteCardById={onDeleteCard}
+                  onUpdateBlocksById={onUpdateCardBlocks}
+                  onOpenChangeTypePickerByCard={openChangeTypePicker}
+                  onReorderCardById={onReorderCard}
+                  onReorderChildren={onReorderChildren}
+                />
+              )}
+            />
           ) : (
-            <DndContext
-              sensors={childSensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleChildDragStart}
-              onDragOver={handleChildDragOver}
-              onDragEnd={handleChildDragEnd}
-              onDragCancel={handleChildDragCancel}
-            >
-              <SortableContext
-                items={childrenCards.map(c => c.id)}
-                strategy={rectSortingStrategy}
-              >
-                <div className={cn(
-                  "grid auto-rows-[4px] gap-2 transition-all",
-                  sidebarOpen 
-                    ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" 
-                    : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                )}>
-                  {childrenCards.map(card => (
-                    <GridCardItem
-                      key={card.id}
-                      card={card}
-                      onNavigate={() => onNavigateCard(card.id)}
-                      onAddNote={() => openCreateTypePicker(card.id)}
-                      onMoveStart={() => handleMoveStart(card.id)}
-                      onRename={(title) => onUpdateCard(card.id, { title })}
-                      onDelete={() => isRecycleBin ? onPermanentlyDeleteCard(card.id) : onDeleteCard(card.id)}
-                      onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
-                      onOpenTypePicker={() => openChangeTypePicker(card)}
-                      isRecycleBin={isRecycleBin}
-                      onRestore={() => onRestoreCard(card.id, null)}
-                      onReorder={(dir) => onReorderCard(card.id, dir)}
-                      dropIndicator={getChildDropIndicator(card.id)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <SortableCardGrid
+              cards={childrenCards}
+              className={getChildrenGridClassName(sidebarOpen)}
+              strategy={rectSortingStrategy}
+              onReorderIds={(ids) => onReorderChildren(currentCard?.id ?? null, ids)}
+              renderCard={(card, dropIndicator) => (
+                <GridCardItem
+                  key={card.id}
+                  card={card}
+                  onNavigate={() => onNavigateCard(card.id)}
+                  onAddNote={() => openCreateTypePicker(card.id)}
+                  onMoveStart={() => handleMoveStart(card.id)}
+                  onRename={(title) => onUpdateCard(card.id, { title })}
+                  onDelete={() => isRecycleBin ? onPermanentlyDeleteCard(card.id) : onDeleteCard(card.id)}
+                  onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                  onOpenTypePicker={() => openChangeTypePicker(card)}
+                  isRecycleBin={isRecycleBin}
+                  onRestore={() => onRestoreCard(card.id, null)}
+                  onReorder={(dir) => onReorderCard(card.id, dir)}
+                  dropIndicator={dropIndicator}
+                />
+              )}
+            />
           )}
         </div>
         )}

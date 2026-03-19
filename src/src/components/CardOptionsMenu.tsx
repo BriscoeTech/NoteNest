@@ -32,6 +32,7 @@ interface CardOptionsMenuProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   anchorPoint?: { x: number; y: number } | null;
+  onAnchorPointChange?: (point: { x: number; y: number } | null) => void;
   onOpen?: () => void;
   onAddNote?: () => void;
   onRename?: () => void;
@@ -55,6 +56,7 @@ export function CardOptionsMenu({
   open,
   onOpenChange,
   anchorPoint,
+  onAnchorPointChange,
   onOpen,
   onAddNote,
   onRename,
@@ -79,6 +81,7 @@ export function CardOptionsMenu({
       setInternalOpen(nextOpen);
       if (!nextOpen) setInternalAnchorPoint(null);
     }
+    if (!nextOpen) onAnchorPointChange?.(null);
     onOpenChange?.(nextOpen);
   };
 
@@ -89,6 +92,7 @@ export function CardOptionsMenu({
     if (!isControlled) {
       setInternalAnchorPoint(nextAnchorPoint);
     }
+    onAnchorPointChange?.(nextAnchorPoint);
     handleOpenChange(true);
   };
 

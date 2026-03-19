@@ -240,7 +240,7 @@ export default function NotesApp() {
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onEmptyRecycleBin={store.emptyRecycleBin}
           onReorderCard={store.moveCardStep}
-          onReorderCardsByIndex={(ids) => store.reorderChildren(currentCardId, ids)}
+          onReorderChildren={store.reorderChildren}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
           sidebarOpen={sidebarOpen}

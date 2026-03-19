@@ -330,6 +330,7 @@ function TreeItem({
             setMenuOpen(open);
             if (!open) setMenuAnchorPoint(null);
           }}
+          onAnchorPointChange={setMenuAnchorPoint}
           anchorPoint={menuAnchorPoint}
           contentClassName="w-44"
           trigger={

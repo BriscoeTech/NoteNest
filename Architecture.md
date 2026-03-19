@@ -98,6 +98,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
+| UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline folder-child rendering 
+| UX | Treemap view preference persists across refresh in local browser storage 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
 | UX | Image and drawing cards render title text in grid 
@@ -127,6 +129,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 2. In workspace grid, opening cards is triggered by double-click.
 3. App updates current scope (`currentCardId`) and tree selection state.
 4. Workspace shows current card content and, when applicable, children grid.
+5. When treemap mode is enabled, workspace still uses the same card tiles and actions, but folder cards also render visible descendants inline inside the folder card.
 
 ### 3.9 Refresh and recovery behavior
 1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
@@ -143,6 +146,9 @@ This section is the authoritative feature contract. Changes must be reflected he
 4. User can reorder within siblings from the tree (up/down or drag reindex) and from the workspace grid (drag reindex).
 5. Tree and workspace drag-reorder UI show an insertion line indicating the before/after drop position.
 6. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
+7. In treemap mode, drag-reorder is scoped per visible sibling group:
+- top-level visible cards reorder among top-level siblings,
+- cards rendered inside a folder reorder only within that folder's visible children.
 
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
@@ -258,6 +264,11 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 5.4.2 Left-panel UI persistence
 - Sidebar UI state is persisted locally in browser storage.
+
+### 5.4.3 Right-panel view preference persistence
+- Workspace child-view mode is persisted locally in browser storage.
+- Persisted values are currently `grid` and `treemap`.
+- On refresh/startup, the workspace must restore the last selected child-view mode.
 - Persisted left-panel state includes current navigation scope, selected tree item, search query, sidebar open/closed state, and tree expansion state.
 - Scope and selection restoration must wait until the card tree has finished loading from IndexedDB so startup does not clear saved values.
 - Saved scope and selection IDs that no longer exist in the loaded tree must be cleared.
@@ -388,6 +399,15 @@ This table is the canonical source for subtle action/menu/card-type combinations
 
 - The shared normal-card action menu implementation currently governs tree normal-card menus and workspace grid normal-card menus.
 - Recycle Bin item menus are still menu-based but are a separate implementation path with their own narrower recovery/cleanup contract.
+
+### 6.6 Shared Renderer and Interaction Reuse Contract
+
+- Workspace `grid` mode and workspace `treemap` mode must reuse the same base card renderer for normal cards.
+- Treemap mode must not introduce a separate note/checkbox/link/image/drawing card implementation with divergent layout, spacing, menu, or interaction behavior.
+- The only intended rendering difference between workspace `grid` and workspace `treemap` is that treemap folder cards may render visible descendant cards inline inside the same folder card shell.
+- Shared card-grid layout decisions such as masonry row behavior, responsive column rules, and shared spacing constants should come from shared code paths/constants rather than duplicated per-mode values.
+- Shared interactions such as right-click menus, `...` menus, rename, double-click open, and drag-reorder should be implemented through shared controller/render paths wherever the behavior contract is the same.
+- When a feature applies to both workspace modes, implementation should extend the shared path rather than copy the feature into a second mode-specific renderer.
 
 ## 7. Search Architecture
 
@@ -547,6 +567,9 @@ Verify the product behavior items below:
 - Tree drag reorder does not nest into cards/folders; parent changes use `Move to...`.
 - Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
+- Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only folder inline-child rendering differs in treemap.
+- Treemap restores the previously selected mode after refresh.
+- Treemap drag-reorder works per visible sibling group, including inside expanded folders.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
 - Tree and workspace normal-card menu ordering stays in sync for shared actions (`Add Note`, `Rename`, `Move to...`, `Move Up`, `Move Down`, `Change type...`, `Delete`).
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.
