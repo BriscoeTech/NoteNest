@@ -2510,6 +2510,15 @@ export function WorkspacePanel({
              <h2 className="text-lg font-semibold">{isRecycleBin ? "Recycle Bin" : "Home"}</h2>
            )}
          </div>
+         {canUseTreemap && (
+           <Button
+             size="sm"
+             variant={childrenViewMode === 'treemap' ? 'default' : 'outline'}
+             onClick={() => setChildrenViewMode((mode) => mode === 'grid' ? 'treemap' : 'grid')}
+           >
+             {childrenViewMode === 'treemap' ? 'Treemap On' : 'Treemap Off'}
+           </Button>
+         )}
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-8">
@@ -2588,15 +2597,6 @@ export function WorkspacePanel({
             </h3>
 
             <div className="flex items-center gap-2">
-              {canUseTreemap && (
-                <Button
-                  size="sm"
-                  variant={childrenViewMode === 'treemap' ? 'default' : 'outline'}
-                  onClick={() => setChildrenViewMode((mode) => mode === 'grid' ? 'treemap' : 'grid')}
-                >
-                  {childrenViewMode === 'treemap' ? 'Treemap On' : 'Treemap Off'}
-                </Button>
-              )}
               {isRecycleBin ? (
                 <Button variant="destructive" size="sm" onClick={handleEmptyRecycleBin}>
                   <Trash2 className="w-4 h-4 mr-1" />

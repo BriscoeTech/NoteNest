@@ -325,9 +325,11 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 6.3 Workspace panel
 - `src/src/components/WorkspacePanel.tsx`:
 - Header for current context and parent navigation.
+- Workspace-level view toggles such as the treemap on/off control belong in this top header area, not inside the child-content toolbar.
 - Current card editor for title and type-gated block list.
 - Title row includes current card type icon.
 - Children displayed as a masonry-packed card grid with create/move/reorder/delete actions.
+- The child-content toolbar contains section-local actions such as `New Note` and recycle-bin purge, but not workspace-shell view-mode toggles.
 - Uses `@dnd-kit` for block and child-card drag sorting.
 - `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/folder).
 - Grid cards open on double-click (all types).
@@ -403,6 +405,7 @@ This table is the canonical source for subtle action/menu/card-type combinations
 ### 6.6 Shared Renderer and Interaction Reuse Contract
 
 - Workspace `grid` mode and workspace `treemap` mode must reuse the same base card renderer for normal cards.
+- The `grid`/`treemap` mode toggle is a workspace-shell control and must remain in the top workspace header rather than inside the child-card content section.
 - Treemap mode must not introduce a separate note/checkbox/link/image/drawing card implementation with divergent layout, spacing, menu, or interaction behavior.
 - The only intended rendering difference between workspace `grid` and workspace `treemap` is that treemap folder cards may render visible descendant cards inline inside the same folder card shell.
 - Shared card-grid layout decisions such as masonry row behavior, responsive column rules, and shared spacing constants should come from shared code paths/constants rather than duplicated per-mode values.
@@ -568,6 +571,7 @@ Verify the product behavior items below:
 - Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
 - Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only folder inline-child rendering differs in treemap.
+- The treemap toggle appears in the top workspace header, not in the sub-notes content toolbar.
 - Treemap restores the previously selected mode after refresh.
 - Treemap drag-reorder works per visible sibling group, including inside expanded folders.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.

@@ -443,3 +443,21 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ### Version
 - Bumped the app version from `2.47.0` to `2.48.0` using the documented minor-version workflow (`version.json` as the only app version source).
+
+## 2026-03-19
+
+### Release `2.49.0`
+
+### Workspace Header Layout
+- Moved the workspace treemap mode toggle out of the right-panel child-content toolbar and into the top workspace header.
+- The treemap toggle now sits alongside the current-context header controls instead of inside the sub-notes content section.
+- Why: child-view mode is a workspace-level display control, so placing it in the header keeps it aligned with the overall right-pane context rather than with a specific content block.
+
+### Architecture Documentation
+- Updated `Architecture.md` to make the treemap toggle placement explicit:
+- it is a header-level workspace control,
+- it is not part of the sub-notes content toolbar.
+- Why: this prevents future layout drift around which controls belong to the workspace shell versus the child-content area.
+
+### Version
+- Bumped the app version from `2.48.0` to `2.49.0` using the documented minor-version workflow (`version.json` as the only app version source).
