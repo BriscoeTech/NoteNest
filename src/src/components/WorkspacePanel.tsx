@@ -1723,6 +1723,7 @@ interface GridCardItemProps {
   onOpenChangeTypePickerByCard?: (card: Card) => void;
   onReorderCardById?: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren?: (parentId: string | null, ids: string[]) => void;
+  nestingDepth?: number;
 }
 
 interface SortableCardGridProps {
@@ -1735,7 +1736,11 @@ interface SortableCardGridProps {
 
 const MASONRY_ROW_HEIGHT = 4;
 const MASONRY_GAP = 8;
-function getNestedChildrenGridClassName(childCount: number) {
+function getNestedChildrenGridClassName(childCount: number, nestingDepth: number) {
+  if (nestingDepth >= 1) {
+    return "grid auto-rows-[4px] gap-2 transition-all items-start grid-cols-1 md:grid-cols-2";
+  }
+
   const columnClassName =
     childCount <= 3
       ? "grid-cols-1"
@@ -1750,8 +1755,8 @@ function getChildrenGridClassName(sidebarOpen: boolean) {
   return cn(
     "grid auto-rows-[4px] gap-2 transition-all",
     sidebarOpen
-      ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-      : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+      ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+      : "grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7"
   );
 }
 
@@ -1848,6 +1853,7 @@ function GridCardItem({
   onOpenChangeTypePickerByCard,
   onReorderCardById,
   onReorderChildren,
+  nestingDepth = 0,
 }: GridCardItemProps) {
   const {
     attributes,
@@ -1912,7 +1918,7 @@ function GridCardItem({
   const visibleChildren = card.children
     .filter((child) => !child.isDeleted)
     .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
-  const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length);
+  const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length, nestingDepth);
   const shouldConstrainInlineChildren = visibleChildren.length > 6;
   
   const handleCheckboxChange = (checked: boolean) => {
@@ -1932,6 +1938,8 @@ function GridCardItem({
   const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
   const isFolderCard = card.cardType === 'folder';
   const showInlineChildren = inlineChildren && isFolderCard && !isRecycleBin;
+  const shouldSpanWide = showInlineChildren && visibleChildren.length > 0;
+  const shouldSpanExtraWide = showInlineChildren && nestingDepth === 0 && visibleChildren.length >= 10;
 
   const handleRenameStart = () => {
     const node = titleRef.current;
@@ -1953,7 +1961,15 @@ function GridCardItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "relative group",
+        shouldSpanWide && "md:col-span-2",
+        shouldSpanExtraWide && "xl:col-span-3"
+      )}
+    >
       {dropIndicator && !isDragging && (
         <div
           className={cn(
@@ -2137,6 +2153,7 @@ function GridCardItem({
                     dropIndicator={childDropIndicator}
                     inlineChildren={true}
                     nestedGapClassName={nestedChildrenClassName}
+                    nestingDepth={nestingDepth + 1}
                     onNavigateCardById={onNavigateCardById}
                     onOpenCreateTypePicker={onOpenCreateTypePicker}
                     onMoveStartById={onMoveStartById}
@@ -2666,6 +2683,7 @@ export function WorkspacePanel({
                   onReorder={(dir) => onReorderCard(card.id, dir)}
                   dropIndicator={dropIndicator}
                   inlineChildren={true}
+                  nestingDepth={0}
                   onNavigateCardById={onNavigateCard}
                   onOpenCreateTypePicker={openCreateTypePicker}
                   onMoveStartById={handleMoveStart}

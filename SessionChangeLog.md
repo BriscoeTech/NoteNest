@@ -475,3 +475,26 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - oversized inline child regions are height-constrained and scroll internally,
 - the goal is to trade width before height when a folder contains many visible descendants.
 - Why: this makes the nested treemap layout behavior explicit instead of leaving it as an incidental implementation detail.
+
+### Release `2.50.0`
+
+### Workspace Card Density Refinement
+- Increased the number of workspace card columns in both normal grid mode and treemap mode so cards can render at a noticeably smaller default width.
+- Updated responsive column counts separately for sidebar-open and sidebar-closed layouts to use available width more aggressively.
+- Why: the previous column counts kept cards wider than desired, which reduced information density and made the workspace feel overly loose.
+
+### Nested Treemap Folder Sizing
+- Updated nested treemap folder sizing so deeper inline folder regions target a stable two-column child layout on medium-and-up widths.
+- Allowed parent treemap folders with inline children to expand across additional parent-grid columns so the deepest visible folder can preserve two normal-sized child columns instead of collapsing into a narrow stack.
+- Kept top-level treemap folders eligible for even wider expansion when they contain large child sets.
+- Why: this makes deep treemap nesting prioritize readable child-card width instead of squeezing the deepest level into undersized columns.
+
+### Architecture Documentation
+- Updated `Architecture.md` to add the final layout contract for this release:
+- workspace card grids use denser responsive column counts than before,
+- nested treemap folders preserve a two-column child layout at deeper levels when space allows,
+- ancestor folders may widen to support that deeper child-card sizing.
+- Why: these density and width-propagation rules now materially affect how users read and organize dense folder trees, so they belong in the architecture contract.
+
+### Version
+- Bumped the app version from `2.49.0` to `2.50.0` using the documented minor-version workflow (`version.json` as the only app version source).
