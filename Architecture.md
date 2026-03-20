@@ -104,6 +104,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Workspace child-card grids use denser responsive column counts so cards render narrower by default than in earlier releases 
 | UX | Deep nested treemap folders preserve a two-column child layout at medium-and-up widths when space is available 
 | UX | Ancestor treemap folders may widen across additional parent-grid columns to preserve readable deeper child-card widths 
+| UX | Long checkbox-card titles in workspace cards wrap within the card boundary and must not overflow before multiline layout engages 
 | UX | Treemap view preference persists across refresh in local browser storage 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
@@ -352,6 +353,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Treemap folder inline-child regions may become internally scrollable once they exceed a practical height budget.
 - In deeper nested treemap levels, inline child grids should stabilize around a two-column layout on medium-and-up widths when practical.
 - Parent treemap folders may widen across additional parent-grid columns to preserve readable child width for deeper visible folders.
+- Checkbox-card title rows must preserve `min-w-0` shrink behavior so long titles wrap inside the card instead of overflowing past the card edge first.
 - Non-folder cards hide sub-note area in workspace.
 - Drawing editor in workspace supports tool-based drawing, persistent group selection, transform, and style updates.
 
@@ -600,6 +602,7 @@ Verify the product behavior items below:
 - Type change is non-destructive: switching type does not delete hidden blocks/children.
 - Tree icons match card type (`note`, `link`, `image`, `drawing`, `folder`) with checkbox rows as explicit exception (no extra icon).
 - Checkbox quick toggle works in tree/grid for checkbox-type cards.
+- Long checkbox-card titles in workspace wrap inside the card boundary instead of overflowing before multiline wrapping engages.
 - Can reorder blocks via drag and up/down actions.
 - Bullet keyboard controls work:
 - Tab/Shift+Tab indent, Enter add bullet, Backspace empty-item behavior.

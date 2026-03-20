@@ -498,3 +498,19 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ### Version
 - Bumped the app version from `2.49.0` to `2.50.0` using the documented minor-version workflow (`version.json` as the only app version source).
+
+### Release `2.51.0`
+
+### Checkbox Card Text Containment
+- Fixed workspace checkbox-card title wrapping so long text now wraps within the card boundaries instead of visually spilling past the card edge before multiline layout engages.
+- Added the missing shrink constraints on the checkbox-card text container in the shared workspace card renderer.
+- Why: checkbox cards were breaking the visual card boundary contract for long titles, which made dense grids harder to scan and feel less stable than other card types.
+
+### Architecture Documentation
+- Updated `Architecture.md` to make checkbox-card text containment explicit:
+- long checkbox titles in workspace cards must wrap inside card bounds,
+- flex-layout shrink constraints must not allow checkbox text to overflow before wrapping.
+- Why: this is a visible rendering contract for one of the primary card types and should be preserved during future shared-card renderer changes.
+
+### Version
+- Bumped the app version from `2.50.0` to `2.51.0` using the documented minor-version workflow (`version.json` as the only app version source).

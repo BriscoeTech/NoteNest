@@ -2012,9 +2012,9 @@ function GridCardItem({
             onClick={(e) => e.stopPropagation()}
           />
         )}
-        <div className="flex-1 w-full flex flex-col items-center">
+        <div className="flex-1 w-full min-w-0 flex flex-col items-center">
         {!isMediaCard && (
-          <div className={cn("w-full", showInlineChildren && checkboxBlock && "flex items-start gap-2")}>
+          <div className={cn("w-full min-w-0", showInlineChildren && checkboxBlock && "flex items-start gap-2")}>
             {showInlineChildren && checkboxBlock && (
               <input
                 type="checkbox"
@@ -2028,7 +2028,7 @@ function GridCardItem({
             <div
               ref={titleRef}
               className={cn(
-                "text-sm font-medium w-full px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
+                "text-sm font-medium w-full min-w-0 px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
                 "cursor-text select-text",
                 checkboxBlock ? "text-left" : "text-center",
                 checkboxBlock?.checked && "line-through text-muted-foreground"
