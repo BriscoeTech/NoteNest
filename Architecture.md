@@ -99,6 +99,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
 | UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline folder-child rendering 
+| UX | Treemap folder cards use adaptive nested masonry columns for visible inline children instead of a fixed single-column stack 
+| UX | Oversized treemap folder child regions are height-constrained and scroll internally instead of expanding without bound 
 | UX | Treemap view preference persists across refresh in local browser storage 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
 | UX | Grid drawing previews render from current stroke data to avoid stale style/width display 
@@ -130,6 +132,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 3. App updates current scope (`currentCardId`) and tree selection state.
 4. Workspace shows current card content and, when applicable, children grid.
 5. When treemap mode is enabled, workspace still uses the same card tiles and actions, but folder cards also render visible descendants inline inside the folder card.
+6. Dense treemap folders should trade horizontal space before vertical overflow by adding nested columns for visible inline children.
+7. If an inline child region still becomes too tall, it should become internally scrollable rather than forcing one folder card to grow without bound.
 
 ### 3.9 Refresh and recovery behavior
 1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
@@ -339,6 +343,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Child-card drag reorder UI shows a before/after insertion indicator while dragging.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
 - Folder cards in grid use folder-style shape while keeping standard card color theme.
+- In treemap mode, folder-card inline children use adaptive nested masonry columns rather than a fixed single-column stack.
+- Treemap folder inline-child regions may become internally scrollable once they exceed a practical height budget.
 - Non-folder cards hide sub-note area in workspace.
 - Drawing editor in workspace supports tool-based drawing, persistent group selection, transform, and style updates.
 
@@ -409,6 +415,8 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - Treemap mode must not introduce a separate note/checkbox/link/image/drawing card implementation with divergent layout, spacing, menu, or interaction behavior.
 - The only intended rendering difference between workspace `grid` and workspace `treemap` is that treemap folder cards may render visible descendant cards inline inside the same folder card shell.
 - Shared card-grid layout decisions such as masonry row behavior, responsive column rules, and shared spacing constants should come from shared code paths/constants rather than duplicated per-mode values.
+- Treemap folder inline-child layout should adapt column count to visible child density so the UI consumes available width before creating extreme vertical growth.
+- When inline folder content still exceeds a practical height, the folder should constrain that region and allow internal scrolling rather than expanding indefinitely.
 - Shared interactions such as right-click menus, `...` menus, rename, double-click open, and drag-reorder should be implemented through shared controller/render paths wherever the behavior contract is the same.
 - When a feature applies to both workspace modes, implementation should extend the shared path rather than copy the feature into a second mode-specific renderer.
 
@@ -574,6 +582,8 @@ Verify the product behavior items below:
 - The treemap toggle appears in the top workspace header, not in the sub-notes content toolbar.
 - Treemap restores the previously selected mode after refresh.
 - Treemap drag-reorder works per visible sibling group, including inside expanded folders.
+- Treemap folder inline children expand into additional masonry columns as density grows instead of remaining a single tall column.
+- Very large treemap folder child regions become internally scrollable instead of forcing unbounded card height.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
 - Tree and workspace normal-card menu ordering stays in sync for shared actions (`Add Note`, `Rename`, `Move to...`, `Move Up`, `Move Down`, `Change type...`, `Delete`).
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.

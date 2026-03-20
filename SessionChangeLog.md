@@ -461,3 +461,17 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ### Version
 - Bumped the app version from `2.48.0` to `2.49.0` using the documented minor-version workflow (`version.json` as the only app version source).
+
+### Treemap Folder Density Improvements
+- Changed treemap folder internals from a single vertical child list to an adaptive masonry-style nested grid.
+- Nested folder children now add columns based on child count instead of always stacking into one long strip.
+- Large inline child areas now cap their height and scroll internally, preventing a single expanded folder from pushing the overall workspace far off-screen.
+- Preserved treemap-local drag reorder inside folder child groups while switching nested layout from single-column list behavior to multi-column packing.
+- Why: treemap folders now use available horizontal space more intelligently before falling back to scrolling, which keeps overview quality higher for dense note collections.
+
+### Architecture Documentation
+- Updated `Architecture.md` to define the new treemap folder contract:
+- inline folder children use adaptive nested masonry columns,
+- oversized inline child regions are height-constrained and scroll internally,
+- the goal is to trade width before height when a folder contains many visible descendants.
+- Why: this makes the nested treemap layout behavior explicit instead of leaving it as an incidental implementation detail.

@@ -1735,7 +1735,16 @@ interface SortableCardGridProps {
 
 const MASONRY_ROW_HEIGHT = 4;
 const MASONRY_GAP = 8;
-const NESTED_FOLDER_CHILDREN_CLASS = "space-y-2";
+function getNestedChildrenGridClassName(childCount: number) {
+  const columnClassName =
+    childCount <= 3
+      ? "grid-cols-1"
+      : childCount <= 8
+        ? "grid-cols-1 md:grid-cols-2"
+        : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+
+  return cn("grid auto-rows-[4px] gap-2 transition-all items-start", columnClassName);
+}
 
 function getChildrenGridClassName(sidebarOpen: boolean) {
   return cn(
@@ -1829,7 +1838,7 @@ function GridCardItem({
   dropIndicator,
   inlineChildren = false,
   sortable = true,
-  nestedGapClassName = NESTED_FOLDER_CHILDREN_CLASS,
+  nestedGapClassName,
   onNavigateCardById,
   onOpenCreateTypePicker,
   onMoveStartById,
@@ -1903,6 +1912,8 @@ function GridCardItem({
   const visibleChildren = card.children
     .filter((child) => !child.isDeleted)
     .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+  const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length);
+  const shouldConstrainInlineChildren = visibleChildren.length > 6;
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -2099,12 +2110,17 @@ function GridCardItem({
           </div>
         )}
         {showInlineChildren && (
-          <div className="w-full mt-4">
+          <div
+            className={cn(
+              "w-full mt-4",
+              shouldConstrainInlineChildren && "max-h-[70vh] overflow-y-auto pr-1"
+            )}
+          >
             {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onReorderCardById && onReorderChildren && (
               <SortableCardGrid
                 cards={visibleChildren}
-                className={nestedGapClassName}
-                strategy={verticalListSortingStrategy}
+                className={nestedChildrenClassName}
+                strategy={rectSortingStrategy}
                 onReorderIds={(ids) => onReorderChildren(card.id, ids)}
                 renderCard={(child, childDropIndicator) => (
                   <GridCardItem
@@ -2120,7 +2136,7 @@ function GridCardItem({
                     onReorder={(dir) => onReorderCardById(child.id, dir)}
                     dropIndicator={childDropIndicator}
                     inlineChildren={true}
-                    nestedGapClassName={nestedGapClassName}
+                    nestedGapClassName={nestedChildrenClassName}
                     onNavigateCardById={onNavigateCardById}
                     onOpenCreateTypePicker={onOpenCreateTypePicker}
                     onMoveStartById={onMoveStartById}
@@ -2650,7 +2666,6 @@ export function WorkspacePanel({
                   onReorder={(dir) => onReorderCard(card.id, dir)}
                   dropIndicator={dropIndicator}
                   inlineChildren={true}
-                  nestedGapClassName={NESTED_FOLDER_CHILDREN_CLASS}
                   onNavigateCardById={onNavigateCard}
                   onOpenCreateTypePicker={openCreateTypePicker}
                   onMoveStartById={handleMoveStart}
