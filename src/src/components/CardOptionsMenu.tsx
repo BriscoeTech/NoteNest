@@ -75,6 +75,10 @@ export function CardOptionsMenu({
   const isControlled = typeof open === 'boolean';
   const menuOpen = isControlled ? open : internalOpen;
   const menuAnchorPoint = anchorPoint ?? internalAnchorPoint ?? { x: 0, y: 0 };
+  const hasPrimaryActions = Boolean(onOpen || (isFolder && onAddNote) || onRename || onMove);
+  const hasMoveActions = Boolean(onMoveUp || onMoveDown);
+  const hasExpandActions = Boolean(hasChildren && (onExpandAll || onCollapseAll));
+  const hasTypeOrExpandActions = Boolean(onChangeType || hasExpandActions);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isControlled) {
@@ -146,8 +150,7 @@ export function CardOptionsMenu({
                 Move to...
               </DropdownMenuItem>
             )}
-            {(onOpen || (isFolder && onAddNote) || onRename || onMove) &&
-              (onMoveUp || onMoveDown || onChangeType || (hasChildren && (onExpandAll || onCollapseAll)) || onDelete) && (
+            {hasPrimaryActions && (
                 <DropdownMenuSeparator />
               )}
             {onMoveUp && (
@@ -162,7 +165,7 @@ export function CardOptionsMenu({
                 Move Down
               </DropdownMenuItem>
             )}
-            {(onMoveUp || onMoveDown) && (onChangeType || (hasChildren && (onExpandAll || onCollapseAll)) || onDelete) && (
+            {hasMoveActions && (
               <DropdownMenuSeparator />
             )}
             {onChangeType && (
@@ -171,7 +174,7 @@ export function CardOptionsMenu({
                 Change type...
               </DropdownMenuItem>
             )}
-            {onChangeType && hasChildren && (onExpandAll || onCollapseAll) && <DropdownMenuSeparator />}
+            {onChangeType && hasExpandActions && <DropdownMenuSeparator />}
             {hasChildren && onExpandAll && (
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onExpandAll(); }}>
                 <ChevronsUpDown className="mr-2 h-4 w-4" />
@@ -184,7 +187,7 @@ export function CardOptionsMenu({
                 Collapse All
               </DropdownMenuItem>
             )}
-            {(onChangeType || (hasChildren && (onExpandAll || onCollapseAll))) && onDelete && <DropdownMenuSeparator />}
+            {hasTypeOrExpandActions && <DropdownMenuSeparator />}
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="text-destructive focus:text-destructive"

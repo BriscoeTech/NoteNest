@@ -3,6 +3,40 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-03-28
+
+### Card Options Menu - Align Separator Conditions With Prop Types
+
+**Author**: Codex
+
+**Problem**:
+- `npm run check` failed in `src/src/components/CardOptionsMenu.tsx` with `TS2774` because several separator conditions still treated required callbacks as optional truthy checks.
+- The component prop types and the render-condition style had drifted out of sync.
+
+**Changes**:
+- Replaced the inline separator truthiness chains with explicit derived booleans for primary actions, move actions, expand actions, and type/expand sections.
+- Removed the always-true `... || onDelete` style checks that TypeScript correctly rejected because `onDelete` is required.
+
+**Result**:
+- `npm run check` now passes again.
+- Menu rendering behavior stays the same, but the code now matches the prop contract and is easier to maintain.
+
+### Export Backups - Timestamped Filenames (v2.52.0)
+
+**Author**: Codex
+
+**Problem**:
+- Exported backup filenames used only the date, so multiple exports on the same day produced the same filename and made backups easier to overwrite or confuse.
+
+**Changes**:
+- Updated `src/src/hooks/use-notes-store.ts` so export now builds filenames as `notes-backup-YYYY-MM-DD_HH-MM.json` using the local export time.
+- Reused the same `Date` instance for both `exportedAt` metadata and filename generation so the exported timestamp and filename stay aligned.
+- Updated `Architecture.md` to document the timestamped export filename contract in the feature inventory, import/export flow, and export data contract sections.
+
+**Result**:
+- Repeated exports on the same day now produce distinct filenames.
+- Backup files are easier to identify chronologically before import or external storage.
+
 ## 2026-03-03
 
 ### Dev Server Tooling

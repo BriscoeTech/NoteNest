@@ -80,6 +80,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view 
 | Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action 
 | Data safety | Export JSON backup 
+| Data safety | Export filenames include local date and hour/minute so repeated same-day exports do not collide (`notes-backup-YYYY-MM-DD_HH-MM.json`) 
 | Data safety | Import JSON backup with merge/override modes 
 | Data safety | Invalid import file shows error feedback and does not apply changes 
 | Data safety | Import is parse-validated; payload shape validation is minimal 
@@ -169,10 +170,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.5 Import and export
 1. Export serializes full tree with version metadata.
-2. Import accepts JSON and prompts for mode:
+2. Export filename includes local date plus hour/minute so repeated exports on the same day produce distinct files: `notes-backup-YYYY-MM-DD_HH-MM.json`.
+3. Import accepts JSON and prompts for mode:
 - `merge`: append imported root cards to existing cards.
 - `override`: replace current cards with imported cards.
-3. Legacy import format with `categories` is migrated to card tree.
+4. Legacy import format with `categories` is migrated to card tree.
 
 ### 3.6 Quick task toggling
 1. If a card is checkbox-type and contains a checkbox block, user can toggle it directly from tree rows.
@@ -501,6 +503,7 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
 - `cards`: full root card array including nested children.
+- Download filename format: `notes-backup-YYYY-MM-DD_HH-MM.json` using the local device time at export.
 
 ### 8.2 Import accepted formats
 - Current format: `{ cards: Card[] }` optionally with metadata.

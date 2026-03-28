@@ -573,14 +573,23 @@ export function useNotesStore() {
 
   const exportData = useCallback(async () => {
     const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
+    const now = new Date();
+    const timestamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-') + '_' + [
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+    ].join('-');
     const data = {
       version: resolvedVersion,
-      exportedAt: new Date().toISOString(),
+      exportedAt: now.toISOString(),
       cards: state.cards
     };
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
-    const filename = `notes-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const filename = `notes-backup-${timestamp}.json`;
     
     // Direct download is more reliable than Web Share API for "Export" functionality
     // especially ensuring it runs synchronously within the user gesture
