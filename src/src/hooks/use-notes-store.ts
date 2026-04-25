@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock, CardType, GraphBlock } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
+  normalizeGraphBlock,
   removeCardFromTree, 
   addCardToParent, 
   updateCardInTree,
@@ -19,26 +20,6 @@ const STORAGE_KEY = 'notecards_data';
 const defaultState: AppState = {
   cards: []
 };
-
-function normalizeGraphBlock(block: GraphBlock): GraphBlock {
-  const rows = Math.max(2, Math.floor(Number.isFinite(block.rows) ? block.rows : 2));
-  const columns = Math.max(2, Math.floor(Number.isFinite(block.columns) ? block.columns : 2));
-  const totalCells = rows * columns;
-  const cells = Array.from({ length: totalCells }, (_, index) => {
-    const existing = block.cells?.[index];
-    return {
-      text: existing?.text ?? '',
-      color: existing?.color ?? '#ffffff',
-    };
-  });
-
-  return {
-    ...block,
-    rows,
-    columns,
-    cells,
-  };
-}
 
 function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
   return blocks.map((block) => {

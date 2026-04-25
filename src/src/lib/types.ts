@@ -84,6 +84,62 @@ export interface GraphBlock {
   cells: GraphCell[];
 }
 
+export const GRAPH_MIN_SIZE = 2;
+export const DEFAULT_GRAPH_CELL_COLOR = '#ffffff';
+
+export function createEmptyGraphCell(): GraphCell {
+  return { text: '', color: DEFAULT_GRAPH_CELL_COLOR };
+}
+
+export function normalizeGraphDimension(value: number): number {
+  return Math.max(GRAPH_MIN_SIZE, Math.floor(Number.isFinite(value) ? value : GRAPH_MIN_SIZE));
+}
+
+export function createGraphCells(rows: number, columns: number, existingCells?: GraphCell[]): GraphCell[] {
+  const safeRows = normalizeGraphDimension(rows);
+  const safeColumns = normalizeGraphDimension(columns);
+  const totalCells = safeRows * safeColumns;
+  return Array.from({ length: totalCells }, (_, index) => existingCells?.[index] ?? createEmptyGraphCell());
+}
+
+export function reshapeGraphCells(
+  currentCells: GraphCell[],
+  previousRows: number,
+  previousColumns: number,
+  nextRows: number,
+  nextColumns: number
+): GraphCell[] {
+  const safePreviousRows = normalizeGraphDimension(previousRows);
+  const safePreviousColumns = normalizeGraphDimension(previousColumns);
+  const safeNextRows = normalizeGraphDimension(nextRows);
+  const safeNextColumns = normalizeGraphDimension(nextColumns);
+  const nextCells: GraphCell[] = [];
+
+  for (let row = 0; row < safeNextRows; row += 1) {
+    for (let column = 0; column < safeNextColumns; column += 1) {
+      if (row < safePreviousRows && column < safePreviousColumns) {
+        const previousIndex = row * safePreviousColumns + column;
+        nextCells.push(currentCells[previousIndex] ?? createEmptyGraphCell());
+      } else {
+        nextCells.push(createEmptyGraphCell());
+      }
+    }
+  }
+
+  return nextCells;
+}
+
+export function normalizeGraphBlock(block: GraphBlock): GraphBlock {
+  const rows = normalizeGraphDimension(block.rows);
+  const columns = normalizeGraphDimension(block.columns);
+  return {
+    ...block,
+    rows,
+    columns,
+    cells: createGraphCells(rows, columns, block.cells),
+  };
+}
+
 export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock | GraphBlock;
 export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'graph' | 'folder';
 

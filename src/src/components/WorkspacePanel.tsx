@@ -4,7 +4,7 @@ import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, 
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
-import { generateId, getDescendantIds } from '@/lib/types';
+import { createEmptyGraphCell, createGraphCells, DEFAULT_GRAPH_CELL_COLOR, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,8 +71,6 @@ interface BlockEditorProps {
 const DRAWING_PREVIEW_WIDTH = 540;
 const DRAWING_PREVIEW_HEIGHT = 720;
 
-const GRAPH_MIN_SIZE = 2;
-const DEFAULT_GRAPH_COLOR = '#ffffff';
 const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
 
 const CARD_TYPE_LABELS: Record<CardType, string> = {
@@ -96,32 +94,6 @@ function CardTypeIcon({ cardType, className }: { cardType: CardType; className?:
   return <FileText className={iconClass} />;
 }
 
-function createGraphCells(rows: number, columns: number, existingCells?: GraphCell[]): GraphCell[] {
-  const totalCells = rows * columns;
-  return Array.from({ length: totalCells }, (_, index) => existingCells?.[index] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
-}
-
-function reshapeGraphCells(
-  currentCells: GraphCell[],
-  previousRows: number,
-  previousColumns: number,
-  nextRows: number,
-  nextColumns: number
-): GraphCell[] {
-  const nextCells: GraphCell[] = [];
-  for (let row = 0; row < nextRows; row += 1) {
-    for (let column = 0; column < nextColumns; column += 1) {
-      if (row < previousRows && column < previousColumns) {
-        const previousIndex = row * previousColumns + column;
-        nextCells.push(currentCells[previousIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
-      } else {
-        nextCells.push({ text: '', color: DEFAULT_GRAPH_COLOR });
-      }
-    }
-  }
-  return nextCells;
-}
-
 function createGraphCellKey(row: number, column: number): string {
   return `${row}:${column}`;
 }
@@ -133,17 +105,6 @@ function createEmptyGraphBlock(): GraphBlock {
     rows: GRAPH_MIN_SIZE,
     columns: GRAPH_MIN_SIZE,
     cells: createGraphCells(GRAPH_MIN_SIZE, GRAPH_MIN_SIZE),
-  };
-}
-
-function normalizeGraphBlock(block: GraphBlock): GraphBlock {
-  const rows = Math.max(GRAPH_MIN_SIZE, Math.floor(Number.isFinite(block.rows) ? block.rows : GRAPH_MIN_SIZE));
-  const columns = Math.max(GRAPH_MIN_SIZE, Math.floor(Number.isFinite(block.columns) ? block.columns : GRAPH_MIN_SIZE));
-  return {
-    ...block,
-    rows,
-    columns,
-    cells: createGraphCells(rows, columns, block.cells),
   };
 }
 
@@ -392,7 +353,7 @@ function GraphBlockEditor({
   const [columnInput, setColumnInput] = useState(String(graphBlock.columns));
   const [bufferedCells, setBufferedCells] = useState<Record<string, GraphCell>>({});
   const safeSelectedCellIndex = Math.min(selectedCellIndex, graphBlock.cells.length - 1);
-  const selectedCell = graphBlock.cells[safeSelectedCellIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR };
+  const selectedCell = graphBlock.cells[safeSelectedCellIndex] ?? createEmptyGraphCell();
 
   useEffect(() => {
     setRowInput(String(graphBlock.rows));
@@ -415,7 +376,7 @@ function GraphBlockEditor({
     for (let row = 0; row < graphBlock.rows; row += 1) {
       for (let column = 0; column < graphBlock.columns; column += 1) {
         const currentIndex = row * graphBlock.columns + column;
-        const currentCell = graphBlock.cells[currentIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR };
+        const currentCell = graphBlock.cells[currentIndex] ?? createEmptyGraphCell();
         const cellKey = createGraphCellKey(row, column);
         if (row >= nextRows || column >= nextColumns) {
           nextBufferedCells[cellKey] = currentCell;
@@ -431,10 +392,10 @@ function GraphBlockEditor({
         const cellKey = createGraphCellKey(row, column);
         if (row < graphBlock.rows && column < graphBlock.columns) {
           const currentIndex = row * graphBlock.columns + column;
-          nextCells.push(graphBlock.cells[currentIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+          nextCells.push(graphBlock.cells[currentIndex] ?? createEmptyGraphCell());
           continue;
         }
-        nextCells.push(nextBufferedCells[cellKey] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+        nextCells.push(nextBufferedCells[cellKey] ?? createEmptyGraphCell());
       }
     }
 
@@ -591,7 +552,7 @@ function GraphBlockEditor({
                   isSelectedCell && 'z-10 ring-2 ring-primary ring-inset'
                 )}
                 style={{
-                  backgroundColor: cell.color || DEFAULT_GRAPH_COLOR,
+                  backgroundColor: cell.color || DEFAULT_GRAPH_CELL_COLOR,
                   borderTop: rowIndex > 0 ? (rowIndex === 1 ? '3px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
                   borderLeft: columnIndex > 0 ? (columnIndex === 1 ? '3px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
                 }}
@@ -619,7 +580,7 @@ function GraphBlockEditor({
             <span className="text-sm text-muted-foreground">Cell color</span>
             <input
               type="color"
-              value={selectedCell.color || DEFAULT_GRAPH_COLOR}
+              value={selectedCell.color || DEFAULT_GRAPH_CELL_COLOR}
               disabled={isRecycleBin}
               onChange={(e) => updateSelectedCell({ color: e.target.value })}
               className="h-12 w-20 cursor-pointer rounded border border-border bg-background p-1"
@@ -2491,7 +2452,7 @@ function GridCardItem({
                     key={`${rowIndex}-${columnIndex}`}
                     className="flex aspect-square min-h-[36px] items-center justify-center p-1 text-[10px] text-center"
                     style={{
-                      backgroundColor: cell.color || DEFAULT_GRAPH_COLOR,
+                      backgroundColor: cell.color || DEFAULT_GRAPH_CELL_COLOR,
                       borderTop: rowIndex > 0 ? (rowIndex === 1 ? '2px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
                       borderLeft: columnIndex > 0 ? (columnIndex === 1 ? '2px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
                     }}

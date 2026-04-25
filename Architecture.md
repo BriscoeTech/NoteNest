@@ -60,6 +60,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Content | Graph editor provides `+` and `-` controls for row and column resizing in addition to numeric entry 
 | Content | Graph cell text renders in black to preserve legibility across cell background colors and themes 
 | Content | Shrinking a graph temporarily buffers trimmed cells for the current editor session so immediate re-expansion restores them before the editor is closed 
+| Content | Graph resize and normalization rules preserve cell row/column coordinates consistently across editor interactions, load normalization, and import normalization 
 | Content | Strict card-type rendering: only active type UI is shown; other block data remains stored 
 | Content | Reorder blocks with drag and with move up/down 
 | Content | One image block per card in current UI flows (replace existing image on add) 
@@ -231,6 +232,7 @@ Source of truth: `src/src/lib/types.ts`.
 - Graph blocks must persist exactly `rows * columns` cells after normalization/import.
 - Graph cell text must render in black in current UI flows.
 - Graph session-only resize buffering must not be persisted to the stored block model.
+- Graph normalization logic must be shared across editor and persistence paths so cell coordinates are preserved consistently during resize, load normalization, and import normalization.
 - Children are allowed under any card in data model; UI gating controls when sub-note area is shown.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.

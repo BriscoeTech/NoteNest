@@ -54,6 +54,18 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 **Result**:
 - Graph resizing is substantially more predictable and forgiving during editing, especially when experimenting with temporary shrink/expand changes.
 
+### Graph Normalization Alignment
+
+**Author**: Codex
+
+**Changes**:
+- Moved graph dimension/cell normalization helpers into `src/src/lib/types.ts` so graph rules live in one shared domain layer.
+- Updated `src/src/hooks/use-notes-store.ts` to use the shared graph normalization helpers during load/import normalization.
+- Updated `src/src/components/WorkspacePanel.tsx` to use the same shared helpers/constants used by the store.
+
+**Result**:
+- Graph coordinate-preserving behavior is now aligned across editor resizing, load normalization, and import normalization, reducing future drift between interactive editing and persisted/imported graph data.
+
 ## 2026-03-28
 
 ### Card Options Menu - Align Separator Conditions With Prop Types
