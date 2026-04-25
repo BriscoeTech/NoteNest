@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, RefreshCw } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, RefreshCw, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock } from '@/lib/types';
+import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock, GraphBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
@@ -69,13 +69,14 @@ interface TreeItemProps {
   onDrop: (targetId: string, position: 'before' | 'after') => void;
 }
 
-const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
+const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
 const CARD_TYPE_LABELS: Record<CardType, string> = {
   note: 'Note',
   checkbox: 'Checkbox',
   link: 'Link',
   image: 'Image',
   drawing: 'Drawing',
+  graph: 'Graph',
   folder: 'Folder',
 };
 
@@ -85,7 +86,18 @@ function typeIcon(type: CardType) {
   if (type === 'link') return <LinkIcon className="w-4 h-4" />;
   if (type === 'image') return <ImageIcon className="w-4 h-4" />;
   if (type === 'drawing') return <Brush className="w-4 h-4" />;
+  if (type === 'graph') return <LayoutGrid className="w-4 h-4" />;
   return <FileText className="w-4 h-4" />;
+}
+
+function createEmptyGraphBlock(): GraphBlock {
+  return {
+    id: generateId(),
+    type: 'graph',
+    rows: 2,
+    columns: 2,
+    cells: Array.from({ length: 4 }, () => ({ text: '', color: '#ffffff' })),
+  };
 }
 
 function TreeItem({
@@ -166,6 +178,10 @@ function TreeItem({
         historyFuture: [],
       };
       onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'graph') {
+      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
     }
   };
 
@@ -604,6 +620,10 @@ export function CategoryTree({
         historyFuture: [],
       };
       onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'graph') {
+      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
     }
   };
 
@@ -645,6 +665,8 @@ export function CategoryTree({
         historyPast: [],
         historyFuture: [],
       }]);
+    } else if (type === 'graph') {
+      onUpdateCardBlocks(id, [createEmptyGraphBlock()]);
     }
     onSelectCard(id);
   };

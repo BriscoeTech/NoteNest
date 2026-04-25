@@ -49,10 +49,17 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Prevent invalid cyclic moves 
 | Notes model | Manual reorder (up/down and drag reorder) 
 | Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety 
-| Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `folder` 
+| Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `graph`, `folder` 
 | Notes model | Card type changes are non-destructive UI-mode switches (existing data retained) 
 | Notes model | Typed note creation uses a shared type picker dialog (workspace `New Note`) 
-| Content | Card blocks: text, bullets, image, checkbox, link, drawing 
+| Content | Card blocks: text, bullets, image, checkbox, link, drawing, graph 
+| Content | Graph notes store a square-cell matrix with per-cell text and background color 
+| Content | Graph editor enforces a minimum `2 x 2` grid and defaults new graph notes to `2 x 2` 
+| Content | Graph editor emphasizes the divider after row 1 and column 1 with darker separator lines 
+| Content | Graph editor presents column controls before row controls 
+| Content | Graph editor provides `+` and `-` controls for row and column resizing in addition to numeric entry 
+| Content | Graph cell text renders in black to preserve legibility across cell background colors and themes 
+| Content | Shrinking a graph temporarily buffers trimmed cells for the current editor session so immediate re-expansion restores them before the editor is closed 
 | Content | Strict card-type rendering: only active type UI is shown; other block data remains stored 
 | Content | Reorder blocks with drag and with move up/down 
 | Content | One image block per card in current UI flows (replace existing image on add) 
@@ -120,16 +127,19 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.1 Create and edit note
 1. User creates a new note at root or under current scope.
-2. User selects note type from a type picker dialog: note, checkbox, link, image, drawing, or folder.
+2. User selects note type from a type picker dialog: note, checkbox, link, image, drawing, graph, or folder.
 3. New card is inserted under target parent with generated ID and timestamps.
 4. Template note creation can initialize first block based on selected template.
-5. Drawing template creation immediately opens the created note for editing.
+5. Drawing and graph template creation immediately open the created note for editing.
 6. User may change card type from card `...` menus via a type picker dialog.
 7. Type change updates presentation immediately but keeps existing card data (blocks/children) intact.
 8. User edits card title and currently visible type-specific content.
-9. For `folder` type, the content editor is hidden and sub-note area is shown.
-10. Changes are persisted to IndexedDB after state updates.
-11. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile.
+9. For `graph` type, the editor shows column controls before row controls, includes `+` and `-` resize actions, and presents a selectable square grid where each cell stores text and color.
+10. During a graph editing session, trimming rows or columns must buffer hidden cells so an immediate re-expand restores them while the editor remains open.
+11. When the graph editor is closed, only the currently visible matrix remains persisted; session-only buffered cells are discarded.
+12. For `folder` type, the content editor is hidden and sub-note area is shown.
+13. Changes are persisted to IndexedDB after state updates.
+14. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
@@ -204,9 +214,11 @@ Source of truth: `src/src/lib/types.ts`.
 - `Card`:
 - `id`, `title`, `cardType`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `ContentBlock` union:
-- `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`.
+- `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`, `GraphBlock`.
 - `DrawingBlock` scene data:
 - `strokes` plus persistent `groups`, with undo/redo snapshot history storing both.
+- `GraphBlock` matrix data:
+- `rows`, `columns`, and `cells` where each cell stores `text` and `color`.
 - Recycle bin sentinel ID: `RECYCLE_BIN_ID = "__recycle_bin__"`.
 
 ### 4.2 Invariants
@@ -215,6 +227,10 @@ Source of truth: `src/src/lib/types.ts`.
 - `parentId` of root cards is `null`.
 - A card cannot be moved under itself or under any descendant.
 - `cardType` controls visible UI/edit surface; it does not delete hidden blocks or children.
+- Graph notes must keep `rows >= 2` and `columns >= 2`.
+- Graph blocks must persist exactly `rows * columns` cells after normalization/import.
+- Graph cell text must render in black in current UI flows.
+- Graph session-only resize buffering must not be persisted to the stored block model.
 - Children are allowed under any card in data model; UI gating controls when sub-note area is shown.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.

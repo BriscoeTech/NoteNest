@@ -3,6 +3,57 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-04-24
+
+### Graph Note Type and Editor
+
+**Author**: Codex
+
+**Changes**:
+- Added first-class `graph` card type and `GraphBlock` content model in `src/src/lib/types.ts`.
+- Wired graph type creation and type switching through both workspace and tree type pickers.
+- Implemented graph editor UI in `src/src/components/WorkspacePanel.tsx` with:
+- default `2 x 2` grid,
+- minimum `2 x 2` enforcement,
+- selectable cells,
+- per-cell text editing,
+- per-cell background color editing.
+- Added graph previews in workspace cards and graph-aware search support in `src/src/hooks/use-notes-store.ts`.
+- Updated `Architecture.md` to document the graph note feature contract and invariants.
+
+**Result**:
+- Users can create permanent square-grid notes for organizing and comparing ideas.
+
+### Dev Server Script Reliability and LAN Output
+
+**Author**: Codex
+
+**Changes**:
+- Updated `script/dev-server-start.sh` to:
+- default to host `0.0.0.0`,
+- print LAN-accessible URLs,
+- launch Vite directly and detach it cleanly so the server process survives after the script exits.
+- Updated `script/dev-server-stop.sh` so it reliably matches and stops the running Vite/npm dev process.
+
+**Result**:
+- Local dev server startup, restart, and LAN access output are now more reliable on Linux.
+
+## 2026-04-25
+
+### Graph Editor Resizing and Input Refinements
+
+**Author**: Codex
+
+**Changes**:
+- Changed graph row/column numeric inputs to use local draft state so users can clear and replace values without immediate re-clamping.
+- Added `+` and `-` controls for both columns and rows, with column controls ordered before row controls per final UI preference.
+- Changed graph cell text rendering to black in both editor and preview paths for better readability.
+- Fixed graph resize behavior so cells stay anchored to their row/column coordinates when columns or rows are added or removed.
+- Added session-local buffering for trimmed graph cells so shrinking and then re-expanding within the same open editor restores hidden cells before the note is closed.
+
+**Result**:
+- Graph resizing is substantially more predictable and forgiving during editing, especially when experimenting with temporary shrink/expand changes.
+
 ## 2026-03-28
 
 ### Card Options Menu - Align Separator Conditions With Prop Types

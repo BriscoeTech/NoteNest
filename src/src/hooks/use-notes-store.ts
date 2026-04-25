@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType, GraphBlock } from '@/lib/types';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
@@ -20,6 +20,35 @@ const defaultState: AppState = {
   cards: []
 };
 
+function normalizeGraphBlock(block: GraphBlock): GraphBlock {
+  const rows = Math.max(2, Math.floor(Number.isFinite(block.rows) ? block.rows : 2));
+  const columns = Math.max(2, Math.floor(Number.isFinite(block.columns) ? block.columns : 2));
+  const totalCells = rows * columns;
+  const cells = Array.from({ length: totalCells }, (_, index) => {
+    const existing = block.cells?.[index];
+    return {
+      text: existing?.text ?? '',
+      color: existing?.color ?? '#ffffff',
+    };
+  });
+
+  return {
+    ...block,
+    rows,
+    columns,
+    cells,
+  };
+}
+
+function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
+  return blocks.map((block) => {
+    if (block.type === 'graph') {
+      return normalizeGraphBlock(block);
+    }
+    return block;
+  });
+}
+
 function inferCardType(card: Pick<Card, 'blocks' | 'children'> & Partial<Pick<Card, 'cardType'>>): CardType {
   if (card.cardType) return card.cardType;
   if (card.children?.length) return 'folder';
@@ -27,6 +56,7 @@ function inferCardType(card: Pick<Card, 'blocks' | 'children'> & Partial<Pick<Ca
   if (card.blocks.some(b => b.type === 'link')) return 'link';
   if (card.blocks.some(b => b.type === 'image')) return 'image';
   if (card.blocks.some(b => b.type === 'drawing')) return 'drawing';
+  if (card.blocks.some(b => b.type === 'graph')) return 'graph';
   return 'note';
 }
 
@@ -34,6 +64,7 @@ function normalizeCardTree(cards: Card[]): Card[] {
   return cards.map(card => ({
     ...card,
     cardType: inferCardType(card),
+    blocks: normalizeBlocks(card.blocks || []),
     children: normalizeCardTree(card.children || [])
   }));
 }
@@ -68,7 +99,7 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
       id: card.id,
       title: card.title || 'Untitled',
       cardType: inferCardType({ blocks, children: [] }),
-      blocks,
+      blocks: normalizeBlocks(blocks),
       parentId: card.categoryId || null,
       children: [],
       sortOrder: Date.now(),
@@ -541,6 +572,7 @@ export function useNotesStore() {
           const matchesBlocks = card.blocks.some(block => {
             if (block.type === 'text') return block.content.toLowerCase().includes(lowerQuery);
             if (block.type === 'bullets') return block.items.some(i => i.content.toLowerCase().includes(lowerQuery));
+            if (block.type === 'graph') return block.cells.some(cell => cell.text.toLowerCase().includes(lowerQuery));
             return false;
           });
 

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
+import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle, LayoutGrid } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot } from '@/lib/types';
+import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
 import { generateId, getDescendantIds } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +71,9 @@ interface BlockEditorProps {
 const DRAWING_PREVIEW_WIDTH = 540;
 const DRAWING_PREVIEW_HEIGHT = 720;
 
-const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'folder'];
+const GRAPH_MIN_SIZE = 2;
+const DEFAULT_GRAPH_COLOR = '#ffffff';
+const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
 
 const CARD_TYPE_LABELS: Record<CardType, string> = {
   note: 'Note',
@@ -79,6 +81,7 @@ const CARD_TYPE_LABELS: Record<CardType, string> = {
   link: 'Link',
   image: 'Image',
   drawing: 'Drawing',
+  graph: 'Graph',
   folder: 'Folder',
 };
 
@@ -89,7 +92,59 @@ function CardTypeIcon({ cardType, className }: { cardType: CardType; className?:
   if (cardType === 'link') return <LinkIcon className={iconClass} />;
   if (cardType === 'image') return <Image className={iconClass} />;
   if (cardType === 'drawing') return <Brush className={iconClass} />;
+  if (cardType === 'graph') return <LayoutGrid className={iconClass} />;
   return <FileText className={iconClass} />;
+}
+
+function createGraphCells(rows: number, columns: number, existingCells?: GraphCell[]): GraphCell[] {
+  const totalCells = rows * columns;
+  return Array.from({ length: totalCells }, (_, index) => existingCells?.[index] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+}
+
+function reshapeGraphCells(
+  currentCells: GraphCell[],
+  previousRows: number,
+  previousColumns: number,
+  nextRows: number,
+  nextColumns: number
+): GraphCell[] {
+  const nextCells: GraphCell[] = [];
+  for (let row = 0; row < nextRows; row += 1) {
+    for (let column = 0; column < nextColumns; column += 1) {
+      if (row < previousRows && column < previousColumns) {
+        const previousIndex = row * previousColumns + column;
+        nextCells.push(currentCells[previousIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+      } else {
+        nextCells.push({ text: '', color: DEFAULT_GRAPH_COLOR });
+      }
+    }
+  }
+  return nextCells;
+}
+
+function createGraphCellKey(row: number, column: number): string {
+  return `${row}:${column}`;
+}
+
+function createEmptyGraphBlock(): GraphBlock {
+  return {
+    id: generateId(),
+    type: 'graph',
+    rows: GRAPH_MIN_SIZE,
+    columns: GRAPH_MIN_SIZE,
+    cells: createGraphCells(GRAPH_MIN_SIZE, GRAPH_MIN_SIZE),
+  };
+}
+
+function normalizeGraphBlock(block: GraphBlock): GraphBlock {
+  const rows = Math.max(GRAPH_MIN_SIZE, Math.floor(Number.isFinite(block.rows) ? block.rows : GRAPH_MIN_SIZE));
+  const columns = Math.max(GRAPH_MIN_SIZE, Math.floor(Number.isFinite(block.columns) ? block.columns : GRAPH_MIN_SIZE));
+  return {
+    ...block,
+    rows,
+    columns,
+    cells: createGraphCells(rows, columns, block.cells),
+  };
 }
 
 function renderDrawingStrokes(
@@ -313,6 +368,284 @@ function createDrawingPreviewDataUrl(strokes: DrawingStroke[]): string {
   return canvas.toDataURL('image/png');
 }
 
+function GraphBlockEditor({
+  block,
+  isRecycleBin,
+  isSelected,
+  onUpdate,
+  onDelete,
+  dragHandleProps,
+}: {
+  block: GraphBlock;
+  isRecycleBin: boolean;
+  isSelected: boolean;
+  onUpdate: (block: GraphBlock) => void;
+  onDelete: () => void;
+  dragHandleProps?: {
+    attributes: Record<string, any>;
+    listeners: Record<string, any>;
+  };
+}) {
+  const graphBlock = normalizeGraphBlock(block);
+  const [selectedCellIndex, setSelectedCellIndex] = useState(0);
+  const [rowInput, setRowInput] = useState(String(graphBlock.rows));
+  const [columnInput, setColumnInput] = useState(String(graphBlock.columns));
+  const [bufferedCells, setBufferedCells] = useState<Record<string, GraphCell>>({});
+  const safeSelectedCellIndex = Math.min(selectedCellIndex, graphBlock.cells.length - 1);
+  const selectedCell = graphBlock.cells[safeSelectedCellIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR };
+
+  useEffect(() => {
+    setRowInput(String(graphBlock.rows));
+  }, [graphBlock.rows]);
+
+  useEffect(() => {
+    setColumnInput(String(graphBlock.columns));
+  }, [graphBlock.columns]);
+
+  const commitDimension = (key: 'rows' | 'columns', rawValue: string) => {
+    const parsedValue = parseInt(rawValue, 10);
+    const requestedValue = Math.max(
+      GRAPH_MIN_SIZE,
+      Number.isFinite(parsedValue) ? parsedValue : key === 'rows' ? graphBlock.rows : graphBlock.columns
+    );
+    const nextRows = key === 'rows' ? requestedValue : graphBlock.rows;
+    const nextColumns = key === 'columns' ? requestedValue : graphBlock.columns;
+    const nextBufferedCells = { ...bufferedCells };
+
+    for (let row = 0; row < graphBlock.rows; row += 1) {
+      for (let column = 0; column < graphBlock.columns; column += 1) {
+        const currentIndex = row * graphBlock.columns + column;
+        const currentCell = graphBlock.cells[currentIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR };
+        const cellKey = createGraphCellKey(row, column);
+        if (row >= nextRows || column >= nextColumns) {
+          nextBufferedCells[cellKey] = currentCell;
+        } else {
+          delete nextBufferedCells[cellKey];
+        }
+      }
+    }
+
+    const nextCells: GraphCell[] = [];
+    for (let row = 0; row < nextRows; row += 1) {
+      for (let column = 0; column < nextColumns; column += 1) {
+        const cellKey = createGraphCellKey(row, column);
+        if (row < graphBlock.rows && column < graphBlock.columns) {
+          const currentIndex = row * graphBlock.columns + column;
+          nextCells.push(graphBlock.cells[currentIndex] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+          continue;
+        }
+        nextCells.push(nextBufferedCells[cellKey] ?? { text: '', color: DEFAULT_GRAPH_COLOR });
+      }
+    }
+
+    const nextBlock = normalizeGraphBlock({
+      ...graphBlock,
+      rows: nextRows,
+      columns: nextColumns,
+      cells: nextCells,
+    });
+    setBufferedCells(nextBufferedCells);
+    onUpdate(nextBlock);
+    setSelectedCellIndex((current) => Math.min(current, nextBlock.cells.length - 1));
+    if (key === 'rows') {
+      setRowInput(String(nextBlock.rows));
+      return;
+    }
+    setColumnInput(String(nextBlock.columns));
+  };
+
+  const incrementDimension = (key: 'rows' | 'columns') => {
+    const currentValue = key === 'rows' ? graphBlock.rows : graphBlock.columns;
+    commitDimension(key, String(currentValue + 1));
+  };
+
+  const decrementDimension = (key: 'rows' | 'columns') => {
+    const currentValue = key === 'rows' ? graphBlock.rows : graphBlock.columns;
+    commitDimension(key, String(Math.max(GRAPH_MIN_SIZE, currentValue - 1)));
+  };
+
+  const updateSelectedCell = (patch: Partial<GraphCell>) => {
+    const nextCells = graphBlock.cells.map((cell, index) => (
+      index === safeSelectedCellIndex ? { ...cell, ...patch } : cell
+    ));
+    onUpdate({ ...graphBlock, cells: nextCells });
+  };
+
+  return (
+    <div className="group relative flex items-start gap-1">
+      {isSelected && dragHandleProps && (
+        <div
+          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
+          {...dragHandleProps.attributes}
+          {...dragHandleProps.listeners}
+        >
+          <GripVertical className="w-3 h-3" />
+        </div>
+      )}
+      <div className="flex-1 space-y-4 rounded bg-muted/30 p-3">
+        <div className="grid gap-3 md:grid-cols-[auto_auto_1fr] md:items-end">
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Columns</span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={isRecycleBin || graphBlock.columns <= GRAPH_MIN_SIZE}
+                onClick={() => decrementDimension('columns')}
+                className="h-10 w-10 shrink-0"
+                aria-label="Remove column"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Input
+                type="number"
+                min={GRAPH_MIN_SIZE}
+                value={columnInput}
+                disabled={isRecycleBin}
+                onChange={(e) => setColumnInput(e.target.value)}
+                onBlur={(e) => commitDimension('columns', e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
+                className="w-24 bg-background"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={isRecycleBin}
+                onClick={() => incrementDimension('columns')}
+                className="h-10 w-10 shrink-0"
+                aria-label="Add column"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Rows</span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={isRecycleBin || graphBlock.rows <= GRAPH_MIN_SIZE}
+                onClick={() => decrementDimension('rows')}
+                className="h-10 w-10 shrink-0"
+                aria-label="Remove row"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Input
+                type="number"
+                min={GRAPH_MIN_SIZE}
+                value={rowInput}
+                disabled={isRecycleBin}
+                onChange={(e) => setRowInput(e.target.value)}
+                onBlur={(e) => commitDimension('rows', e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
+                className="w-24 bg-background"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={isRecycleBin}
+                onClick={() => incrementDimension('rows')}
+                className="h-10 w-10 shrink-0"
+                aria-label="Add row"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </label>
+          <div className="text-sm text-muted-foreground">
+            Select a square, then edit its text or color.
+          </div>
+        </div>
+
+        <div
+          className="grid gap-0 overflow-auto rounded-md border border-border bg-background"
+          style={{ gridTemplateColumns: `repeat(${graphBlock.columns}, minmax(72px, 1fr))` }}
+        >
+          {graphBlock.cells.map((cell, index) => {
+            const rowIndex = Math.floor(index / graphBlock.columns);
+            const columnIndex = index % graphBlock.columns;
+            const isSelectedCell = index === safeSelectedCellIndex;
+            return (
+              <button
+                key={`${rowIndex}-${columnIndex}`}
+                type="button"
+                disabled={isRecycleBin}
+                onClick={() => setSelectedCellIndex(index)}
+                className={cn(
+                  'relative flex aspect-square min-h-[72px] items-center justify-center p-2 text-center text-sm transition-colors',
+                  !isRecycleBin && 'hover:brightness-95',
+                  isSelectedCell && 'z-10 ring-2 ring-primary ring-inset'
+                )}
+                style={{
+                  backgroundColor: cell.color || DEFAULT_GRAPH_COLOR,
+                  borderTop: rowIndex > 0 ? (rowIndex === 1 ? '3px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
+                  borderLeft: columnIndex > 0 ? (columnIndex === 1 ? '3px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
+                }}
+              >
+                <span className="line-clamp-4 whitespace-pre-wrap break-words text-black">
+                  {cell.text || '\u00A0'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Cell text</span>
+            <Textarea
+              value={selectedCell.text}
+              disabled={isRecycleBin}
+              onChange={(e) => updateSelectedCell({ text: e.target.value })}
+              placeholder="Write inside this square..."
+              className="min-h-[112px] resize-y bg-background"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Cell color</span>
+            <input
+              type="color"
+              value={selectedCell.color || DEFAULT_GRAPH_COLOR}
+              disabled={isRecycleBin}
+              onChange={(e) => updateSelectedCell({ color: e.target.value })}
+              className="h-12 w-20 cursor-pointer rounded border border-border bg-background p-1"
+            />
+          </label>
+        </div>
+      </div>
+      {isSelected && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
 function getVisibleBlocksByCardType(card: Card): ContentBlock[] {
   switch (card.cardType) {
     case 'note':
@@ -325,6 +658,8 @@ function getVisibleBlocksByCardType(card: Card): ContentBlock[] {
       return card.blocks.filter(block => block.type === 'image');
     case 'drawing':
       return card.blocks.filter(block => block.type === 'drawing');
+    case 'graph':
+      return card.blocks.filter(block => block.type === 'graph');
     case 'folder':
       return [];
     default:
@@ -1322,6 +1657,19 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
     }
   }, [block]);
 
+  if (block.type === 'graph') {
+    return (
+      <GraphBlockEditor
+        block={block}
+        isRecycleBin={isRecycleBin}
+        isSelected={isSelected}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        dragHandleProps={dragHandleProps}
+      />
+    );
+  }
+
   if (block.type === 'drawing') {
     return (
       <DrawingBlockEditor
@@ -1915,6 +2263,10 @@ function GridCardItem({
   const drawingBlock = card.cardType === 'drawing'
     ? card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined
     : undefined;
+  const graphBlock = card.cardType === 'graph'
+    ? card.blocks.find(b => b.type === 'graph') as GraphBlock | undefined
+    : undefined;
+  const normalizedGraphBlock = graphBlock ? normalizeGraphBlock(graphBlock) : undefined;
   const visibleChildren = card.children
     .filter((child) => !child.isDeleted)
     .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
@@ -2123,6 +2475,39 @@ function GridCardItem({
         {card.cardType === 'drawing' && !drawingBlock && (
           <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
             No drawing yet
+          </div>
+        )}
+        {graphBlock && (
+          <div className="w-full mt-2 px-2">
+            <div
+              className="grid overflow-hidden rounded border bg-background"
+              style={{ gridTemplateColumns: `repeat(${normalizedGraphBlock!.columns}, minmax(0, 1fr))` }}
+            >
+              {normalizedGraphBlock!.cells.map((cell, index) => {
+                const rowIndex = Math.floor(index / normalizedGraphBlock!.columns);
+                const columnIndex = index % normalizedGraphBlock!.columns;
+                return (
+                  <div
+                    key={`${rowIndex}-${columnIndex}`}
+                    className="flex aspect-square min-h-[36px] items-center justify-center p-1 text-[10px] text-center"
+                    style={{
+                      backgroundColor: cell.color || DEFAULT_GRAPH_COLOR,
+                      borderTop: rowIndex > 0 ? (rowIndex === 1 ? '2px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
+                      borderLeft: columnIndex > 0 ? (columnIndex === 1 ? '2px solid rgb(31 41 55)' : '1px solid hsl(var(--border))') : undefined,
+                    }}
+                  >
+                    <span className="line-clamp-3 whitespace-pre-wrap break-words text-black">
+                      {cell.text || '\u00A0'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {card.cardType === 'graph' && !graphBlock && (
+          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
+            No graph yet
           </div>
         )}
         {showInlineChildren && (
@@ -2407,6 +2792,10 @@ export function WorkspacePanel({
         historyFuture: [],
       };
       onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
+      return;
+    }
+    if (nextType === 'graph') {
+      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
     }
   };
 
@@ -2460,6 +2849,11 @@ export function WorkspacePanel({
         historyFuture: [],
       };
       onUpdateCardBlocks(id, [block]);
+      onNavigateCard(id);
+      return;
+    }
+    if (type === 'graph') {
+      onUpdateCardBlocks(id, [createEmptyGraphBlock()]);
       onNavigateCard(id);
       return;
     }

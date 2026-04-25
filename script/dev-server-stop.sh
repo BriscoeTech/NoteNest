@@ -3,7 +3,7 @@ set -euo pipefail
 
 PID_FILE="/tmp/notenest-vite.pid"
 
-PIDS="$(pgrep -f "vite.*dev" || true)"
+PIDS="$(pgrep -f "vite.*dev|npm.*run[[:space:]]+dev" || true)"
 if [[ -n "$PIDS" ]]; then
   echo "$PIDS" | xargs -r kill > /dev/null 2>&1 || true
   sleep 1

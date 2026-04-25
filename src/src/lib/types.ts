@@ -71,8 +71,21 @@ export interface DrawingBlock {
   historyFuture?: DrawingSnapshot[];
 }
 
-export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock;
-export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'folder';
+export interface GraphCell {
+  text: string;
+  color: string;
+}
+
+export interface GraphBlock {
+  id: string;
+  type: 'graph';
+  rows: number;
+  columns: number;
+  cells: GraphCell[];
+}
+
+export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock | GraphBlock;
+export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'graph' | 'folder';
 
 export interface Card {
   id: string;

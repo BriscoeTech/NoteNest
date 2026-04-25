@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HOST="${1:-127.0.0.1}"
+HOST="${1:-0.0.0.0}"
 PORT="${2:-5000}"
 PID_FILE="/tmp/notenest-vite.pid"
 LOG_FILE="/tmp/notenest-vite.log"
@@ -28,6 +28,39 @@ cleanup_lock() {
 }
 trap cleanup_lock EXIT
 
+get_network_ips() {
+  if command -v hostname >/dev/null 2>&1; then
+    hostname -I 2>/dev/null | tr ' ' '\n' | sed '/^$/d' | grep -vE '^(127\.|::1$)' || true
+    return
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    ip -o addr show scope global | awk '{print $4}' | cut -d/ -f1 || true
+  fi
+}
+
+print_urls() {
+  local host="$1"
+  local port="$2"
+  local local_url="${3:-}"
+
+  if [[ -n "$local_url" ]]; then
+    echo "URL: $local_url"
+  else
+    echo "URL: http://$host:$port/"
+  fi
+
+  if [[ "$host" == "0.0.0.0" ]]; then
+    local ips
+    ips="$(get_network_ips)"
+    if [[ -n "$ips" ]]; then
+      while IFS= read -r ip; do
+        [[ -n "$ip" ]] || continue
+        echo "Network URL: http://$ip:$port/"
+      done <<< "$ips"
+    fi
+  fi
+}
+
 if [[ ! -f "package.json" ]]; then
   echo "Cannot find package.json in project root: $PROJECT_ROOT"
   exit 1
@@ -50,7 +83,7 @@ if [[ -n "$EXISTING_LINE" ]]; then
   echo "Vite dev server already running (pid: $EXISTING_PID) - ignoring request."
   echo "IP: $EXISTING_HOST"
   echo "Port: $EXISTING_PORT"
-  echo "URL: http://$EXISTING_HOST:$EXISTING_PORT/"
+  print_urls "$EXISTING_HOST" "$EXISTING_PORT"
   exit 0
 fi
 
@@ -60,12 +93,16 @@ if command -v lsof >/dev/null 2>&1; then
     echo "Vite dev server appears to already be running on port $PORT (pid: $LISTENER_PID) - ignoring request."
     echo "IP: $HOST"
     echo "Port: $PORT"
-    echo "URL: http://$HOST:$PORT/"
+    print_urls "$HOST" "$PORT"
     exit 0
   fi
 fi
 
-nohup npm run dev -- --host "$HOST" --port "$PORT" > "$LOG_FILE" 2>&1 &
+if command -v setsid >/dev/null 2>&1; then
+  setsid node_modules/.bin/vite dev --host "$HOST" --port "$PORT" < /dev/null > "$LOG_FILE" 2>&1 &
+else
+  nohup node_modules/.bin/vite dev --host "$HOST" --port "$PORT" < /dev/null > "$LOG_FILE" 2>&1 &
+fi
 echo $! > "$PID_FILE"
 
 for _ in {1..40}; do
@@ -92,12 +129,8 @@ echo "IP: $HOST"
 echo "Port: $PORT"
 if [[ -n "$LOCAL_LINE" ]]; then
   LOCAL_URL="$(echo "$LOCAL_LINE" | sed -nE 's/.*(https?:\/\/[^[:space:]]+).*/\1/p' | head -n 1)"
-  if [[ -n "$LOCAL_URL" ]]; then
-    echo "URL: $LOCAL_URL"
-  else
-    echo "URL: http://$HOST:$PORT/"
-  fi
+  print_urls "$HOST" "$PORT" "$LOCAL_URL"
 else
-  echo "URL: http://$HOST:$PORT/"
+  print_urls "$HOST" "$PORT"
 fi
 echo "Log: $LOG_FILE"
