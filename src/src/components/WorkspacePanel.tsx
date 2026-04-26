@@ -1,19 +1,22 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import type { MutableRefObject, ReactNode, RefObject } from 'react';
 import { Plus, Search, X, Folder, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
+import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
 import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
   CardTypeIcon,
-  cardTypeCanHaveChildren,
-  cardTypeIsMedia,
-  createEmptyGraphBlock,
+  cardTypeOpensOnCreate,
+  cardTypeUsesCreateFilePicker,
+  createCardBlockContext,
   createInitialBlocksForCardType,
   ensureCardBlocksForTypeChange,
+  getCardTypeDefinition,
+  getTypedBlocksByCardType,
   getVisibleBlocksByCardType,
 } from '@/lib/card-types';
 import { Button } from '@/components/ui/button';
@@ -81,9 +84,295 @@ interface BlockEditorProps {
 // Keep preview aspect aligned with drawing editor viewport (3:4 width:height).
 const DRAWING_PREVIEW_WIDTH = 540;
 const DRAWING_PREVIEW_HEIGHT = 720;
+type DrawingStrokeSegment = { ax: number; ay: number; bx: number; by: number };
+type DrawingShapeKind = NonNullable<DrawingStroke['kind']>;
+type DrawingToolKind = 'pen' | 'line' | 'rectangle' | 'circle' | 'eraser' | 'select';
 
 function createGraphCellKey(row: number, column: number): string {
   return `${row}:${column}`;
+}
+
+abstract class DrawingShapebase {
+  protected constructor(readonly kind: DrawingShapeKind) {}
+
+  abstract render(ctx: CanvasRenderingContext2D, stroke: DrawingStroke, width: number, height: number): void;
+  abstract getSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[];
+}
+
+class FreehandShape extends DrawingShapebase {
+  constructor() {
+    super('freehand');
+  }
+
+  render(ctx: CanvasRenderingContext2D, stroke: DrawingStroke, width: number, height: number): void {
+    const first = stroke.points[0];
+    if (!first) return;
+
+    if (stroke.points.length === 1) {
+      const x = first.x * width;
+      const y = first.y * height;
+      const radius = Math.max(0.5, ctx.lineWidth / 2);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(first.x * width, first.y * height);
+    for (let i = 1; i < stroke.points.length; i += 1) {
+      const p = stroke.points[i];
+      ctx.lineTo(p.x * width, p.y * height);
+    }
+    ctx.stroke();
+  }
+
+  getSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[] {
+    if (!stroke.points.length) return [];
+    if (stroke.points.length === 1) {
+      const p = stroke.points[0];
+      return [{ ax: p.x, ay: p.y, bx: p.x, by: p.y }];
+    }
+
+    const segments: DrawingStrokeSegment[] = [];
+    for (let i = 1; i < stroke.points.length; i += 1) {
+      const a = stroke.points[i - 1];
+      const b = stroke.points[i];
+      segments.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+    }
+    return segments;
+  }
+}
+
+class LineShape extends DrawingShapebase {
+  constructor() {
+    super('line');
+  }
+
+  render(ctx: CanvasRenderingContext2D, stroke: DrawingStroke, width: number, height: number): void {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    if (!first || !last) return;
+    ctx.beginPath();
+    ctx.moveTo(first.x * width, first.y * height);
+    ctx.lineTo(last.x * width, last.y * height);
+    ctx.stroke();
+  }
+
+  getSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[] {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    return first && last ? [{ ax: first.x, ay: first.y, bx: last.x, by: last.y }] : [];
+  }
+}
+
+class RectangleShape extends DrawingShapebase {
+  constructor() {
+    super('rectangle');
+  }
+
+  render(ctx: CanvasRenderingContext2D, stroke: DrawingStroke, width: number, height: number): void {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    if (!first || !last) return;
+    const left = Math.min(first.x, last.x) * width;
+    const top = Math.min(first.y, last.y) * height;
+    const w = Math.abs(last.x - first.x) * width;
+    const h = Math.abs(last.y - first.y) * height;
+    ctx.strokeRect(left, top, w, h);
+  }
+
+  getSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[] {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    if (!first || !last) return [];
+    const x1 = first.x;
+    const y1 = first.y;
+    const x2 = last.x;
+    const y2 = last.y;
+    return [
+      { ax: x1, ay: y1, bx: x2, by: y1 },
+      { ax: x2, ay: y1, bx: x2, by: y2 },
+      { ax: x2, ay: y2, bx: x1, by: y2 },
+      { ax: x1, ay: y2, bx: x1, by: y1 },
+    ];
+  }
+}
+
+class CircleShape extends DrawingShapebase {
+  constructor() {
+    super('circle');
+  }
+
+  render(ctx: CanvasRenderingContext2D, stroke: DrawingStroke, width: number, height: number): void {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    if (!first || !last) return;
+    const cx = ((first.x + last.x) / 2) * width;
+    const cy = ((first.y + last.y) / 2) * height;
+    const rx = Math.abs(last.x - first.x) * width / 2;
+    const ry = Math.abs(last.y - first.y) * height / 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  getSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[] {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    if (!first || !last) return [];
+    const cx = (first.x + last.x) / 2;
+    const cy = (first.y + last.y) / 2;
+    const rx = Math.max(0.0005, Math.abs(last.x - first.x) / 2);
+    const ry = Math.max(0.0005, Math.abs(last.y - first.y) / 2);
+    const steps = 24;
+    const segments: DrawingStrokeSegment[] = [];
+    let prevX = cx + rx;
+    let prevY = cy;
+    for (let i = 1; i <= steps; i += 1) {
+      const t = (i / steps) * Math.PI * 2;
+      const x = cx + Math.cos(t) * rx;
+      const y = cy + Math.sin(t) * ry;
+      segments.push({ ax: prevX, ay: prevY, bx: x, by: y });
+      prevX = x;
+      prevY = y;
+    }
+    return segments;
+  }
+}
+
+const DRAWING_SHAPES = [
+  new FreehandShape(),
+  new LineShape(),
+  new RectangleShape(),
+  new CircleShape(),
+] as const satisfies readonly DrawingShapebase[];
+
+const DRAWING_SHAPE_REGISTRY = Object.fromEntries(
+  DRAWING_SHAPES.map((shape) => [shape.kind, shape])
+) as Record<DrawingShapeKind, DrawingShapebase>;
+
+function getDrawingShape(kind: DrawingStroke['kind'] | undefined): DrawingShapebase {
+  return DRAWING_SHAPE_REGISTRY[kind ?? 'freehand'];
+}
+
+interface DrawingDraftStrokeContext {
+  point: DrawingPoint;
+  color: string;
+  width: number;
+}
+
+interface DrawingDraftStrokeUpdateContext {
+  point: DrawingPoint;
+  width: number;
+  height: number;
+  keepAspectRatio: boolean;
+}
+
+abstract class DrawingToolbase {
+  protected constructor(
+    readonly tool: DrawingToolKind,
+    readonly label: string,
+    readonly Icon: typeof Type
+  ) {}
+
+  createDraftStroke(_context: DrawingDraftStrokeContext): DrawingStroke | null {
+    return null;
+  }
+
+  updateDraftStroke(stroke: DrawingStroke, context: DrawingDraftStrokeUpdateContext): DrawingStroke {
+    return stroke;
+  }
+}
+
+class SelectDrawingTool extends DrawingToolbase {
+  constructor() {
+    super('select', 'Select', Move);
+  }
+}
+
+class EraserDrawingTool extends DrawingToolbase {
+  constructor() {
+    super('eraser', 'Erase Segment', Eraser);
+  }
+}
+
+class FreehandDrawingTool extends DrawingToolbase {
+  constructor() {
+    super('pen', 'Pen', Brush);
+  }
+
+  createDraftStroke({ point, color, width }: DrawingDraftStrokeContext): DrawingStroke {
+    return {
+      id: generateId(),
+      color,
+      width,
+      tool: 'pen',
+      kind: 'freehand',
+      points: [point],
+      parentGroupId: null,
+    };
+  }
+
+  updateDraftStroke(stroke: DrawingStroke, { point }: DrawingDraftStrokeUpdateContext): DrawingStroke {
+    return { ...stroke, points: [...stroke.points, point] };
+  }
+}
+
+class ShapeDrawingTool extends DrawingToolbase {
+  constructor(tool: Extract<DrawingToolKind, 'line' | 'rectangle' | 'circle'>, label: string, Icon: typeof Type) {
+    super(tool, label, Icon);
+  }
+
+  createDraftStroke({ point, color, width }: DrawingDraftStrokeContext): DrawingStroke {
+    return {
+      id: generateId(),
+      color,
+      width,
+      tool: 'pen',
+      kind: this.tool as DrawingShapeKind,
+      points: [point, point],
+      parentGroupId: null,
+    };
+  }
+
+  updateDraftStroke(stroke: DrawingStroke, { point, width, height, keepAspectRatio }: DrawingDraftStrokeUpdateContext): DrawingStroke {
+    const start = stroke.points[0];
+    if (!start) return stroke;
+    if (stroke.kind === 'circle' && keepAspectRatio) {
+      const dxPx = (point.x - start.x) * width;
+      const dyPx = (point.y - start.y) * height;
+      const sizePx = Math.max(Math.abs(dxPx), Math.abs(dyPx));
+      return {
+        ...stroke,
+        points: [
+          start,
+          {
+            x: start.x + (dxPx === 0 ? 0 : (Math.sign(dxPx) * sizePx) / width),
+            y: start.y + (dyPx === 0 ? 0 : (Math.sign(dyPx) * sizePx) / height),
+          },
+        ],
+      };
+    }
+    return { ...stroke, points: [start, point] };
+  }
+}
+
+const DRAWING_TOOLS = [
+  new SelectDrawingTool(),
+  new FreehandDrawingTool(),
+  new ShapeDrawingTool('line', 'Line', Minus),
+  new ShapeDrawingTool('rectangle', 'Rectangle', Square),
+  new ShapeDrawingTool('circle', 'Circle', Circle),
+  new EraserDrawingTool(),
+] as const satisfies readonly DrawingToolbase[];
+
+const DRAWING_TOOL_REGISTRY = Object.fromEntries(
+  DRAWING_TOOLS.map((definition) => [definition.tool, definition])
+) as Record<DrawingToolKind, DrawingToolbase>;
+
+function getDrawingTool(tool: DrawingToolKind): DrawingToolbase {
+  return DRAWING_TOOL_REGISTRY[tool];
 }
 
 function renderDrawingStrokes(
@@ -98,9 +387,6 @@ function renderDrawingStrokes(
 
   for (const stroke of strokes) {
     if (!stroke.points.length) continue;
-    const first = stroke.points[0];
-    const last = stroke.points[stroke.points.length - 1];
-    const kind = stroke.kind ?? 'freehand';
 
     ctx.save();
     ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
@@ -110,114 +396,13 @@ function renderDrawingStrokes(
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    if (kind === 'line') {
-      ctx.beginPath();
-      ctx.moveTo(first.x * width, first.y * height);
-      ctx.lineTo(last.x * width, last.y * height);
-      ctx.stroke();
-      ctx.restore();
-      continue;
-    }
-
-    if (kind === 'rectangle') {
-      const left = Math.min(first.x, last.x) * width;
-      const top = Math.min(first.y, last.y) * height;
-      const w = Math.abs(last.x - first.x) * width;
-      const h = Math.abs(last.y - first.y) * height;
-      ctx.strokeRect(left, top, w, h);
-      ctx.restore();
-      continue;
-    }
-
-    if (kind === 'circle') {
-      const cx = ((first.x + last.x) / 2) * width;
-      const cy = ((first.y + last.y) / 2) * height;
-      const rx = Math.abs(last.x - first.x) * width / 2;
-      const ry = Math.abs(last.y - first.y) * height / 2;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-      continue;
-    }
-
-    if (stroke.points.length === 1) {
-      const x = first.x * width;
-      const y = first.y * height;
-      const radius = Math.max(0.5, ctx.lineWidth / 2);
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      continue;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(first.x * width, first.y * height);
-    for (let i = 1; i < stroke.points.length; i += 1) {
-      const p = stroke.points[i];
-      ctx.lineTo(p.x * width, p.y * height);
-    }
-    ctx.stroke();
+    getDrawingShape(stroke.kind).render(ctx, stroke, width, height);
     ctx.restore();
   }
 }
 
-function getStrokeSegmentsNormalized(stroke: DrawingStroke): Array<{ ax: number; ay: number; bx: number; by: number }> {
-  const kind = stroke.kind ?? 'freehand';
-  if (!stroke.points.length) return [];
-  const first = stroke.points[0];
-  const last = stroke.points[stroke.points.length - 1];
-
-  if (kind === 'line') {
-    return [{ ax: first.x, ay: first.y, bx: last.x, by: last.y }];
-  }
-
-  if (kind === 'rectangle') {
-    const x1 = first.x;
-    const y1 = first.y;
-    const x2 = last.x;
-    const y2 = last.y;
-    return [
-      { ax: x1, ay: y1, bx: x2, by: y1 },
-      { ax: x2, ay: y1, bx: x2, by: y2 },
-      { ax: x2, ay: y2, bx: x1, by: y2 },
-      { ax: x1, ay: y2, bx: x1, by: y1 },
-    ];
-  }
-
-  if (kind === 'circle') {
-    const cx = (first.x + last.x) / 2;
-    const cy = (first.y + last.y) / 2;
-    const rx = Math.max(0.0005, Math.abs(last.x - first.x) / 2);
-    const ry = Math.max(0.0005, Math.abs(last.y - first.y) / 2);
-    const steps = 24;
-    const segs: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
-    let prevX = cx + rx;
-    let prevY = cy;
-    for (let i = 1; i <= steps; i += 1) {
-      const t = (i / steps) * Math.PI * 2;
-      const x = cx + Math.cos(t) * rx;
-      const y = cy + Math.sin(t) * ry;
-      segs.push({ ax: prevX, ay: prevY, bx: x, by: y });
-      prevX = x;
-      prevY = y;
-    }
-    return segs;
-  }
-
-  if (stroke.points.length === 1) {
-    const p = stroke.points[0];
-    return [{ ax: p.x, ay: p.y, bx: p.x, by: p.y }];
-  }
-
-  const segs: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
-  for (let i = 1; i < stroke.points.length; i += 1) {
-    const a = stroke.points[i - 1];
-    const b = stroke.points[i];
-    segs.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
-  }
-  return segs;
+function getStrokeSegmentsNormalized(stroke: DrawingStroke): DrawingStrokeSegment[] {
+  return getDrawingShape(stroke.kind).getSegmentsNormalized(stroke);
 }
 
 function getStrokeSegments(stroke: DrawingStroke, width: number, height: number): Array<{ ax: number; ay: number; bx: number; by: number }> {
@@ -825,7 +1010,7 @@ function DrawingBlockEditor({
         initialVector: { x: number; y: number };
       }
   >(null);
-  const [tool, setTool] = useState<'pen' | 'line' | 'rectangle' | 'circle' | 'eraser' | 'select'>('select');
+  const [tool, setTool] = useState<DrawingToolKind>('select');
   const [color, setColor] = useState('#111827');
   const [brushSize, setBrushSize] = useState(2);
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
@@ -839,27 +1024,6 @@ function DrawingBlockEditor({
   const displayedGroups = displayedSnapshot.groups;
   const historyPast = block.historyPast ?? [];
   const historyFuture = block.historyFuture ?? [];
-  const shapeToolKind: Record<'line' | 'rectangle' | 'circle', DrawingStroke['kind']> = {
-    line: 'line',
-    rectangle: 'rectangle',
-    circle: 'circle',
-  };
-
-  const constrainCirclePoint = (
-    start: DrawingPoint,
-    current: DrawingPoint,
-    width: number,
-    height: number
-  ): DrawingPoint => {
-    const dxPx = (current.x - start.x) * width;
-    const dyPx = (current.y - start.y) * height;
-    const sizePx = Math.max(Math.abs(dxPx), Math.abs(dyPx));
-    return {
-      x: start.x + (dxPx === 0 ? 0 : (Math.sign(dxPx) * sizePx) / width),
-      y: start.y + (dyPx === 0 ? 0 : (Math.sign(dyPx) * sizePx) / height),
-    };
-  };
-
   const getNormalizedPoint = (event: React.PointerEvent<HTMLCanvasElement>): DrawingPoint => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
@@ -1175,16 +1339,8 @@ function DrawingBlockEditor({
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
-    const isShapeTool = tool === 'line' || tool === 'rectangle' || tool === 'circle';
-    const stroke: DrawingStroke = {
-      id: generateId(),
-      color,
-      width: brushSize,
-      tool: 'pen',
-      kind: isShapeTool ? shapeToolKind[tool] : 'freehand',
-      points: isShapeTool ? [point, point] : [point],
-      parentGroupId: null,
-    };
+    const stroke = getDrawingTool(tool).createDraftStroke({ point, color, width: brushSize });
+    if (!stroke) return;
     draftStrokeRef.current = stroke;
     setTransientSnapshot({ strokes: [...normalizedSnapshot.strokes, stroke], groups: normalizedSnapshot.groups });
   };
@@ -1194,20 +1350,13 @@ function DrawingBlockEditor({
     const point = getNormalizedPoint(event);
 
     if (draftStrokeRef.current) {
-      const kind = draftStrokeRef.current.kind ?? 'freehand';
       const { width, height } = getCanvasDrawSize();
-      draftStrokeRef.current =
-        kind === 'freehand'
-          ? { ...draftStrokeRef.current, points: [...draftStrokeRef.current.points, point] }
-          : kind === 'circle' && keepAspectRatio
-            ? {
-                ...draftStrokeRef.current,
-                points: [
-                  draftStrokeRef.current.points[0],
-                  constrainCirclePoint(draftStrokeRef.current.points[0], point, width, height),
-                ],
-              }
-          : { ...draftStrokeRef.current, points: [draftStrokeRef.current.points[0], point] };
+      draftStrokeRef.current = getDrawingTool(tool).updateDraftStroke(draftStrokeRef.current, {
+        point,
+        width,
+        height,
+        keepAspectRatio,
+      });
       setTransientSnapshot({ strokes: [...normalizedSnapshot.strokes, draftStrokeRef.current], groups: normalizedSnapshot.groups });
       return;
     }
@@ -1397,14 +1546,7 @@ function DrawingBlockEditor({
   };
 
   const swatches = ['#111827', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
-  const toolLabelMap: Record<typeof tool, string> = {
-    pen: 'Pen',
-    line: 'Line',
-    rectangle: 'Rectangle',
-    circle: 'Circle',
-    eraser: 'Erase Segment',
-    select: 'Select',
-  };
+  const activeTool = getDrawingTool(tool);
 
   return (
     <div className="group relative flex items-start gap-1">
@@ -1424,35 +1566,20 @@ function DrawingBlockEditor({
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="sm" variant="outline" disabled={isRecycleBin}>
                   <Type className="w-4 h-4 mr-1" />
-                  {`Tools: ${toolLabelMap[tool]}`}
+                  {`Tools: ${activeTool.label}`}
                   <ChevronDown className="w-3 h-3 ml-1 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuItem onClick={() => setTool('select')}>
-                  <Move className="w-4 h-4 mr-2" />
-                  Select
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool('pen')}>
-                  <Brush className="w-4 h-4 mr-2" />
-                  Pen
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool('line')}>
-                  <Minus className="w-4 h-4 mr-2" />
-                  Line
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool('rectangle')}>
-                  <Square className="w-4 h-4 mr-2" />
-                  Rectangle
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool('circle')}>
-                  <Circle className="w-4 h-4 mr-2" />
-                  Circle
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTool('eraser')}>
-                  <Eraser className="w-4 h-4 mr-2" />
-                  Erase Segment
-                </DropdownMenuItem>
+                {DRAWING_TOOLS.map((toolDefinition) => {
+                  const ToolIcon = toolDefinition.Icon;
+                  return (
+                    <DropdownMenuItem key={toolDefinition.tool} onClick={() => setTool(toolDefinition.tool)}>
+                      <ToolIcon className="w-4 h-4 mr-2" />
+                      {toolDefinition.label}
+                    </DropdownMenuItem>
+                  );
+                })}
                 <DropdownMenuSeparator />
                 <div className="px-2 py-1.5">
                   <div className="mb-2">
@@ -1547,35 +1674,86 @@ function DrawingBlockEditor({
   );
 }
 
-function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dragHandleProps }: BlockEditorProps) {
-  const textRef = useRef<HTMLTextAreaElement>(null);
-  const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
-  const focusNextBullet = useRef<string | null>(null);
 
-  const autoResize = (textarea: HTMLTextAreaElement) => {
-    textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
-  };
+type BlockEditorContext = {
+  textRef: RefObject<HTMLTextAreaElement | null>;
+  bulletRefs: MutableRefObject<Map<string, HTMLTextAreaElement>>;
+  focusNextBullet: MutableRefObject<string | null>;
+  autoResize: (textarea: HTMLTextAreaElement) => void;
+};
 
-  useEffect(() => {
-    if (block.type === 'text' && textRef.current) {
-      autoResize(textRef.current);
-    }
-  }, [block]);
+type TypedBlockEditorProps<TBlock extends ContentBlock> = Omit<BlockEditorProps, 'block'> & {
+  block: TBlock;
+};
 
-  useEffect(() => {
-    if (focusNextBullet.current && block.type === 'bullets') {
-      const ref = bulletRefs.current.get(focusNextBullet.current);
-      if (ref) {
-        ref.focus();
-        const len = ref.value.length;
-        ref.setSelectionRange(len, len);
-      }
-      focusNextBullet.current = null;
-    }
-  }, [block]);
+abstract class BlockEditorbase<TBlock extends ContentBlock = ContentBlock> {
+  protected constructor(readonly type: TBlock['type']) {}
 
-  if (block.type === 'graph') {
+  afterBlockChange(_block: TBlock, _context: BlockEditorContext): void {}
+
+  abstract renderEditor(props: TypedBlockEditorProps<TBlock>, context: BlockEditorContext): ReactNode;
+}
+
+function BlockDragHandle({ dragHandleProps, className = 'mt-1' }: {
+  dragHandleProps?: BlockEditorProps['dragHandleProps'];
+  className?: string;
+}) {
+  if (!dragHandleProps) return null;
+  return (
+    <div
+      className={cn("cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground hidden md:block", className)}
+      {...dragHandleProps.attributes}
+      {...dragHandleProps.listeners}
+    >
+      <GripVertical className="w-3 h-3" />
+    </div>
+  );
+}
+
+function BlockActionMenu({ onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, includeMoveActions = false }: {
+  onDelete: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  includeMoveActions?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {includeMoveActions && (
+          <>
+            <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
+              <ChevronUp className="w-4 h-4 mr-2" />
+              Move Up
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
+              <ChevronDown className="w-4 h-4 mr-2" />
+              Move Down
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+          <Trash2 className="w-4 h-4 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+class GraphBlockEditorDefinition extends BlockEditorbase<GraphBlock> {
+  constructor() {
+    super('graph');
+  }
+
+  renderEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, dragHandleProps }: TypedBlockEditorProps<GraphBlock>): ReactNode {
     return (
       <GraphBlockEditor
         block={block}
@@ -1587,44 +1765,39 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
       />
     );
   }
+}
 
-  if (block.type === 'drawing') {
-    return (
-      <DrawingBlockEditor
-        block={block}
-        isRecycleBin={isRecycleBin}
-        isSelected={isSelected}
-        onUpdate={onUpdate}
-        onDelete={onDelete}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        canMoveUp={canMoveUp}
-        canMoveDown={canMoveDown}
-        dragHandleProps={dragHandleProps}
-      />
-    );
+class DrawingBlockEditorDefinition extends BlockEditorbase<DrawingBlock> {
+  constructor() {
+    super('drawing');
   }
 
-  if (block.type === 'text') {
+  renderEditor(props: TypedBlockEditorProps<DrawingBlock>): ReactNode {
+    return <DrawingBlockEditor {...props} />;
+  }
+}
+
+class TextBlockEditorDefinition extends BlockEditorbase<TextBlock> {
+  constructor() {
+    super('text');
+  }
+
+  afterBlockChange(_block: TextBlock, context: BlockEditorContext): void {
+    if (context.textRef.current) {
+      context.autoResize(context.textRef.current);
+    }
+  }
+
+  renderEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, dragHandleProps }: TypedBlockEditorProps<TextBlock>, context: BlockEditorContext): ReactNode {
     return (
       <div className="group relative flex items-start gap-1">
-        {isSelected && dragHandleProps && (
-          <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
-            {...dragHandleProps.attributes}
-            {...dragHandleProps.listeners}
-          >
-            <GripVertical className="w-3 h-3" />
-          </div>
-        )}
+        {isSelected && <BlockDragHandle dragHandleProps={dragHandleProps} />}
         <div className="flex-1">
           <Textarea
-            ref={textRef}
+            ref={context.textRef}
             value={block.content}
-            onChange={(e) => {
-              onUpdate({ ...block, content: e.target.value });
-            }}
-            onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
+            onChange={(e) => onUpdate({ ...block, content: e.target.value })}
+            onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)}
             disabled={isRecycleBin}
             placeholder={isSelected ? "Type text here..." : ""}
             className="w-full border-none shadow-none focus-visible:ring-0 p-3 resize-none min-h-[44px] overflow-hidden text-base bg-muted/30 rounded placeholder:text-muted-foreground/40"
@@ -1632,308 +1805,178 @@ function BlockEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMo
           />
         </div>
         {isSelected && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <BlockActionMenu onDelete={onDelete} onMoveUp={() => undefined} onMoveDown={() => undefined} canMoveUp={false} canMoveDown={false} />
         )}
       </div>
     );
   }
+}
 
-  if (block.type === 'image') {
-    const imageBlock = block as ImageBlock;
+class ImageBlockEditorDefinition extends BlockEditorbase<ImageBlock> {
+  constructor() {
+    super('image');
+  }
+
+  renderEditor({ block, isSelected, onUpdate, dragHandleProps }: TypedBlockEditorProps<ImageBlock>): ReactNode {
     return (
       <div className="group relative flex items-start gap-1">
-        {isSelected && dragHandleProps && (
-          <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
-            {...dragHandleProps.attributes}
-            {...dragHandleProps.listeners}
-          >
-            <GripVertical className="w-3 h-3" />
-          </div>
-        )}
+        {isSelected && <BlockDragHandle dragHandleProps={dragHandleProps} />}
         <div className="flex-1">
           {isSelected && (
             <div className="mb-2 flex items-center gap-2 bg-muted/30 rounded p-3">
               <span className="text-sm text-muted-foreground">Size:</span>
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={imageBlock.width}
-                onChange={(e) => onUpdate({ ...imageBlock, width: parseInt(e.target.value) })}
-                className="flex-1 h-2 accent-primary"
-              />
-              <span className="text-sm text-muted-foreground w-10">{imageBlock.width}%</span>
+              <input type="range" min="10" max="100" step="5" value={block.width} onChange={(e) => onUpdate({ ...block, width: parseInt(e.target.value) })} className="flex-1 h-2 accent-primary" />
+              <span className="text-sm text-muted-foreground w-10">{block.width}%</span>
             </div>
           )}
-          <div 
-            className="bg-muted/30 rounded p-2"
-            style={{ width: `${imageBlock.width}%` }}
-          >
-            <img 
-              src={imageBlock.dataUrl} 
-              alt="Note image" 
-              className="w-full h-auto rounded"
-            />
+          <div className="bg-muted/30 rounded p-2" style={{ width: block.width + '%' }}>
+            <img src={block.dataUrl} alt="Note image" className="w-full h-auto rounded" />
           </div>
         </div>
       </div>
     );
   }
+}
 
-  if (block.type === 'checkbox') {
-    const checkboxBlock = block as CheckboxBlock;
+class CheckboxBlockEditorDefinition extends BlockEditorbase<CheckboxBlock> {
+  constructor() {
+    super('checkbox');
+  }
+
+  renderEditor({ block, isRecycleBin, isSelected, onUpdate, dragHandleProps }: TypedBlockEditorProps<CheckboxBlock>): ReactNode {
     return (
       <div className="group relative flex items-center gap-1">
-        {isSelected && dragHandleProps && (
-          <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground hidden md:block"
-            {...dragHandleProps.attributes}
-            {...dragHandleProps.listeners}
-          >
-            <GripVertical className="w-3 h-3" />
-          </div>
-        )}
+        {isSelected && <BlockDragHandle dragHandleProps={dragHandleProps} className="" />}
         <div className="flex-1 flex items-center gap-3 bg-muted/30 rounded p-3">
-          <input
-            type="checkbox"
-            checked={checkboxBlock.checked}
-            onChange={(e) => onUpdate({ ...checkboxBlock, checked: e.target.checked })}
-            disabled={isRecycleBin}
-            className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
-          />
-          <span className={cn("text-base", checkboxBlock.checked && "line-through text-muted-foreground")}>
-            {checkboxBlock.checked ? "Completed" : "Not completed"}
-          </span>
+          <input type="checkbox" checked={block.checked} onChange={(e) => onUpdate({ ...block, checked: e.target.checked })} disabled={isRecycleBin} className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary" />
+          <span className={cn("text-base", block.checked && "line-through text-muted-foreground")}>{block.checked ? "Completed" : "Not completed"}</span>
         </div>
       </div>
     );
   }
+}
 
-  if (block.type === 'link') {
-    const linkBlock = block as LinkBlock;
+class LinkBlockEditorDefinition extends BlockEditorbase<LinkBlock> {
+  constructor() {
+    super('link');
+  }
+
+  renderEditor({ block, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dragHandleProps }: TypedBlockEditorProps<LinkBlock>): ReactNode {
     return (
       <div className="group relative flex items-center gap-1">
-        {isSelected && dragHandleProps && (
-          <div 
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground hidden md:block"
-            {...dragHandleProps.attributes}
-            {...dragHandleProps.listeners}
-          >
-            <GripVertical className="w-3 h-3" />
-          </div>
-        )}
+        {isSelected && <BlockDragHandle dragHandleProps={dragHandleProps} className="" />}
         <div className="flex-1 flex items-center gap-3 bg-muted/30 rounded p-3">
           <div className="flex items-center gap-2 flex-1 overflow-hidden">
              <LinkIcon className="w-4 h-4 text-primary shrink-0" />
-             {linkBlock.url ? (
-               <a 
-                 href={linkBlock.url} 
-                 target="_blank" 
-                 rel="noopener noreferrer"
-                 className="text-primary hover:underline truncate flex-1 block"
-               >
-                 {linkBlock.url}
-               </a>
+             {block.url ? (
+               <a href={block.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate flex-1 block">{block.url}</a>
              ) : (
-               <Input
-                 value={linkBlock.url}
-                 onChange={(e) => onUpdate({ ...linkBlock, url: e.target.value })}
-                 placeholder="Paste URL here..."
-                 className="h-8 bg-background"
-                 autoFocus
-               />
+               <Input value={block.url} onChange={(e) => onUpdate({ ...block, url: e.target.value })} placeholder="Paste URL here..." className="h-8 bg-background" autoFocus />
              )}
           </div>
-          {linkBlock.url && (
-             <Button 
-               variant="ghost" 
-               size="sm" 
-               className="h-6 w-6 p-0"
-               onClick={() => onUpdate({ ...linkBlock, url: '' })}
-             >
-               <Pencil className="w-3 h-3" />
-             </Button>
+          {block.url && (
+             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onUpdate({ ...block, url: '' })}><Pencil className="w-3 h-3" /></Button>
           )}
         </div>
-        {isSelected && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="p-2 text-muted-foreground/60 hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center">
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-                <ChevronUp className="w-4 h-4 mr-2" />
-                Move Up
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-                <ChevronDown className="w-4 h-4 mr-2" />
-                Move Down
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {isSelected && <BlockActionMenu onDelete={onDelete} onMoveUp={onMoveUp} onMoveDown={onMoveDown} canMoveUp={canMoveUp} canMoveDown={canMoveDown} includeMoveActions />}
       </div>
     );
   }
+}
 
-  const bulletBlock = block as BulletBlock;
+class BulletBlockEditorDefinition extends BlockEditorbase<BulletBlock> {
+  constructor() {
+    super('bullets');
+  }
 
-  const updateBullet = (id: string, content: string) => {
-    const newItems = bulletBlock.items.map(b => b.id === id ? { ...b, content } : b);
-    onUpdate({ ...bulletBlock, items: newItems });
-  };
+  afterBlockChange(_block: BulletBlock, context: BlockEditorContext): void {
+    if (!context.focusNextBullet.current) return;
+    const ref = context.bulletRefs.current.get(context.focusNextBullet.current);
+    if (ref) {
+      ref.focus();
+      const len = ref.value.length;
+      ref.setSelectionRange(len, len);
+    }
+    context.focusNextBullet.current = null;
+  }
 
-  const addBullet = (afterIndex: number, indent: number) => {
-    // @ts-ignore
-    const newBullet: BulletItem = { id: generateId(), content: '', indent };
-    const newItems = [...bulletBlock.items];
-    newItems.splice(afterIndex + 1, 0, newBullet);
-    onUpdate({ ...bulletBlock, items: newItems });
-    focusNextBullet.current = newBullet.id;
-  };
-
-  const handleBulletKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, bullet: BulletItem, index: number) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      if (e.shiftKey) {
-        if (bullet.indent > 0) {
-          const newItems = bulletBlock.items.map(b => b.id === bullet.id ? { ...b, indent: b.indent - 1 } : b);
-          onUpdate({ ...bulletBlock, items: newItems });
-        }
-      } else {
-        if (bullet.indent < 5) {
-          const newItems = bulletBlock.items.map(b => b.id === bullet.id ? { ...b, indent: b.indent + 1 } : b);
-          onUpdate({ ...bulletBlock, items: newItems });
+  renderEditor({ block, isRecycleBin, isSelected, onUpdate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown, dragHandleProps }: TypedBlockEditorProps<BulletBlock>, context: BlockEditorContext): ReactNode {
+    const updateBullet = (id: string, content: string) => onUpdate({ ...block, items: block.items.map((item) => item.id === id ? { ...item, content } : item) });
+    const addBullet = (afterIndex: number, indent: number) => {
+      const newBullet: BulletItem = { id: generateId(), content: '', indent };
+      const newItems = [...block.items];
+      newItems.splice(afterIndex + 1, 0, newBullet);
+      onUpdate({ ...block, items: newItems });
+      context.focusNextBullet.current = newBullet.id;
+    };
+    const removeBullet = (id: string) => {
+      if (block.items.length <= 1) return;
+      onUpdate({ ...block, items: block.items.filter((item) => item.id !== id) });
+    };
+    const handleBulletKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>, bullet: BulletItem, index: number) => {
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const nextIndent = event.shiftKey ? Math.max(0, bullet.indent - 1) : Math.min(5, bullet.indent + 1);
+        if (nextIndent !== bullet.indent) onUpdate({ ...block, items: block.items.map((item) => item.id === bullet.id ? { ...item, indent: nextIndent } : item) });
+        return;
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        addBullet(index, bullet.indent);
+        return;
+      }
+      if (event.key === 'Backspace' && bullet.content === '') {
+        event.preventDefault();
+        if (block.items.length > 1) {
+          onUpdate({ ...block, items: block.items.filter((item) => item.id !== bullet.id) });
+          if (index > 0) context.focusNextBullet.current = block.items[index - 1].id;
+        } else if (bullet.indent > 0) {
+          onUpdate({ ...block, items: block.items.map((item) => item.id === bullet.id ? { ...item, indent: 0 } : item) });
         }
       }
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      addBullet(index, bullet.indent);
-    } else if (e.key === 'Backspace' && bullet.content === '') {
-      e.preventDefault();
-      if (bulletBlock.items.length > 1) {
-        const newItems = bulletBlock.items.filter(b => b.id !== bullet.id);
-        onUpdate({ ...bulletBlock, items: newItems });
-        if (index > 0) {
-          focusNextBullet.current = bulletBlock.items[index - 1].id;
-        }
-      } else if (bullet.indent > 0) {
-        const newItems = bulletBlock.items.map(b => b.id === bullet.id ? { ...b, indent: 0 } : b);
-        onUpdate({ ...bulletBlock, items: newItems });
-      }
-    }
-  };
-
-  const removeBullet = (id: string) => {
-    if (bulletBlock.items.length > 1) {
-      const newItems = bulletBlock.items.filter(b => b.id !== id);
-      onUpdate({ ...bulletBlock, items: newItems });
-    }
-  };
-
-  return (
-    <div className="group relative flex items-start gap-1">
-      {isSelected && dragHandleProps && (
-        <div 
-          className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/40 hover:text-muted-foreground mt-1 hidden md:block"
-          {...dragHandleProps.attributes}
-          {...dragHandleProps.listeners}
-        >
-          <GripVertical className="w-3 h-3" />
+    };
+    return (
+      <div className="group relative flex items-start gap-1">
+        {isSelected && <BlockDragHandle dragHandleProps={dragHandleProps} />}
+        <div className="flex-1 bg-muted/30 rounded p-3">
+          <div className="space-y-1">
+            {block.items.map((bullet, index) => (
+              <div key={bullet.id} className="flex items-start gap-2 group/bullet" style={{ paddingLeft: (bullet.indent * 16) + 'px' }}>
+                <span className="text-muted-foreground font-bold mt-1 select-none text-sm">•</span>
+                <Textarea ref={(el) => { if (el) context.bulletRefs.current.set(bullet.id, el); else context.bulletRefs.current.delete(bullet.id); }} value={bullet.content} onChange={(e) => updateBullet(bullet.id, e.target.value)} onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)} onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)} disabled={isRecycleBin} placeholder={isSelected ? "..." : ""} className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground" rows={1} />
+                {isSelected && <button className="p-2 text-muted-foreground hover:text-destructive min-h-[36px] min-w-[36px] flex items-center justify-center" onClick={() => removeBullet(bullet.id)} disabled={isRecycleBin}><Trash2 className="w-3.5 h-3.5" /></button>}
+              </div>
+            ))}
+          </div>
+          {isSelected && <button className="text-sm text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 py-2" onClick={() => addBullet(block.items.length - 1, 0)} disabled={isRecycleBin}><Plus className="w-4 h-4" /> Add bullet</button>}
         </div>
-      )}
-      <div className="flex-1 bg-muted/30 rounded p-3">
-        <div className="space-y-1">
-          {bulletBlock.items.map((bullet, index) => (
-            <div
-              key={bullet.id}
-              className="flex items-start gap-2 group/bullet"
-              style={{ paddingLeft: `${bullet.indent * 16}px` }}
-            >
-              <span className="text-muted-foreground font-bold mt-1 select-none text-sm">•</span>
-              <Textarea
-                ref={(el) => {
-                  if (el) bulletRefs.current.set(bullet.id, el);
-                  else bulletRefs.current.delete(bullet.id);
-                }}
-                value={bullet.content}
-                onChange={(e) => updateBullet(bullet.id, e.target.value)}
-                onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)}
-                onInput={(e) => autoResize(e.target as HTMLTextAreaElement)}
-                disabled={isRecycleBin}
-                placeholder={isSelected ? "..." : ""}
-                className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground"
-                rows={1}
-              />
-              {isSelected && (
-                <button
-                  className="p-2 text-muted-foreground hover:text-destructive min-h-[36px] min-w-[36px] flex items-center justify-center"
-                  onClick={() => removeBullet(bullet.id)}
-                  disabled={isRecycleBin}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        {isSelected && (
-          <button
-            className="text-sm text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 py-2"
-            onClick={() => addBullet(bulletBlock.items.length - 1, 0)}
-            disabled={isRecycleBin}
-          >
-            <Plus className="w-4 h-4" /> Add bullet
-          </button>
-        )}
+        {isSelected && <BlockActionMenu onDelete={onDelete} onMoveUp={onMoveUp} onMoveDown={onMoveDown} canMoveUp={canMoveUp} canMoveDown={canMoveDown} includeMoveActions />}
       </div>
-      {isSelected && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="p-2 text-muted-foreground/60 hover:text-foreground mt-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onMoveUp} disabled={!canMoveUp}>
-              <ChevronUp className="w-4 h-4 mr-2" />
-              Move Up
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onMoveDown} disabled={!canMoveDown}>
-              <ChevronDown className="w-4 h-4 mr-2" />
-              Move Down
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
-  );
+    );
+  }
+}
+
+const BLOCK_EDITOR_DEFINITIONS = [new GraphBlockEditorDefinition(), new DrawingBlockEditorDefinition(), new TextBlockEditorDefinition(), new ImageBlockEditorDefinition(), new CheckboxBlockEditorDefinition(), new LinkBlockEditorDefinition(), new BulletBlockEditorDefinition()] as const satisfies readonly BlockEditorbase[];
+const BLOCK_EDITOR_REGISTRY = Object.fromEntries(BLOCK_EDITOR_DEFINITIONS.map((definition) => [definition.type, definition])) as Record<ContentBlock['type'], BlockEditorbase>;
+function getBlockEditorDefinition(type: ContentBlock['type']): BlockEditorbase {
+  return BLOCK_EDITOR_REGISTRY[type];
+}
+
+function BlockEditor(props: BlockEditorProps) {
+  const { block } = props;
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const bulletRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+  const focusNextBullet = useRef<string | null>(null);
+  const autoResize = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+  };
+  const context: BlockEditorContext = { textRef, bulletRefs, focusNextBullet, autoResize };
+  const definition = getBlockEditorDefinition(block.type);
+  useEffect(() => {
+    definition.afterBlockChange(block, context);
+  }, [block, definition]);
+  return definition.renderEditor(props, context);
 }
 
 interface SortableBlockProps extends BlockEditorProps {
@@ -2169,21 +2212,14 @@ function GridCardItem({
     gridRowEnd: `span ${rowSpan}`,
   };
 
-  const checkboxBlock = card.cardType === 'checkbox'
-    ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
-    : undefined;
-  const linkBlock = card.cardType === 'link'
-    ? card.blocks.find(b => b.type === 'link') as LinkBlock | undefined
-    : undefined;
-  const imageBlock = card.cardType === 'image'
-    ? card.blocks.find(b => b.type === 'image') as ImageBlock | undefined
-    : undefined;
-  const drawingBlock = card.cardType === 'drawing'
-    ? card.blocks.find(b => b.type === 'drawing') as DrawingBlock | undefined
-    : undefined;
-  const graphBlock = card.cardType === 'graph'
-    ? card.blocks.find(b => b.type === 'graph') as GraphBlock | undefined
-    : undefined;
+  const cardTypeDefinition = getCardTypeDefinition(card.cardType);
+  const {
+    checkboxBlock,
+    linkBlock,
+    imageBlock,
+    drawingBlock,
+    graphBlock,
+  } = getTypedBlocksByCardType(card);
   const normalizedGraphBlock = graphBlock ? normalizeGraphBlock(graphBlock) : undefined;
   const visibleChildren = card.children
     .filter((child) => !child.isDeleted)
@@ -2205,11 +2241,20 @@ function GridCardItem({
     }
   };
 
-  const isMediaCard = cardTypeIsMedia(card.cardType);
-  const isFolderCard = cardTypeCanHaveChildren(card.cardType);
-  const showInlineChildren = inlineChildren && isFolderCard && !isRecycleBin;
-  const shouldSpanWide = showInlineChildren && visibleChildren.length > 0;
-  const shouldSpanExtraWide = showInlineChildren && nestingDepth === 0 && visibleChildren.length >= 10;
+  const gridLayout = cardTypeDefinition.getGridLayout({
+    hasCheckboxBlock: Boolean(checkboxBlock),
+    inlineChildren,
+    isRecycleBin: Boolean(isRecycleBin),
+    visibleChildrenCount: visibleChildren.length,
+    nestingDepth,
+  });
+  const {
+    isMediaCard,
+    canHaveChildren: isFolderCard,
+    showInlineChildren,
+    shouldSpanWide,
+    shouldSpanExtraWide,
+  } = gridLayout;
 
   const handleRenameStart = () => {
     const node = titleRef.current;
@@ -2250,17 +2295,7 @@ function GridCardItem({
         )}
       <div
         ref={contentRef}
-        className={cn(
-          "relative rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors min-h-[96px]",
-          showInlineChildren
-            ? "p-4"
-            : cn(
-                "flex items-center gap-2 justify-center",
-                isMediaCard ? "p-0 overflow-hidden" : "p-4",
-                checkboxBlock ? "justify-start pl-4" : "justify-center"
-              ),
-          isFolderCard && "bg-card border-border hover:bg-accent"
-        )}
+        className={gridLayout.contentClassName}
         onDoubleClick={(e) => {
           e.stopPropagation();
           onNavigate();
@@ -2284,7 +2319,7 @@ function GridCardItem({
         )}
         <div className="flex-1 w-full min-w-0 flex flex-col items-center">
         {!isMediaCard && (
-          <div className={cn("w-full min-w-0", showInlineChildren && checkboxBlock && "flex items-start gap-2")}>
+          <div className={gridLayout.titleWrapperClassName}>
             {showInlineChildren && checkboxBlock && (
               <input
                 type="checkbox"
@@ -2298,9 +2333,7 @@ function GridCardItem({
             <div
               ref={titleRef}
               className={cn(
-                "text-sm font-medium w-full min-w-0 px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none",
-                "cursor-text select-text",
-                checkboxBlock ? "text-left" : "text-center",
+                gridLayout.titleClassName,
                 checkboxBlock?.checked && "line-through text-muted-foreground"
               )}
               contentEditable={!isRecycleBin}
@@ -2370,9 +2403,9 @@ function GridCardItem({
             </div>
           </div>
         )}
-        {card.cardType === 'image' && !imageBlock && (
+        {!imageBlock && !drawingBlock && !graphBlock && gridLayout.emptyMessage && (
           <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
-            No image yet
+            {gridLayout.emptyMessage}
           </div>
         )}
         {drawingBlock && (
@@ -2388,11 +2421,6 @@ function GridCardItem({
                 className={cn("w-full h-auto block object-contain", isMediaCard ? "" : "h-24")}
               />
             </div>
-          </div>
-        )}
-        {card.cardType === 'drawing' && !drawingBlock && (
-          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
-            No drawing yet
           </div>
         )}
         {graphBlock && (
@@ -2421,11 +2449,6 @@ function GridCardItem({
                 );
               })}
             </div>
-          </div>
-        )}
-        {card.cardType === 'graph' && !graphBlock && (
-          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
-            No graph yet
           </div>
         )}
         {showInlineChildren && (
@@ -2663,23 +2686,17 @@ export function WorkspacePanel({
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      
-      // Replace existing image if strictly one per card desired, or append?
-      // Let's replace existing image to keep it cleaner, but NOT remove other types.
-      const blocksWithoutImage = currentCard.blocks.filter(b => b.type !== 'image');
-      
-      // @ts-ignore
-      const newBlock: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-      onUpdateCardBlocks(currentCard.id, [...blocksWithoutImage, newBlock]);
+      const visibleBlockIds = new Set(getVisibleBlocksByCardType(currentCard).map((block) => block.id));
+      const blocksWithoutVisibleType = currentCard.blocks.filter((block) => !visibleBlockIds.has(block.id));
+      const nextBlocks = createInitialBlocksForCardType(currentCard.cardType, { imageDataUrl: dataUrl });
+      onUpdateCardBlocks(currentCard.id, [...blocksWithoutVisibleType, ...nextBlocks]);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
   const getCardCreationContext = (type: CardType) => (
-    type === 'drawing'
-      ? { drawingPreviewDataUrl: createDrawingPreviewDataUrl([]) }
-      : undefined
+    createCardBlockContext(type, () => createDrawingPreviewDataUrl([]))
   );
   
   const applyCardType = (card: Card, nextType: CardType) => {
@@ -2696,7 +2713,7 @@ export function WorkspacePanel({
   };
 
   const createCardByType = (parentId: string | null, type: CardType) => {
-    if (type === 'image') {
+    if (cardTypeUsesCreateFilePicker(type)) {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
@@ -2706,8 +2723,8 @@ export function WorkspacePanel({
         const reader = new FileReader();
         reader.onload = (event) => {
           const dataUrl = event.target?.result as string;
-          const id = onAddCard(parentId, 'image');
-          onUpdateCardBlocks(id, createInitialBlocksForCardType('image', { imageDataUrl: dataUrl }));
+          const id = onAddCard(parentId, type);
+          onUpdateCardBlocks(id, createInitialBlocksForCardType(type, { imageDataUrl: dataUrl }));
         };
         reader.readAsDataURL(file);
       };
@@ -2720,7 +2737,7 @@ export function WorkspacePanel({
     if (blocks.length > 0) {
       onUpdateCardBlocks(id, blocks);
     }
-    if (type === 'drawing' || type === 'graph') {
+    if (cardTypeOpensOnCreate(type)) {
       onNavigateCard(id);
     }
   };
@@ -2783,7 +2800,8 @@ export function WorkspacePanel({
     }
   };
 
-  const canShowChildrenUI = isRecycleBin || !currentCard || cardTypeCanHaveChildren(currentCard.cardType);
+  const currentCardTypeDefinition = currentCard ? getCardTypeDefinition(currentCard.cardType) : null;
+  const canShowChildrenUI = isRecycleBin || !currentCard || Boolean(currentCardTypeDefinition?.canHaveChildren);
   const canUseTreemap = !isRecycleBin && !searchQuery && canShowChildrenUI;
   const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
 
@@ -2831,7 +2849,7 @@ export function WorkspacePanel({
               />
             </div>
 
-            {currentCard.cardType === 'image' && visibleBlocks.length === 0 ? (
+            {currentCardTypeDefinition?.showsEmptyImageUpload && visibleBlocks.length === 0 ? (
               <div className="rounded-lg border border-dashed p-4">
                 <Button size="sm" onClick={() => imageInputRef.current?.click()}>
                   <Image className="w-4 h-4 mr-1" />

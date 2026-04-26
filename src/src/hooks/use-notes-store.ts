@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
-import { inferCardTypeFromCardData } from '@/lib/card-types';
+import { blockMatchesSearch } from '@/lib/block-types';
+import {
+  buildExportBackup,
+  createExportFilename,
+  getImportCards,
+  normalizeCardTree,
+  stringifyExportBackup,
+} from '@/lib/import-export';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
-  normalizeGraphBlock,
   removeCardFromTree, 
   addCardToParent, 
   updateCardInTree,
@@ -22,116 +28,6 @@ const defaultState: AppState = {
   cards: []
 };
 
-function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
-  return blocks.map((block) => {
-    if (block.type === 'graph') {
-      return normalizeGraphBlock(block);
-    }
-    return block;
-  });
-}
-
-function normalizeCardTree(cards: Card[]): Card[] {
-  return cards.map(card => ({
-    ...card,
-    cardType: inferCardTypeFromCardData(card),
-    blocks: normalizeBlocks(card.blocks || []),
-    children: normalizeCardTree(card.children || [])
-  }));
-}
-
-// Migration helpers (kept for potential legacy localstorage data if we want to migrate it once)
-function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
-  const categoryMap = new Map<string, Card>();
-
-  const convertCategory = (cat: any): Card => ({
-    id: cat.id,
-    title: cat.name,
-    cardType: 'folder',
-    blocks: [],
-    parentId: cat.parentId,
-    children: [],
-    sortOrder: cat.sortOrder || Date.now(),
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    isDeleted: false
-  });
-
-  const convertCard = (card: any): Card => {
-    let blocks = card.blocks || [];
-    if (!blocks.length && card.content) {
-      blocks.push({ id: generateId(), type: 'text', content: card.content });
-    }
-    if (card.bullets && card.bullets.length) {
-      blocks.push({ id: generateId(), type: 'bullets', items: card.bullets });
-    }
-
-    return {
-      id: card.id,
-      title: card.title || 'Untitled',
-      cardType: inferCardTypeFromCardData({ blocks, children: [] }),
-      blocks: normalizeBlocks(blocks),
-      parentId: card.categoryId || null,
-      children: [],
-      sortOrder: Date.now(),
-      createdAt: card.createdAt || Date.now(),
-      updatedAt: card.updatedAt || Date.now(),
-      isDeleted: card.isDeleted || false
-    };
-  };
-
-  // Flatten categories
-  const flatCategories: any[] = [];
-  const traverse = (cats: any[]) => {
-    for (const cat of cats) {
-      flatCategories.push(cat);
-      traverse(cat.children || []);
-    }
-  };
-  traverse(categories);
-
-  // Create Card objects for categories
-  flatCategories.forEach(cat => {
-    categoryMap.set(cat.id, convertCategory(cat));
-  });
-
-  // Create Card objects for legacy cards
-  const convertedCards = legacyCards.map(convertCard);
-
-  // Build the tree
-  const rootCards: Card[] = [];
-
-  // Add category-cards to tree
-  flatCategories.forEach(cat => {
-    const card = categoryMap.get(cat.id)!;
-    if (cat.parentId && categoryMap.has(cat.parentId)) {
-      const parent = categoryMap.get(cat.parentId)!;
-      parent.children.push(card);
-    } else {
-      rootCards.push(card);
-    }
-  });
-
-  // Add legacy cards to tree
-  convertedCards.forEach((card: Card) => {
-    if (card.parentId && categoryMap.has(card.parentId)) {
-      const parent = categoryMap.get(card.parentId)!;
-      parent.children.push(card);
-    } else {
-      rootCards.push(card);
-    }
-  });
-
-  // Sort children
-  const sortCards = (list: Card[]) => {
-    list.sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
-    list.forEach(c => sortCards(c.children));
-  };
-  sortCards(rootCards);
-
-  return rootCards;
-}
-
 export function useNotesStore() {
   const [state, setState] = useState<AppState>(defaultState);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -146,7 +42,7 @@ export function useNotesStore() {
           const parsed = JSON.parse(saved);
           if (parsed.categories && Array.isArray(parsed.categories)) {
              console.log('Migrating legacy data...');
-             const newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
+             const newCards = getImportCards(parsed);
              setState({ cards: newCards });
           } else {
              setState({ cards: normalizeCardTree(parsed.cards || []) });
@@ -157,13 +53,8 @@ export function useNotesStore() {
            if (localSaved) {
               console.log('Migrating from localStorage to IDB...');
               const parsed = JSON.parse(localSaved);
-              let newCards: Card[] = [];
-              if (parsed.categories) {
-                 newCards = migrateLegacyData(parsed.categories, parsed.cards || []);
-              } else {
-                 newCards = parsed.cards || [];
-              }
-              setState({ cards: normalizeCardTree(newCards) });
+              const newCards = getImportCards(parsed);
+              setState({ cards: newCards });
               // Save to IDB immediately
               await set(STORAGE_KEY, JSON.stringify({ cards: newCards }));
            }
@@ -540,12 +431,7 @@ export function useNotesStore() {
       for (const card of list) {
         if (!card.isDeleted) {
           const matchesTitle = card.title.toLowerCase().includes(lowerQuery);
-          const matchesBlocks = card.blocks.some(block => {
-            if (block.type === 'text') return block.content.toLowerCase().includes(lowerQuery);
-            if (block.type === 'bullets') return block.items.some(i => i.content.toLowerCase().includes(lowerQuery));
-            if (block.type === 'graph') return block.cells.some(cell => cell.text.toLowerCase().includes(lowerQuery));
-            return false;
-          });
+          const matchesBlocks = card.blocks.some((block) => blockMatchesSearch(block, lowerQuery));
 
           if (matchesTitle || matchesBlocks) {
             results.push(card);
@@ -577,22 +463,10 @@ export function useNotesStore() {
   const exportData = useCallback(async () => {
     const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
     const now = new Date();
-    const timestamp = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getDate()).padStart(2, '0'),
-    ].join('-') + '_' + [
-      String(now.getHours()).padStart(2, '0'),
-      String(now.getMinutes()).padStart(2, '0'),
-    ].join('-');
-    const data = {
-      version: resolvedVersion,
-      exportedAt: now.toISOString(),
-      cards: state.cards
-    };
-    const jsonString = JSON.stringify(data, null, 2);
+    const data = buildExportBackup(state.cards, resolvedVersion, now);
+    const jsonString = stringifyExportBackup(data);
     const blob = new Blob([jsonString], { type: 'application/json' });
-    const filename = `notes-backup-${timestamp}.json`;
+    const filename = createExportFilename(now);
     
     // Direct download is more reliable than Web Share API for "Export" functionality
     // especially ensuring it runs synchronously within the user gesture
@@ -610,14 +484,7 @@ export function useNotesStore() {
   }, [state]);
 
   const importData = useCallback((data: any, mode: 'merge' | 'override') => {
-    let importedCards: Card[] = [];
-    if (data.categories) {
-       // Legacy format
-       importedCards = migrateLegacyData(data.categories, data.cards || []);
-    } else {
-      importedCards = data.cards || [];
-    }
-    importedCards = normalizeCardTree(importedCards);
+    const importedCards = getImportCards(data);
 
     if (mode === 'override') {
       setState({ cards: importedCards });

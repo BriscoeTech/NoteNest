@@ -454,11 +454,19 @@ This table is the canonical source for subtle action/menu/card-type combinations
 ### 6.7 Card Type Registry Contract
 
 - Card-type metadata and shared behavior must be centralized in a card-type registry based on `Cardbase`.
-- The registry is the source of truth for card type order, labels, picker icons, tree icons, default block creation, type-change block initialization, visible block filtering, import/load type inference, media-card behavior, create-and-open behavior, and child-container capability.
+- The registry is the source of truth for card type order, labels, picker icons, tree icons, default block creation, type-change block initialization, visible block filtering, import/load type inference, media-card behavior, create-and-open behavior, grid presentation policy, and child-container capability.
 - Persisted cards must remain plain JSON objects; class instances must not be serialized into IndexedDB, import/export files, or sync payloads.
 - UI components and store normalization should consume the registry instead of duplicating `cardType` switch statements for shared behavior.
 - Type-specific rendering and editing controls may remain in component code when they are genuinely unique to a card type, but shared applicability decisions should come from the registry.
 - Folder cards are normal registered card types with `canHaveChildren = true`.
+
+### 6.8 Block Type Registry Contract
+
+- Block-type metadata and shared behavior must be centralized in a block-type registry based on `Blockbase`.
+- The registry is the source of truth for block normalization and block-level search matching.
+- Persisted blocks must remain plain JSON objects; class instances must not be serialized into IndexedDB, import/export files, or sync payloads.
+- Editor dispatch may use polymorphic block editor definitions in component code when the renderer needs React state, refs, or callbacks.
+- Shared menu surfaces should render from action descriptors instead of hard-coded repeated menu branches.
 
 ## 7. Search Architecture
 
@@ -527,10 +535,13 @@ This table is the canonical source for subtle action/menu/card-type combinations
 ## 8. Import/Export Data Contract
 
 ### 8.1 Export payload
+- Export formatting is centralized in `src/src/lib/import-export.ts` and covered by `script/import-export-contract.test.ts`.
 - Shape:
+- Top-level key order is `version`, `exportedAt`, `cards`.
 - `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
 - `cards`: full root card array including nested children.
+- Export JSON is pretty-printed with two-space indentation.
 - Download filename format: `notes-backup-YYYY-MM-DD_HH-MM.json` using the local device time at export.
 
 ### 8.2 Import accepted formats

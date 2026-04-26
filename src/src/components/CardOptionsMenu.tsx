@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   ArrowUp,
   ChevronDown,
@@ -46,6 +47,39 @@ interface CardOptionsMenuProps {
   onDelete: () => void;
 }
 
+type CardMenuEntry =
+  | {
+      type: 'action';
+      key: string;
+      label: string;
+      Icon: LucideIcon;
+      onSelect: () => void;
+      className?: string;
+    }
+  | {
+      type: 'separator';
+      key: string;
+    };
+
+function compactMenuEntries(entries: Array<CardMenuEntry | null | false | undefined>): CardMenuEntry[] {
+  const compacted: CardMenuEntry[] = [];
+
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (entry.type === 'separator') {
+      const previous = compacted[compacted.length - 1];
+      if (!previous || previous.type === 'separator') continue;
+    }
+    compacted.push(entry);
+  }
+
+  while (compacted[compacted.length - 1]?.type === 'separator') {
+    compacted.pop();
+  }
+
+  return compacted;
+}
+
 export function CardOptionsMenu({
   isFolder = false,
   isRecycleBin = false,
@@ -75,10 +109,105 @@ export function CardOptionsMenu({
   const isControlled = typeof open === 'boolean';
   const menuOpen = isControlled ? open : internalOpen;
   const menuAnchorPoint = anchorPoint ?? internalAnchorPoint ?? { x: 0, y: 0 };
-  const hasPrimaryActions = Boolean(onOpen || (isFolder && onAddNote) || onRename || onMove);
-  const hasMoveActions = Boolean(onMoveUp || onMoveDown);
-  const hasExpandActions = Boolean(hasChildren && (onExpandAll || onCollapseAll));
-  const hasTypeOrExpandActions = Boolean(onChangeType || hasExpandActions);
+  const menuEntries = compactMenuEntries(
+    isRecycleBin
+      ? [
+          onRestore && {
+            type: 'action',
+            key: 'restore',
+            label: 'Restore',
+            Icon: ArrowUp,
+            onSelect: onRestore,
+          },
+          { type: 'separator', key: 'restore-delete-separator' },
+          {
+            type: 'action',
+            key: 'delete-forever',
+            label: 'Delete Forever',
+            Icon: Trash2,
+            onSelect: onDelete,
+            className: 'text-destructive focus:text-destructive',
+          },
+        ]
+      : [
+          isFolder && onAddNote && {
+            type: 'action',
+            key: 'add-note',
+            label: 'Add Note',
+            Icon: Plus,
+            onSelect: onAddNote,
+          },
+          { type: 'separator', key: 'create-primary-separator' },
+          onOpen && {
+            type: 'action',
+            key: 'open',
+            label: 'Open',
+            Icon: FolderOpen,
+            onSelect: onOpen,
+          },
+          onRename && {
+            type: 'action',
+            key: 'rename',
+            label: 'Rename',
+            Icon: Pencil,
+            onSelect: onRename,
+          },
+          onMove && {
+            type: 'action',
+            key: 'move',
+            label: 'Move to...',
+            Icon: FolderInput,
+            onSelect: onMove,
+          },
+          { type: 'separator', key: 'primary-move-separator' },
+          onMoveUp && {
+            type: 'action',
+            key: 'move-up',
+            label: 'Move Up',
+            Icon: ArrowUp,
+            onSelect: onMoveUp,
+          },
+          onMoveDown && {
+            type: 'action',
+            key: 'move-down',
+            label: 'Move Down',
+            Icon: ChevronDown,
+            onSelect: onMoveDown,
+          },
+          { type: 'separator', key: 'move-type-separator' },
+          onChangeType && {
+            type: 'action',
+            key: 'change-type',
+            label: 'Change type...',
+            Icon: Type,
+            onSelect: onChangeType,
+          },
+          { type: 'separator', key: 'type-expand-separator' },
+          hasChildren && onExpandAll && {
+            type: 'action',
+            key: 'expand-all',
+            label: 'Expand All',
+            Icon: ChevronsUpDown,
+            onSelect: onExpandAll,
+          },
+          hasChildren && onCollapseAll && {
+            type: 'action',
+            key: 'collapse-all',
+            label: 'Collapse All',
+            Icon: ChevronsDownUp,
+            onSelect: onCollapseAll,
+          },
+          { type: 'separator', key: 'expand-delete-separator' },
+          {
+            type: 'action',
+            key: 'delete',
+            label: 'Delete',
+            Icon: Trash2,
+            onSelect: onDelete,
+            className: 'text-destructive focus:text-destructive',
+          },
+        ]
+  );
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!isControlled) {
@@ -123,97 +252,25 @@ export function CardOptionsMenu({
         )}
       </span>
       <DropdownMenuContent align={align} className={contentClassName}>
-        {!isRecycleBin ? (
-          <>
-            {isFolder && onAddNote && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onAddNote(); }}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Note
-              </DropdownMenuItem>
-            )}
-            {isFolder && onAddNote && (onOpen || onRename || onMove) && <DropdownMenuSeparator />}
-            {onOpen && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpen(); }}>
-                <FolderOpen className="mr-2 h-4 w-4" />
-                Open
-              </DropdownMenuItem>
-            )}
-            {onRename && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(); }}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Rename
-              </DropdownMenuItem>
-            )}
-            {onMove && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMove(); }}>
-                <FolderInput className="mr-2 h-4 w-4" />
-                Move to...
-              </DropdownMenuItem>
-            )}
-            {hasPrimaryActions && (
-                <DropdownMenuSeparator />
-              )}
-            {onMoveUp && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveUp(); }}>
-                <ArrowUp className="mr-2 h-4 w-4" />
-                Move Up
-              </DropdownMenuItem>
-            )}
-            {onMoveDown && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMoveDown(); }}>
-                <ChevronDown className="mr-2 h-4 w-4" />
-                Move Down
-              </DropdownMenuItem>
-            )}
-            {hasMoveActions && (
-              <DropdownMenuSeparator />
-            )}
-            {onChangeType && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onChangeType(); }}>
-                <Type className="mr-2 h-4 w-4" />
-                Change type...
-              </DropdownMenuItem>
-            )}
-            {onChangeType && hasExpandActions && <DropdownMenuSeparator />}
-            {hasChildren && onExpandAll && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onExpandAll(); }}>
-                <ChevronsUpDown className="mr-2 h-4 w-4" />
-                Expand All
-              </DropdownMenuItem>
-            )}
-            {hasChildren && onCollapseAll && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onCollapseAll(); }}>
-                <ChevronsDownUp className="mr-2 h-4 w-4" />
-                Collapse All
-              </DropdownMenuItem>
-            )}
-            {hasTypeOrExpandActions && <DropdownMenuSeparator />}
+        {menuEntries.map((entry) => {
+          if (entry.type === 'separator') {
+            return <DropdownMenuSeparator key={entry.key} />;
+          }
+          const Icon = entry.Icon;
+          return (
             <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-destructive focus:text-destructive"
+              key={entry.key}
+              onClick={(e) => {
+                e.stopPropagation();
+                entry.onSelect();
+              }}
+              className={entry.className}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              <Icon className="mr-2 h-4 w-4" />
+              {entry.label}
             </DropdownMenuItem>
-          </>
-        ) : (
-          <>
-            {onRestore && (
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRestore(); }}>
-                <ArrowUp className="mr-2 h-4 w-4" />
-                Restore
-              </DropdownMenuItem>
-            )}
-            {onRestore && <DropdownMenuSeparator />}
-            <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Forever
-            </DropdownMenuItem>
-          </>
-        )}
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -3,6 +3,46 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-04-26
+
+### Card and Block Registry Refactor (v2.53.0)
+
+**Author**: Codex
+
+**Problem**:
+- Adding a new note/card type required touching scattered type checks for creation, tree icons, menu behavior, import/load inference, workspace grid presentation, and editor rendering.
+- Import/export formatting behavior was embedded in the store hook, which made the backup contract harder to test directly.
+
+**Changes**:
+- Added a `Cardbase` card-type registry in `src/src/lib/card-types.tsx` for shared card metadata and behavior:
+- labels and ordering,
+- picker/tree icons,
+- default block creation,
+- type-change block initialization,
+- visible/typed block lookup,
+- create-file-picker and open-after-create behavior,
+- child-container capability,
+- workspace grid presentation policy.
+- Added a `Blockbase` block-type registry in `src/src/lib/block-types.ts` for shared block normalization and search behavior.
+- Replaced repeated block-editor type dispatch with polymorphic editor definitions in `src/src/components/WorkspacePanel.tsx`.
+- Extracted drawing shape and drawing tool strategy definitions so drawing behavior is less dependent on repeated tool/kind conditionals.
+- Refactored shared card menu rendering to use action descriptors instead of duplicated normal/recycle-bin menu branches.
+- Extracted import/export formatting, import normalization, current-format import, and legacy import migration into `src/src/lib/import-export.ts`.
+- Added contract tests for:
+- card type registry behavior,
+- block type registry behavior,
+- import/export JSON shape and formatting,
+- filename formatting,
+- current-format round trips,
+- graph import normalization,
+- legacy category/card migration.
+- Updated `Architecture.md` to document the card registry, block registry, menu descriptor boundary, and import/export formatting contract.
+
+**Result**:
+- New card and block types have fewer scattered update points.
+- Import/export backup formatting is now explicitly tested and easier to maintain.
+- Functional behavior is intended to remain unchanged.
+
 ## 2026-04-24
 
 ### Graph Note Type and Editor

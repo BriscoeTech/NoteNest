@@ -11,7 +11,16 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, CardType, ContentBlock, GraphBlock } from '@/lib/types';
+import type {
+  Card,
+  CardType,
+  CheckboxBlock,
+  ContentBlock,
+  DrawingBlock,
+  GraphBlock,
+  ImageBlock,
+  LinkBlock,
+} from '@/lib/types';
 import { createGraphCells, generateId, GRAPH_MIN_SIZE } from '@/lib/types';
 
 export interface CardBlockCreationContext {
@@ -27,10 +36,45 @@ export interface CardTypeDefinition {
   opensOnCreate: boolean;
   isMediaCard: boolean;
   showTreeIcon: boolean;
+  usesCreateFilePicker: boolean;
+  needsDrawingPreviewContext: boolean;
+  showsEmptyImageUpload: boolean;
+  emptyGridMessage: string | null;
   getVisibleBlocks(card: Pick<Card, 'blocks'>): ContentBlock[];
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks;
   createBlocksForNewCard(context?: CardBlockCreationContext): ContentBlock[];
   ensureBlocksForTypeChange(card: Pick<Card, 'blocks'>, context?: CardBlockCreationContext): ContentBlock[];
   inferFromCard(card: Pick<Card, 'blocks' | 'children'>): boolean;
+  getGridLayout(context: CardGridLayoutContext): CardGridLayout;
+  renderTreeIcon(isExpanded: boolean): ReactNode;
+}
+
+export interface CardGridLayoutContext {
+  hasCheckboxBlock: boolean;
+  inlineChildren: boolean;
+  isRecycleBin: boolean;
+  visibleChildrenCount: number;
+  nestingDepth: number;
+}
+
+export interface CardGridLayout {
+  isMediaCard: boolean;
+  canHaveChildren: boolean;
+  showInlineChildren: boolean;
+  shouldSpanWide: boolean;
+  shouldSpanExtraWide: boolean;
+  contentClassName: string;
+  titleWrapperClassName: string;
+  titleClassName: string;
+  emptyMessage: string | null;
+}
+
+export interface CardTypedBlocks {
+  checkboxBlock?: CheckboxBlock;
+  linkBlock?: LinkBlock;
+  imageBlock?: ImageBlock;
+  drawingBlock?: DrawingBlock;
+  graphBlock?: GraphBlock;
 }
 
 export abstract class Cardbase implements CardTypeDefinition {
@@ -38,6 +82,10 @@ export abstract class Cardbase implements CardTypeDefinition {
   readonly opensOnCreate: boolean = false;
   readonly isMediaCard: boolean = false;
   readonly showTreeIcon: boolean = true;
+  readonly usesCreateFilePicker: boolean = false;
+  readonly needsDrawingPreviewContext: boolean = false;
+  readonly showsEmptyImageUpload: boolean = false;
+  readonly emptyGridMessage: string | null = null;
 
   protected constructor(
     readonly type: CardType,
@@ -48,6 +96,10 @@ export abstract class Cardbase implements CardTypeDefinition {
 
   getVisibleBlocks(card: Pick<Card, 'blocks'>): ContentBlock[] {
     return card.blocks.filter((block) => this.visibleBlockTypes.includes(block.type));
+  }
+
+  getTypedBlocks(_card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return {};
   }
 
   createBlocksForNewCard(_context: CardBlockCreationContext = {}): ContentBlock[] {
@@ -67,6 +119,47 @@ export abstract class Cardbase implements CardTypeDefinition {
   inferFromCard(card: Pick<Card, 'blocks' | 'children'>): boolean {
     return this.getVisibleBlocks(card).length > 0;
   }
+
+  getGridLayout({
+    hasCheckboxBlock,
+    inlineChildren,
+    isRecycleBin,
+    visibleChildrenCount,
+    nestingDepth,
+  }: CardGridLayoutContext): CardGridLayout {
+    const showInlineChildren = inlineChildren && this.canHaveChildren && !isRecycleBin;
+    return {
+      isMediaCard: this.isMediaCard,
+      canHaveChildren: this.canHaveChildren,
+      showInlineChildren,
+      shouldSpanWide: showInlineChildren && visibleChildrenCount > 0,
+      shouldSpanExtraWide: showInlineChildren && nestingDepth === 0 && visibleChildrenCount >= 10,
+      contentClassName: cn(
+        'relative rounded-lg border bg-card hover:bg-accent hover:border-primary/30 transition-colors min-h-[96px]',
+        showInlineChildren
+          ? 'p-4'
+          : cn(
+              'flex items-center gap-2 justify-center',
+              this.isMediaCard ? 'p-0 overflow-hidden' : 'p-4',
+              hasCheckboxBlock ? 'justify-start pl-4' : 'justify-center'
+            ),
+        this.canHaveChildren && 'bg-card border-border hover:bg-accent'
+      ),
+      titleWrapperClassName: cn('w-full min-w-0', showInlineChildren && hasCheckboxBlock && 'flex items-start gap-2'),
+      titleClassName: cn(
+        'text-sm font-medium w-full min-w-0 px-2 border-none shadow-none bg-transparent p-0 min-h-[20px] break-words whitespace-pre-wrap outline-none',
+        'cursor-text select-text',
+        hasCheckboxBlock ? 'text-left' : 'text-center'
+      ),
+      emptyMessage: this.emptyGridMessage,
+    };
+  }
+
+  renderTreeIcon(_isExpanded: boolean): ReactNode {
+    if (!this.showTreeIcon) return null;
+    const Icon = this.Icon;
+    return <Icon className="w-4 h-4 text-muted-foreground shrink-0" />;
+  }
 }
 
 class NoteCard extends Cardbase {
@@ -80,8 +173,14 @@ class NoteCard extends Cardbase {
 }
 
 class CheckboxCard extends Cardbase {
+  readonly showTreeIcon = false;
+
   constructor() {
     super('checkbox', 'Checkbox', CheckSquare, ['checkbox']);
+  }
+
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return { checkboxBlock: this.getVisibleBlocks(card)[0] as CheckboxBlock | undefined };
   }
 
   createBlocksForNewCard(): ContentBlock[] {
@@ -94,6 +193,10 @@ class LinkCard extends Cardbase {
     super('link', 'Link', LinkIcon, ['link']);
   }
 
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return { linkBlock: this.getVisibleBlocks(card)[0] as LinkBlock | undefined };
+  }
+
   createBlocksForNewCard(): ContentBlock[] {
     return [{ id: generateId(), type: 'link', url: '' }];
   }
@@ -101,9 +204,16 @@ class LinkCard extends Cardbase {
 
 class ImageCard extends Cardbase {
   readonly isMediaCard = true;
+  readonly usesCreateFilePicker = true;
+  readonly showsEmptyImageUpload = true;
+  readonly emptyGridMessage = 'No image yet';
 
   constructor() {
     super('image', 'Image', Image, ['image']);
+  }
+
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return { imageBlock: this.getVisibleBlocks(card)[0] as ImageBlock | undefined };
   }
 
   createBlocksForNewCard(context: CardBlockCreationContext = {}): ContentBlock[] {
@@ -120,9 +230,15 @@ class ImageCard extends Cardbase {
 class DrawingCard extends Cardbase {
   readonly isMediaCard = true;
   readonly opensOnCreate = true;
+  readonly needsDrawingPreviewContext = true;
+  readonly emptyGridMessage = 'No drawing yet';
 
   constructor() {
     super('drawing', 'Drawing', Brush, ['drawing']);
+  }
+
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return { drawingBlock: this.getVisibleBlocks(card)[0] as DrawingBlock | undefined };
   }
 
   createBlocksForNewCard(context: CardBlockCreationContext = {}): ContentBlock[] {
@@ -151,9 +267,14 @@ export function createEmptyGraphBlock(): GraphBlock {
 
 class GraphCard extends Cardbase {
   readonly opensOnCreate = true;
+  readonly emptyGridMessage = 'No graph yet';
 
   constructor() {
     super('graph', 'Graph', LayoutGrid, ['graph']);
+  }
+
+  getTypedBlocks(card: Pick<Card, 'blocks'>): CardTypedBlocks {
+    return { graphBlock: this.getVisibleBlocks(card)[0] as GraphBlock | undefined };
   }
 
   createBlocksForNewCard(): ContentBlock[] {
@@ -170,6 +291,11 @@ class FolderCard extends Cardbase {
 
   inferFromCard(card: Pick<Card, 'blocks' | 'children'>): boolean {
     return card.children.length > 0;
+  }
+
+  renderTreeIcon(isExpanded: boolean): ReactNode {
+    const Icon = isExpanded ? FolderOpen : Folder;
+    return <Icon className="w-4 h-4 text-muted-foreground shrink-0" />;
   }
 }
 
@@ -210,6 +336,10 @@ export function getVisibleBlocksByCardType(card: Pick<Card, 'cardType' | 'blocks
   return getCardTypeDefinition(card.cardType).getVisibleBlocks(card);
 }
 
+export function getTypedBlocksByCardType(card: Pick<Card, 'cardType' | 'blocks'>): CardTypedBlocks {
+  return getCardTypeDefinition(card.cardType).getTypedBlocks(card);
+}
+
 export function createInitialBlocksForCardType(
   type: CardType,
   context: CardBlockCreationContext = {}
@@ -233,13 +363,28 @@ export function cardTypeIsMedia(type: CardType): boolean {
   return getCardTypeDefinition(type).isMediaCard;
 }
 
+export function cardTypeUsesCreateFilePicker(type: CardType): boolean {
+  return getCardTypeDefinition(type).usesCreateFilePicker;
+}
+
+export function cardTypeOpensOnCreate(type: CardType): boolean {
+  return getCardTypeDefinition(type).opensOnCreate;
+}
+
+export function createCardBlockContext(
+  type: CardType,
+  createDrawingPreviewDataUrl: () => string
+): CardBlockCreationContext | undefined {
+  return getCardTypeDefinition(type).needsDrawingPreviewContext
+    ? { drawingPreviewDataUrl: createDrawingPreviewDataUrl() }
+    : undefined;
+}
+
 export function CardTypeIcon({ cardType, className }: { cardType: CardType; className?: string }) {
   const Icon = getCardTypeDefinition(cardType).Icon;
   return <Icon className={cn('w-5 h-5 text-muted-foreground shrink-0', className)} />;
 }
 
 export function getTreeCardTypeIcon(cardType: CardType, isExpanded: boolean): ReactNode {
-  if (cardType === 'checkbox') return null;
-  const Icon = cardType === 'folder' && isExpanded ? FolderOpen : getCardTypeDefinition(cardType).Icon;
-  return <Icon className="w-4 h-4 text-muted-foreground shrink-0" />;
+  return getCardTypeDefinition(cardType).renderTreeIcon(isExpanded);
 }

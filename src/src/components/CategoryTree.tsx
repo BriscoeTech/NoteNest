@@ -1,16 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, CardType, ContentBlock, CheckboxBlock } from '@/lib/types';
+import type { Card, CardType, ContentBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
   CardTypeIcon,
   cardTypeCanHaveChildren,
+  cardTypeUsesCreateFilePicker,
   createInitialBlocksForCardType,
   ensureCardBlocksForTypeChange,
   getTreeCardTypeIcon,
+  getTypedBlocksByCardType,
 } from '@/lib/card-types';
 import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
 import {
@@ -110,9 +112,7 @@ function TreeItem({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
 
-  const checkboxBlock = card.cardType === 'checkbox'
-    ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
-    : undefined;
+  const { checkboxBlock } = getTypedBlocksByCardType(card);
   const canHaveChildren = cardTypeCanHaveChildren(card.cardType);
 
   const handleCheckboxChange = (checked: boolean) => {
@@ -519,7 +519,7 @@ export function CategoryTree({
   };
 
   const createCardByType = (parentId: string | null, type: CardType) => {
-    if (type === 'image') {
+    if (cardTypeUsesCreateFilePicker(type)) {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
@@ -529,8 +529,8 @@ export function CategoryTree({
         const reader = new FileReader();
         reader.onload = (loadEvent) => {
           const dataUrl = loadEvent.target?.result as string;
-          const id = onAddCard(parentId, 'image');
-          onUpdateCardBlocks(id, createInitialBlocksForCardType('image', { imageDataUrl: dataUrl }));
+          const id = onAddCard(parentId, type);
+          onUpdateCardBlocks(id, createInitialBlocksForCardType(type, { imageDataUrl: dataUrl }));
           onSelectCard(id);
         };
         reader.readAsDataURL(file);
