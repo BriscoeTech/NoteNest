@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
+import { inferCardTypeFromCardData } from '@/lib/card-types';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
@@ -30,21 +31,10 @@ function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
   });
 }
 
-function inferCardType(card: Pick<Card, 'blocks' | 'children'> & Partial<Pick<Card, 'cardType'>>): CardType {
-  if (card.cardType) return card.cardType;
-  if (card.children?.length) return 'folder';
-  if (card.blocks.some(b => b.type === 'checkbox')) return 'checkbox';
-  if (card.blocks.some(b => b.type === 'link')) return 'link';
-  if (card.blocks.some(b => b.type === 'image')) return 'image';
-  if (card.blocks.some(b => b.type === 'drawing')) return 'drawing';
-  if (card.blocks.some(b => b.type === 'graph')) return 'graph';
-  return 'note';
-}
-
 function normalizeCardTree(cards: Card[]): Card[] {
   return cards.map(card => ({
     ...card,
-    cardType: inferCardType(card),
+    cardType: inferCardTypeFromCardData(card),
     blocks: normalizeBlocks(card.blocks || []),
     children: normalizeCardTree(card.children || [])
   }));
@@ -79,7 +69,7 @@ function migrateLegacyData(categories: any[], legacyCards: any[]): Card[] {
     return {
       id: card.id,
       title: card.title || 'Untitled',
-      cardType: inferCardType({ blocks, children: [] }),
+      cardType: inferCardTypeFromCardData({ blocks, children: [] }),
       blocks: normalizeBlocks(blocks),
       parentId: card.categoryId || null,
       children: [],

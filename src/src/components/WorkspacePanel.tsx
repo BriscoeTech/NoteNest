@@ -1,10 +1,21 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { Plus, Search, X, Folder, FolderOpen, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, CheckSquare, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle, LayoutGrid } from 'lucide-react';
+import { Plus, Search, X, Folder, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
-import { createEmptyGraphCell, createGraphCells, DEFAULT_GRAPH_CELL_COLOR, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
+import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
+import {
+  CARD_TYPE_LABELS,
+  CARD_TYPE_ORDER,
+  CardTypeIcon,
+  cardTypeCanHaveChildren,
+  cardTypeIsMedia,
+  createEmptyGraphBlock,
+  createInitialBlocksForCardType,
+  ensureCardBlocksForTypeChange,
+  getVisibleBlocksByCardType,
+} from '@/lib/card-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,41 +82,8 @@ interface BlockEditorProps {
 const DRAWING_PREVIEW_WIDTH = 540;
 const DRAWING_PREVIEW_HEIGHT = 720;
 
-const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
-
-const CARD_TYPE_LABELS: Record<CardType, string> = {
-  note: 'Note',
-  checkbox: 'Checkbox',
-  link: 'Link',
-  image: 'Image',
-  drawing: 'Drawing',
-  graph: 'Graph',
-  folder: 'Folder',
-};
-
-function CardTypeIcon({ cardType, className }: { cardType: CardType; className?: string }) {
-  const iconClass = cn('w-5 h-5 text-muted-foreground shrink-0', className);
-  if (cardType === 'folder') return <Folder className={iconClass} />;
-  if (cardType === 'checkbox') return <CheckSquare className={iconClass} />;
-  if (cardType === 'link') return <LinkIcon className={iconClass} />;
-  if (cardType === 'image') return <Image className={iconClass} />;
-  if (cardType === 'drawing') return <Brush className={iconClass} />;
-  if (cardType === 'graph') return <LayoutGrid className={iconClass} />;
-  return <FileText className={iconClass} />;
-}
-
 function createGraphCellKey(row: number, column: number): string {
   return `${row}:${column}`;
-}
-
-function createEmptyGraphBlock(): GraphBlock {
-  return {
-    id: generateId(),
-    type: 'graph',
-    rows: GRAPH_MIN_SIZE,
-    columns: GRAPH_MIN_SIZE,
-    cells: createGraphCells(GRAPH_MIN_SIZE, GRAPH_MIN_SIZE),
-  };
 }
 
 function renderDrawingStrokes(
@@ -605,27 +583,6 @@ function GraphBlockEditor({
       )}
     </div>
   );
-}
-
-function getVisibleBlocksByCardType(card: Card): ContentBlock[] {
-  switch (card.cardType) {
-    case 'note':
-      return card.blocks.filter(block => block.type === 'text' || block.type === 'bullets');
-    case 'checkbox':
-      return card.blocks.filter(block => block.type === 'checkbox');
-    case 'link':
-      return card.blocks.filter(block => block.type === 'link');
-    case 'image':
-      return card.blocks.filter(block => block.type === 'image');
-    case 'drawing':
-      return card.blocks.filter(block => block.type === 'drawing');
-    case 'graph':
-      return card.blocks.filter(block => block.type === 'graph');
-    case 'folder':
-      return [];
-    default:
-      return [];
-  }
 }
 
 function distancePointToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -2248,8 +2205,8 @@ function GridCardItem({
     }
   };
 
-  const isMediaCard = card.cardType === 'image' || card.cardType === 'drawing';
-  const isFolderCard = card.cardType === 'folder';
+  const isMediaCard = cardTypeIsMedia(card.cardType);
+  const isFolderCard = cardTypeCanHaveChildren(card.cardType);
   const showInlineChildren = inlineChildren && isFolderCard && !isRecycleBin;
   const shouldSpanWide = showInlineChildren && visibleChildren.length > 0;
   const shouldSpanExtraWide = showInlineChildren && nestingDepth === 0 && visibleChildren.length >= 10;
@@ -2718,45 +2675,17 @@ export function WorkspacePanel({
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+
+  const getCardCreationContext = (type: CardType) => (
+    type === 'drawing'
+      ? { drawingPreviewDataUrl: createDrawingPreviewDataUrl([]) }
+      : undefined
+  );
   
   const applyCardType = (card: Card, nextType: CardType) => {
-    const hasTypeBlock = card.blocks.some((block) => {
-      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
-      return block.type === nextType;
-    });
-    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
-
-    if (nextType === 'note') {
-      const newBlock: ContentBlock = { id: generateId(), type: 'text', content: '' };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'checkbox') {
-      const newBlock: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'link') {
-      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'drawing') {
-      const newBlock: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        groups: [],
-        redoStrokes: [],
-        previewDataUrl: createDrawingPreviewDataUrl([]),
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'graph') {
-      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
+    const nextBlocks = ensureCardBlocksForTypeChange(card, nextType, getCardCreationContext(nextType));
+    if (nextBlocks !== card.blocks) {
+      onUpdateCardBlocks(card.id, nextBlocks);
     }
   };
 
@@ -2778,8 +2707,7 @@ export function WorkspacePanel({
         reader.onload = (event) => {
           const dataUrl = event.target?.result as string;
           const id = onAddCard(parentId, 'image');
-          const block: ImageBlock = { id: generateId(), type: 'image', dataUrl, width: 100 };
-          onUpdateCardBlocks(id, [block]);
+          onUpdateCardBlocks(id, createInitialBlocksForCardType('image', { imageDataUrl: dataUrl }));
         };
         reader.readAsDataURL(file);
       };
@@ -2788,35 +2716,12 @@ export function WorkspacePanel({
     }
 
     const id = onAddCard(parentId, type);
-    if (type === 'checkbox') {
-      const block: CheckboxBlock = { id: generateId(), type: 'checkbox', checked: false };
-      onUpdateCardBlocks(id, [block]);
-      return;
+    const blocks = createInitialBlocksForCardType(type, getCardCreationContext(type));
+    if (blocks.length > 0) {
+      onUpdateCardBlocks(id, blocks);
     }
-    if (type === 'link') {
-      const block: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(id, [block]);
-      return;
-    }
-    if (type === 'drawing') {
-      const block: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        groups: [],
-        redoStrokes: [],
-        previewDataUrl: createDrawingPreviewDataUrl([]),
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateCardBlocks(id, [block]);
+    if (type === 'drawing' || type === 'graph') {
       onNavigateCard(id);
-      return;
-    }
-    if (type === 'graph') {
-      onUpdateCardBlocks(id, [createEmptyGraphBlock()]);
-      onNavigateCard(id);
-      return;
     }
   };
 
@@ -2878,7 +2783,7 @@ export function WorkspacePanel({
     }
   };
 
-  const canShowChildrenUI = isRecycleBin || !currentCard || currentCard.cardType === 'folder';
+  const canShowChildrenUI = isRecycleBin || !currentCard || cardTypeCanHaveChildren(currentCard.cardType);
   const canUseTreemap = !isRecycleBin && !searchQuery && canShowChildrenUI;
   const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
 

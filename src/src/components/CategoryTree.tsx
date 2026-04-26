@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Trash2, MoreHorizontal, FileText, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, Image as ImageIcon, Brush, CheckSquare, Link as LinkIcon, RefreshCw, LayoutGrid } from 'lucide-react';
+import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, CardType, ContentBlock, CheckboxBlock, LinkBlock, DrawingBlock, GraphBlock } from '@/lib/types';
-import { generateId } from '@/lib/types';
+import type { Card, CardType, ContentBlock, CheckboxBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
+import {
+  CARD_TYPE_LABELS,
+  CARD_TYPE_ORDER,
+  CardTypeIcon,
+  cardTypeCanHaveChildren,
+  createInitialBlocksForCardType,
+  ensureCardBlocksForTypeChange,
+  getTreeCardTypeIcon,
+} from '@/lib/card-types';
 import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
 import {
   DropdownMenu,
@@ -69,37 +77,6 @@ interface TreeItemProps {
   onDrop: (targetId: string, position: 'before' | 'after') => void;
 }
 
-const CARD_TYPE_ORDER: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
-const CARD_TYPE_LABELS: Record<CardType, string> = {
-  note: 'Note',
-  checkbox: 'Checkbox',
-  link: 'Link',
-  image: 'Image',
-  drawing: 'Drawing',
-  graph: 'Graph',
-  folder: 'Folder',
-};
-
-function typeIcon(type: CardType) {
-  if (type === 'folder') return <Folder className="w-4 h-4" />;
-  if (type === 'checkbox') return <CheckSquare className="w-4 h-4" />;
-  if (type === 'link') return <LinkIcon className="w-4 h-4" />;
-  if (type === 'image') return <ImageIcon className="w-4 h-4" />;
-  if (type === 'drawing') return <Brush className="w-4 h-4" />;
-  if (type === 'graph') return <LayoutGrid className="w-4 h-4" />;
-  return <FileText className="w-4 h-4" />;
-}
-
-function createEmptyGraphBlock(): GraphBlock {
-  return {
-    id: generateId(),
-    type: 'graph',
-    rows: 2,
-    columns: 2,
-    cells: Array.from({ length: 4 }, () => ({ text: '', color: '#ffffff' })),
-  };
-}
-
 function TreeItem({
   card,
   depth,
@@ -136,6 +113,7 @@ function TreeItem({
   const checkboxBlock = card.cardType === 'checkbox'
     ? card.blocks.find(b => b.type === 'checkbox') as CheckboxBlock | undefined
     : undefined;
+  const canHaveChildren = cardTypeCanHaveChildren(card.cardType);
 
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -147,41 +125,9 @@ function TreeItem({
   const handleChangeCardType = (nextType: CardType) => {
     if (card.cardType === nextType) return;
     onUpdateCard(card.id, { cardType: nextType });
-    const hasTypeBlock = card.blocks.some((block) => {
-      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
-      return block.type === nextType;
-    });
-    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
-
-    if (nextType === 'note') {
-      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'text', content: '' }]);
-      return;
-    }
-    if (nextType === 'checkbox') {
-      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'checkbox', checked: false }]);
-      return;
-    }
-    if (nextType === 'link') {
-      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'drawing') {
-      const newBlock: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        groups: [],
-        redoStrokes: [],
-        previewDataUrl: '',
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'graph') {
-      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
+    const nextBlocks = ensureCardBlocksForTypeChange(card, nextType);
+    if (nextBlocks !== card.blocks) {
+      onUpdateCardBlocks(card.id, nextBlocks);
     }
   };
 
@@ -308,21 +254,7 @@ function TreeItem({
           />
         )}
 
-        {card.cardType === 'folder' ? (
-          isExpanded ? <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" /> : <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : card.cardType === 'checkbox' ? (
-          // Checkbox-type rows use the checkbox control as the leading marker.
-          // Do not render an extra type icon for this row type.
-          null
-        ) : card.cardType === 'link' ? (
-          <LinkIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : card.cardType === 'image' ? (
-          <ImageIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : card.cardType === 'drawing' ? (
-          <Brush className="w-4 h-4 text-muted-foreground shrink-0" />
-        ) : (
-          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-        )}
+        {getTreeCardTypeIcon(card.cardType, isExpanded)}
 
         {isEditing ? (
           <Input
@@ -339,7 +271,7 @@ function TreeItem({
         )}
 
         <CardOptionsMenu
-          isFolder={card.cardType === 'folder'}
+          isFolder={canHaveChildren}
           hasChildren={hasChildren}
           open={menuOpen}
           onOpenChange={(open) => {
@@ -356,7 +288,7 @@ function TreeItem({
               <MoreHorizontal className="w-3 h-3" />
             </button>
           }
-          onAddNote={card.cardType === 'folder' ? () => onAddChildNote(card.id) : undefined}
+          onAddNote={canHaveChildren ? () => onAddChildNote(card.id) : undefined}
           onRename={handleStartRename}
           onMove={() => onMoveCard(card.id)}
           onChangeType={() => setTypeDialogOpen(true)}
@@ -421,7 +353,7 @@ function TreeItem({
                   setTypeDialogOpen(false);
                 }}
               >
-                {typeIcon(type)}
+                <CardTypeIcon cardType={type} className="w-4 h-4" />
                 <span>{CARD_TYPE_LABELS[type]}</span>
               </button>
             ))}
@@ -586,47 +518,6 @@ export function CategoryTree({
     setTypeDialogOpen(true);
   };
 
-  const handleChangeCardType = (card: Card, nextType: CardType) => {
-    if (card.cardType === nextType) return;
-    onUpdateCard(card.id, { cardType: nextType });
-    const hasTypeBlock = card.blocks.some((block) => {
-      if (nextType === 'note') return block.type === 'text' || block.type === 'bullets';
-      return block.type === nextType;
-    });
-    if (hasTypeBlock || nextType === 'folder' || nextType === 'image') return;
-
-    if (nextType === 'note') {
-      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'text', content: '' }]);
-      return;
-    }
-    if (nextType === 'checkbox') {
-      onUpdateCardBlocks(card.id, [...card.blocks, { id: generateId(), type: 'checkbox', checked: false }]);
-      return;
-    }
-    if (nextType === 'link') {
-      const newBlock: LinkBlock = { id: generateId(), type: 'link', url: '' };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'drawing') {
-      const newBlock: DrawingBlock = {
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        groups: [],
-        redoStrokes: [],
-        previewDataUrl: '',
-        historyPast: [],
-        historyFuture: [],
-      };
-      onUpdateCardBlocks(card.id, [...card.blocks, newBlock]);
-      return;
-    }
-    if (nextType === 'graph') {
-      onUpdateCardBlocks(card.id, [...card.blocks, createEmptyGraphBlock()]);
-    }
-  };
-
   const createCardByType = (parentId: string | null, type: CardType) => {
     if (type === 'image') {
       const input = document.createElement('input');
@@ -639,8 +530,7 @@ export function CategoryTree({
         reader.onload = (loadEvent) => {
           const dataUrl = loadEvent.target?.result as string;
           const id = onAddCard(parentId, 'image');
-          const block = { id: generateId(), type: 'image', dataUrl, width: 100 } as ContentBlock;
-          onUpdateCardBlocks(id, [block]);
+          onUpdateCardBlocks(id, createInitialBlocksForCardType('image', { imageDataUrl: dataUrl }));
           onSelectCard(id);
         };
         reader.readAsDataURL(file);
@@ -650,23 +540,9 @@ export function CategoryTree({
     }
 
     const id = onAddCard(parentId, type);
-    if (type === 'checkbox') {
-      onUpdateCardBlocks(id, [{ id: generateId(), type: 'checkbox', checked: false }]);
-    } else if (type === 'link') {
-      onUpdateCardBlocks(id, [{ id: generateId(), type: 'link', url: '' }]);
-    } else if (type === 'drawing') {
-      onUpdateCardBlocks(id, [{
-        id: generateId(),
-        type: 'drawing',
-        strokes: [],
-        groups: [],
-        redoStrokes: [],
-        previewDataUrl: '',
-        historyPast: [],
-        historyFuture: [],
-      }]);
-    } else if (type === 'graph') {
-      onUpdateCardBlocks(id, [createEmptyGraphBlock()]);
+    const blocks = createInitialBlocksForCardType(type);
+    if (blocks.length > 0) {
+      onUpdateCardBlocks(id, blocks);
     }
     onSelectCard(id);
   };
@@ -881,7 +757,7 @@ export function CategoryTree({
                   setTypeDialogOpen(false);
                 }}
               >
-                {typeIcon(type)}
+                <CardTypeIcon cardType={type} className="w-4 h-4" />
                 <span>{CARD_TYPE_LABELS[type]}</span>
               </button>
             ))}

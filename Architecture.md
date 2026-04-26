@@ -208,7 +208,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ## 4. Data Model and Invariants
 
-Source of truth: `src/src/lib/types.ts`.
+Source of truth for stored data shape: `src/src/lib/types.ts`.
+Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 
 ### 4.1 Core types
 - `AppState`: `{ cards: Card[] }` where `cards` are root cards.
@@ -449,6 +450,15 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - Width propagation across nested treemap folders is intentional: ancestor folders may claim additional parent-grid width so the deepest visible folder can maintain usable child-card widths.
 - Shared interactions such as right-click menus, `...` menus, rename, double-click open, and drag-reorder should be implemented through shared controller/render paths wherever the behavior contract is the same.
 - When a feature applies to both workspace modes, implementation should extend the shared path rather than copy the feature into a second mode-specific renderer.
+
+### 6.7 Card Type Registry Contract
+
+- Card-type metadata and shared behavior must be centralized in a card-type registry based on `Cardbase`.
+- The registry is the source of truth for card type order, labels, picker icons, tree icons, default block creation, type-change block initialization, visible block filtering, import/load type inference, media-card behavior, create-and-open behavior, and child-container capability.
+- Persisted cards must remain plain JSON objects; class instances must not be serialized into IndexedDB, import/export files, or sync payloads.
+- UI components and store normalization should consume the registry instead of duplicating `cardType` switch statements for shared behavior.
+- Type-specific rendering and editing controls may remain in component code when they are genuinely unique to a card type, but shared applicability decisions should come from the registry.
+- Folder cards are normal registered card types with `canHaveChildren = true`.
 
 ## 7. Search Architecture
 
