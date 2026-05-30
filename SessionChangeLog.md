@@ -3,6 +3,25 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-05-30
+
+### Card and Folder Color Palette
+
+**Author**: Codex
+
+**Changes**:
+- Added a shared card color dialog for cards and folders from normal card action menus.
+- Added eight local palette slots with a protected default/no-color slot.
+- Added HSV background color selection with a hue slider and saturation/value shade picker.
+- Added black/white text color selection, sample `Text` previews on palette slots, and a live active preview before save/apply.
+- Persisted reusable palette slots in local browser storage.
+- Persisted resolved background color, text color, and text-color HSV metadata directly on cards/folders in IndexedDB.
+- Added contrast-aware fallback text color handling and reset default nested cards to normal card foreground colors to avoid inheritance issues in folder/treemap views.
+
+**Result**:
+- Users can style cards and folders without tying existing cards to mutable palette slots.
+- Palette presets are reusable, while individual cards/folders keep their own saved colors.
+
 ## 2026-04-26
 
 ### Card and Block Registry Refactor (v2.53.0)

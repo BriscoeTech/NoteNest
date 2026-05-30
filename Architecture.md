@@ -51,6 +51,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety 
 | Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `graph`, `folder` 
 | Notes model | Card type changes are non-destructive UI-mode switches (existing data retained) 
+| Notes model | Cards and folders may store custom background and text colors; default cards use theme colors 
+| Notes model | Card color presets are reusable local palette entries, but applying a preset stores resolved colors on the card/folder 
 | Notes model | Typed note creation uses a shared type picker dialog (workspace `New Note`) 
 | Content | Card blocks: text, bullets, image, checkbox, link, drawing, graph 
 | Content | Graph notes store a square-cell matrix with per-cell text and background color 
@@ -105,6 +107,10 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
+| UX | Normal card action menus expose a shared card color dialog for cards and folders 
+| UX | Card color dialog provides eight local palette slots; the default/no-color slot cannot be overwritten 
+| UX | Card color palette swatches and active editor preview show sample text on the selected background 
+| UX | Card color dialog supports HSV background selection and black/white text color selection, persisting text HSV metadata for future text-color expansion 
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
 | UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline folder-child rendering 
@@ -141,6 +147,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 12. For `folder` type, the content editor is hidden and sub-note area is shown.
 13. Changes are persisted to IndexedDB after state updates.
 14. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile.
+15. User may open the shared card color dialog from a normal card action menu to choose a card/folder background and black/white text color.
+16. Applying a palette color writes the resolved background/text values onto the selected card/folder only; later palette edits must not mutate cards that previously used that preset.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
@@ -214,7 +222,7 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 ### 4.1 Core types
 - `AppState`: `{ cards: Card[] }` where `cards` are root cards.
 - `Card`:
-- `id`, `title`, `cardType`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
+- `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`, `GraphBlock`.
 - `DrawingBlock` scene data:
@@ -229,6 +237,10 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - `parentId` of root cards is `null`.
 - A card cannot be moved under itself or under any descendant.
 - `cardType` controls visible UI/edit surface; it does not delete hidden blocks or children.
+- `backgroundColor` is either `null`/missing for default theme styling or a normalized hex color string.
+- `textColor` is either `null`/missing for default or automatic styling, `#111827` for dark text, or `#ffffff` for light text.
+- `textColorHsv` persists the selected text color's HSV representation even while the current UI only exposes black/white text choices.
+- Palette slot edits affect future selections only; cards/folders persist resolved color values rather than palette-slot references.
 - Graph notes must keep `rows >= 2` and `columns >= 2`.
 - Graph blocks must persist exactly `rows * columns` cells after normalization/import.
 - Graph cell text must render in black in current UI flows.
@@ -302,6 +314,13 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Persisted left-panel state includes current navigation scope, selected tree item, search query, sidebar open/closed state, and tree expansion state.
 - Scope and selection restoration must wait until the card tree has finished loading from IndexedDB so startup does not clear saved values.
 - Saved scope and selection IDs that no longer exist in the loaded tree must be cleared.
+
+### 5.4.4 Card color palette persistence
+- Card/folder background and text selections are persisted on each card in IndexedDB as part of the normal card tree state.
+- The reusable eight-slot card color palette is persisted separately in local browser storage.
+- Palette slot 1 represents default/no custom color and must remain non-overwritable.
+- Editable palette slots store background color, text color, and text-color HSV metadata.
+- Older string-only palette slots must be accepted and treated as background-only presets with derived text defaults.
 
 ### 5.5 Versioning Contract
 - App version source is runtime `version.json`.

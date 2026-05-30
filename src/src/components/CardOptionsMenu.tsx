@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowUp,
+  Palette,
   ChevronDown,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -39,6 +40,7 @@ interface CardOptionsMenuProps {
   onRename?: () => void;
   onMove?: () => void;
   onChangeType?: () => void;
+  onChangeColor?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onExpandAll?: () => void;
@@ -96,6 +98,7 @@ export function CardOptionsMenu({
   onRename,
   onMove,
   onChangeType,
+  onChangeColor,
   onMoveUp,
   onMoveDown,
   onExpandAll,
@@ -181,6 +184,13 @@ export function CardOptionsMenu({
             label: 'Change type...',
             Icon: Type,
             onSelect: onChangeType,
+          },
+          onChangeColor && {
+            type: 'action',
+            key: 'change-color',
+            label: 'Card color...',
+            Icon: Palette,
+            onSelect: onChangeColor,
           },
           { type: 'separator', key: 'type-expand-separator' },
           hasChildren && onExpandAll && {

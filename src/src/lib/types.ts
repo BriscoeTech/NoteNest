@@ -147,6 +147,9 @@ export interface Card {
   id: string;
   title: string;
   cardType: CardType;
+  backgroundColor?: string | null;
+  textColor?: '#111827' | '#ffffff' | null;
+  textColorHsv?: { h: number; s: number; v: number } | null;
   blocks: ContentBlock[];
   parentId: string | null;
   children: Card[];

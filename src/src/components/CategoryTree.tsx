@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, Chev
 import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
+import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
@@ -32,6 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { CardOptionsMenu } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
+import { CardColorDialog } from './CardColorDialog';
 
 const TREE_EXPANDED_STORAGE_KEY = 'notenest-tree-expanded';
 
@@ -109,11 +111,14 @@ function TreeItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [colorDialogOpen, setColorDialogOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
 
   const { checkboxBlock } = getTypedBlocksByCardType(card);
   const canHaveChildren = cardTypeCanHaveChildren(card.cardType);
+  const cardBackgroundColor = normalizeCardColor(card.backgroundColor);
+  const readableTextColor = normalizeCardTextColor(card.textColor) ?? getReadableTextColor(cardBackgroundColor);
 
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -215,11 +220,16 @@ function TreeItem({
         onDrop={handleDrop}
         className={cn(
           "relative flex items-center gap-1 py-1.5 px-2 rounded-md cursor-pointer group transition-colors",
-          isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent text-foreground",
+          isSelected && !cardBackgroundColor ? "bg-primary/10 text-primary" : "hover:bg-accent text-foreground",
+          readableTextColor && "[&_svg]:text-current",
           isDragging && "opacity-50",
           dropPosition && "bg-primary/10"
         )}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{
+          paddingLeft: `${depth * 12 + 8}px`,
+          backgroundColor: cardBackgroundColor || undefined,
+          color: readableTextColor,
+        }}
         onClick={() => onSelectCard(card.id)}
         onContextMenu={handleContextMenu}
       >
@@ -254,7 +264,9 @@ function TreeItem({
           />
         )}
 
-        {getTreeCardTypeIcon(card.cardType, isExpanded)}
+        <span style={{ color: readableTextColor }}>
+          {getTreeCardTypeIcon(card.cardType, isExpanded)}
+        </span>
 
         {isEditing ? (
           <Input
@@ -267,7 +279,12 @@ function TreeItem({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className={cn("text-xs font-medium break-words whitespace-normal flex-1", checkboxBlock?.checked && "line-through text-muted-foreground")}>{card.title || "Untitled"}</span>
+          <span
+            className={cn("text-xs font-medium break-words whitespace-normal flex-1", checkboxBlock?.checked && !readableTextColor && "line-through text-muted-foreground", checkboxBlock?.checked && readableTextColor && "line-through opacity-70")}
+            style={{ color: readableTextColor }}
+          >
+            {card.title || "Untitled"}
+          </span>
         )}
 
         <CardOptionsMenu
@@ -292,6 +309,7 @@ function TreeItem({
           onRename={handleStartRename}
           onMove={() => onMoveCard(card.id)}
           onChangeType={() => setTypeDialogOpen(true)}
+          onChangeColor={() => setColorDialogOpen(true)}
           onMoveUp={() => onReorderCard(card.id, 'up')}
           onMoveDown={() => onReorderCard(card.id, 'down')}
           onExpandAll={hasChildren ? () => onExpandRecursively(card.id, true) : undefined}
@@ -360,6 +378,15 @@ function TreeItem({
           </div>
         </DialogContent>
       </Dialog>
+
+      <CardColorDialog
+        open={colorDialogOpen}
+        onOpenChange={setColorDialogOpen}
+        color={card.backgroundColor}
+        textColor={card.textColor}
+        textColorHsv={card.textColorHsv}
+        onApply={({ backgroundColor, textColor, textColorHsv }) => onUpdateCard(card.id, { backgroundColor, textColor, textColorHsv })}
+      />
     </div>
   );
 }

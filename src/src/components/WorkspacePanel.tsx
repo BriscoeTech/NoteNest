@@ -6,6 +6,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
 import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, findCardById, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
+import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
@@ -40,6 +41,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CardOptionsMenu } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
+import { CardColorDialog } from './CardColorDialog';
 
 interface WorkspacePanelProps {
   currentCard: Card | null;
@@ -2030,6 +2032,7 @@ interface GridCardItemProps {
   onDeleteCardById?: (id: string) => void;
   onUpdateBlocksById?: (id: string, blocks: ContentBlock[]) => void;
   onOpenChangeTypePickerByCard?: (card: Card) => void;
+  onChangeCardColorById?: (id: string, color: string | null, textColor: '#111827' | '#ffffff' | null, textColorHsv: { h: number; s: number; v: number } | null) => void;
   onReorderCardById?: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren?: (parentId: string | null, ids: string[]) => void;
   nestingDepth?: number;
@@ -2160,6 +2163,7 @@ function GridCardItem({
   onDeleteCardById,
   onUpdateBlocksById,
   onOpenChangeTypePickerByCard,
+  onChangeCardColorById,
   onReorderCardById,
   onReorderChildren,
   nestingDepth = 0,
@@ -2177,6 +2181,7 @@ function GridCardItem({
   const [rowSpan, setRowSpan] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
+  const [colorDialogOpen, setColorDialogOpen] = useState(false);
 
   useLayoutEffect(() => {
     const node = contentRef.current;
@@ -2226,6 +2231,9 @@ function GridCardItem({
     .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
   const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length, nestingDepth);
   const shouldConstrainInlineChildren = visibleChildren.length > 6;
+  const cardBackgroundColor = normalizeCardColor(card.backgroundColor);
+  const readableTextColor = normalizeCardTextColor(card.textColor) ?? getReadableTextColor(cardBackgroundColor);
+  const cardTextColor = readableTextColor ?? 'hsl(var(--card-foreground))';
   
   const handleCheckboxChange = (checked: boolean) => {
     if (checkboxBlock) {
@@ -2295,7 +2303,8 @@ function GridCardItem({
         )}
       <div
         ref={contentRef}
-        className={gridLayout.contentClassName}
+        className={cn(gridLayout.contentClassName, readableTextColor && "[&_svg]:text-current")}
+        style={{ backgroundColor: cardBackgroundColor || undefined, color: cardTextColor }}
         onDoubleClick={(e) => {
           e.stopPropagation();
           onNavigate();
@@ -2305,7 +2314,10 @@ function GridCardItem({
         {...(sortable ? listeners : {})}
       >
         {isFolderCard && (
-          <div className="absolute -top-2 left-4 h-3 w-14 rounded-t-md border border-b-0 border-border bg-card" />
+          <div
+            className="absolute -top-2 left-4 h-3 w-14 rounded-t-md border border-b-0 border-border bg-card"
+            style={{ backgroundColor: cardBackgroundColor || undefined }}
+          />
         )}
         {!showInlineChildren && checkboxBlock && (
           <input
@@ -2332,10 +2344,12 @@ function GridCardItem({
             )}
             <div
               ref={titleRef}
-              className={cn(
-                gridLayout.titleClassName,
-                checkboxBlock?.checked && "line-through text-muted-foreground"
+            className={cn(
+              gridLayout.titleClassName,
+                checkboxBlock?.checked && !readableTextColor && "line-through text-muted-foreground",
+                checkboxBlock?.checked && readableTextColor && "line-through opacity-70"
               )}
+              style={{ color: cardTextColor }}
               contentEditable={!isRecycleBin}
               suppressContentEditableWarning
               onBlur={(e) => onRename(e.currentTarget.textContent || "")}
@@ -2361,12 +2375,13 @@ function GridCardItem({
           <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
              {linkBlock.url ? (
                <div className={cn("flex items-center gap-1", checkboxBlock ? "justify-start" : "justify-center")}>
-                 <LinkIcon className="w-3 h-3 text-primary shrink-0" />
+                 <LinkIcon className={cn("w-3 h-3 shrink-0", !readableTextColor && "text-primary")} style={{ color: readableTextColor }} />
                  <a 
                    href={linkBlock.url.startsWith('http') ? linkBlock.url : `https://${linkBlock.url}`}
                    target="_blank" 
                    rel="noopener noreferrer" 
-                   className="text-xs text-primary hover:underline break-all whitespace-normal block max-w-full"
+                   className={cn("text-xs hover:underline break-all whitespace-normal block max-w-full", !readableTextColor && "text-primary")}
+                   style={{ color: readableTextColor }}
                  >
                    Link
                  </a>
@@ -2404,7 +2419,7 @@ function GridCardItem({
           </div>
         )}
         {!imageBlock && !drawingBlock && !graphBlock && gridLayout.emptyMessage && (
-          <div className="w-full mt-2 px-2 text-xs text-muted-foreground text-center">
+          <div className={cn("w-full mt-2 px-2 text-xs text-center", !readableTextColor && "text-muted-foreground", readableTextColor && "opacity-75")} style={{ color: readableTextColor }}>
             {gridLayout.emptyMessage}
           </div>
         )}
@@ -2458,7 +2473,7 @@ function GridCardItem({
               shouldConstrainInlineChildren && "max-h-[70vh] overflow-y-auto pr-1"
             )}
           >
-            {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onReorderCardById && onReorderChildren && (
+            {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onChangeCardColorById && onReorderCardById && onReorderChildren && (
               <SortableCardGrid
                 cards={visibleChildren}
                 className={nestedChildrenClassName}
@@ -2487,6 +2502,7 @@ function GridCardItem({
                     onDeleteCardById={onDeleteCardById}
                     onUpdateBlocksById={onUpdateBlocksById}
                     onOpenChangeTypePickerByCard={onOpenChangeTypePickerByCard}
+                    onChangeCardColorById={onChangeCardColorById}
                     onReorderCardById={onReorderCardById}
                     onReorderChildren={onReorderChildren}
                   />
@@ -2517,10 +2533,23 @@ function GridCardItem({
             onMoveUp={onReorder ? () => onReorder('up') : undefined}
             onMoveDown={onReorder ? () => onReorder('down') : undefined}
             onChangeType={onOpenTypePicker}
+            onChangeColor={!isRecycleBin ? () => setColorDialogOpen(true) : undefined}
             onRestore={onRestore}
             onDelete={onDelete}
           />
        </div>
+       <CardColorDialog
+        open={colorDialogOpen}
+        onOpenChange={setColorDialogOpen}
+        color={card.backgroundColor}
+        textColor={card.textColor}
+        textColorHsv={card.textColorHsv}
+        onApply={({ backgroundColor, textColor, textColorHsv }) => {
+          if (onChangeCardColorById) {
+            onChangeCardColorById(card.id, backgroundColor, textColor, textColorHsv);
+          }
+        }}
+       />
     </div>
   );
 }
@@ -2970,6 +2999,7 @@ export function WorkspacePanel({
                   onDeleteCardById={onDeleteCard}
                   onUpdateBlocksById={onUpdateCardBlocks}
                   onOpenChangeTypePickerByCard={openChangeTypePicker}
+                  onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
                   onReorderCardById={onReorderCard}
                   onReorderChildren={onReorderChildren}
                 />
@@ -2995,6 +3025,7 @@ export function WorkspacePanel({
                   isRecycleBin={isRecycleBin}
                   onRestore={() => onRestoreCard(card.id, null)}
                   onReorder={(dir) => onReorderCard(card.id, dir)}
+                  onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
                   dropIndicator={dropIndicator}
                 />
               )}
