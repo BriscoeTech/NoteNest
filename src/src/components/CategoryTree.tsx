@@ -512,6 +512,7 @@ export function CategoryTree({
   const moveExcludeIds = cardToMove
     ? [cardToMove, ...getDescendantIds(cards, cardToMove)]
     : [];
+  const moveSelectedId = cardToMove ? findCardById(cards, cardToMove)?.parentId ?? null : null;
 
   const handleAddChildNote = (parentId: string) => {
     setTypeDialogParentId(parentId);
@@ -738,6 +739,7 @@ export function CategoryTree({
         title="Move to..."
         excludeIds={moveExcludeIds}
         showRoot={true}
+        selectedId={moveSelectedId}
       />
 
       <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>

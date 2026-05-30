@@ -651,3 +651,13 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ### Version
 - Bumped the app version from `2.50.0` to `2.51.0` using the documented minor-version workflow (`version.json` as the only app version source).
+
+### Move Picker Current Location
+- Updated the shared move picker so moving a note opens with its current parent location selected instead of visually defaulting to Home/root.
+- The picker now expands the ancestor path to the current parent when the dialog opens, making deeply nested moves start in the right part of the tree.
+- Fixed empty folders in the move picker so they render with folder icons based on card type instead of falling back to the regular note icon when they have no children.
+- Why: moving notes should preserve current-location context, and folder identity should remain visible even before a folder contains child notes.
+
+### Architecture Documentation
+- Updated `Architecture.md` to make the move picker current-location and empty-folder icon behavior explicit.
+- Why: these are shared dialog contracts used from both sidebar and workspace card actions, so future move-picker changes should preserve them.

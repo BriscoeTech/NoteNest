@@ -384,6 +384,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Card type picker dialog used for:
 - creating new notes from workspace `New Note`,
 - changing existing note type from card `...` menus.
+- Move target picker opens with the moving note's current parent selected and expands the ancestor path to that current location.
+- Move target picker renders folder icons based on card type capability, so empty folders still appear as folders.
 - Move target picker excludes self and descendants for the selected moving card.
 - Store validation (`canMoveCard`) remains the final safety guard for invalid targets.
 

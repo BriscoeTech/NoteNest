@@ -9,7 +9,7 @@ const PRECACHE_ASSETS = [
   './icons/favicon.ico',
   './version.json',
     './assets/index-BRUJVzTv.css',
-  './assets/index-DnrmQZ4N.js',
+  './assets/index-ez-eVSBr.js',
 ];
 
 self.addEventListener('install', (event) => {

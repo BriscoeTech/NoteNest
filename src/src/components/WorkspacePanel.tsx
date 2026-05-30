@@ -5,7 +5,7 @@ import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, 
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
-import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
+import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, findCardById, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
@@ -2646,6 +2646,7 @@ export function WorkspacePanel({
   const moveExcludeIds = cardToMove
     ? [cardToMove, ...getDescendantIds(allCards, cardToMove)]
     : [];
+  const moveSelectedId = cardToMove ? findCardById(allCards, cardToMove)?.parentId ?? null : null;
 
   // Auto resize title
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -3011,6 +3012,7 @@ export function WorkspacePanel({
         title="Move to..."
         excludeIds={moveExcludeIds}
         showRoot={true}
+        selectedId={moveSelectedId}
       />
 
       <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
