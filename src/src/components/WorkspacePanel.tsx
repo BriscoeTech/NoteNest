@@ -2833,11 +2833,14 @@ interface RecycleBinTreeItemProps {
   onDeleteForever: (id: string) => void;
 }
 
+function sortCardsByNewestUpdatedAt(cards: Card[]): Card[] {
+  return [...cards].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: RecycleBinTreeItemProps) {
-  const deletedChildren = card.children
-    .filter(c => c.isDeleted)
-    .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
-  const hasChildren = deletedChildren.length > 0;
+  const deletedChildren = sortCardsByNewestUpdatedAt(card.children.filter(c => c.isDeleted));
+  const { checkboxBlock } = getTypedBlocksByCardType(card);
+  const isCheckedCheckboxCard = card.cardType === 'checkbox' && checkboxBlock?.checked;
 
   return (
     <div>
@@ -2845,10 +2848,27 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
         className="group flex items-center gap-2 rounded-md border bg-card p-3"
         style={{ marginLeft: `${depth * 20}px` }}
       >
-        {hasChildren ? <Folder className="h-4 w-4 text-muted-foreground" /> : <FileText className="h-4 w-4 text-muted-foreground" />}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{card.title || 'Untitled'}</div>
-          <div className="text-xs text-muted-foreground">
+        <CardTypeIcon cardType={card.cardType} className="h-4 w-4" />
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {card.cardType === 'checkbox' && checkboxBlock && (
+            <input
+              type="checkbox"
+              checked={checkboxBlock.checked}
+              readOnly
+              tabIndex={-1}
+              className="h-4 w-4 shrink-0 rounded border-gray-300 text-primary focus:ring-0 pointer-events-none"
+              aria-label={checkboxBlock.checked ? 'Checked' : 'Unchecked'}
+            />
+          )}
+          <div
+            className={cn(
+              "min-w-0 flex-1 truncate text-sm font-medium",
+              isCheckedCheckboxCard && "line-through text-muted-foreground"
+            )}
+          >
+            {card.title || 'Untitled'}
+          </div>
+          <div className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
             Deleted {formatDistanceToNow(new Date(card.updatedAt), { addSuffix: true })}
           </div>
         </div>
@@ -3328,10 +3348,7 @@ export function WorkspacePanel({
              </div>
           ) : isRecycleBin ? (
             <div className="space-y-2">
-              {childrenCards
-                .filter(c => c.isDeleted)
-                .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0))
-                .map(card => (
+              {sortCardsByNewestUpdatedAt(childrenCards.filter(c => c.isDeleted)).map(card => (
                   <RecycleBinTreeItem
                     key={card.id}
                     card={card}

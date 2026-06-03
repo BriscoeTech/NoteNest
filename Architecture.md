@@ -96,6 +96,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Restore undeletes all descendants in subtree (recursive restore) 
 | Deletion | Recycle Bin lists deleted descendants even when ancestor is deleted 
 | Deletion | Recycle Bin preserves deleted hierarchy in right-panel tree view 
+| Deletion | Recycle Bin sorts deleted items by deleted time newest-first at each visible hierarchy level 
 | Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action 
 | Data safety | Export JSON backup 
 | Data safety | Export filenames include local date and hour/minute so repeated same-day exports do not collide (`notes-backup-YYYY-MM-DD_HH-MM.json`) 
@@ -115,6 +116,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Sidebar footer app version display (runtime-derived from `version.json`) 
 | UX | Recycle Bin displays deleted-card count badge 
 | UX | Recycle Bin view is read-only for content editing and note creation 
+| UX | Recycle Bin rows show the deleted-time label inline on the right side of the row 
+| UX | Recycle Bin rows use the card type iconography; checkbox cards show a non-interactive checked or unchecked state preview 
 | UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
 | UX | Normal card action menus show exactly one ToDo action: `Add to ToDo` when absent from ToDo, or `Remove from ToDo` when present
@@ -223,7 +226,10 @@ This section is the authoritative feature contract. Changes must be reflected he
 4. Available actions are restore-to-root and permanent delete.
 5. Deleted descendants are listed in Recycle Bin even if a deleted ancestor is also present.
 6. Right-panel Recycle Bin view preserves tree hierarchy (nested deleted items).
-7. `Empty Recycle Bin` permanently purges all deleted items.
+7. Deleted items must be ordered by deleted time newest-first within each visible sibling group in the Recycle Bin.
+8. Recycle Bin rows must show deleted time inline on the right side of the row rather than as a secondary line under the title.
+9. Recycle Bin rows must use card-type-driven iconography; checkbox cards must show their checked or unchecked state read-only and must not be toggleable from the Recycle Bin.
+10. `Empty Recycle Bin` permanently purges all deleted items.
 
 ### 3.10 ToDo priority list
 1. User selects ToDo from the left panel to open a ToDo-specific right-panel view.
@@ -288,6 +294,7 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
 - Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
+- Recycle Bin ordering is based on deleted time using `updatedAt` descending, not normal visible-tree `sortOrder`.
 - ToDo membership/order is stored separately from cards in `todoItems`.
 - ToDo card priority numbers are derived by counting `TodoCardItem` entries in `todoItems`; divider entries are ignored for numbering.
 - A card may appear at most once in ToDo.

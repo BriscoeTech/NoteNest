@@ -5,6 +5,22 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ## 2026-06-03
 
+### Recycle Bin Deleted-State Sorting and Card-Type Rendering
+
+**Author**: Codex
+
+**Changes**:
+- Changed the Recycle Bin right-panel list to sort deleted notes by deleted time newest-first instead of normal `sortOrder`, including nested deleted descendants.
+- Moved the deleted-time label onto the right side of each Recycle Bin row instead of rendering it on a separate line below the title.
+- Switched Recycle Bin rows from generic folder/file icons to the actual card-type icon path.
+- Added read-only checkbox state display for deleted checkbox cards so checked and unchecked items are visible in the Recycle Bin without being toggleable.
+- Updated `Architecture.md` to document the Recycle Bin ordering and rendering contract.
+- Bumped the app version from `2.55.0` to `2.56.0`.
+
+**Validation**:
+- `npm run check`
+- `npm run build`
+
 ### ToDo Divider Top Insertion
 
 **Author**: Codex

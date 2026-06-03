@@ -14,6 +14,10 @@ const TREE_SEARCH_STORAGE_KEY = 'notenest-tree-search';
 const TREE_SIDEBAR_OPEN_STORAGE_KEY = 'notenest-tree-sidebar-open';
 const APP_VIEW_STORAGE_KEY = 'notenest-selected-view';
 
+function sortDeletedCardsByNewest(cards: Card[]): Card[] {
+  return [...cards].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 export default function NotesApp() {
   const store = useNotesStore();
   const [selectedView, setSelectedView] = useState<'home' | 'todo'>(() => {
@@ -71,7 +75,7 @@ export default function NotesApp() {
 
       const filterDeletedTree = (cards: Card[], lower: string): Card[] => {
         const filtered: Card[] = [];
-        for (const card of cards) {
+        for (const card of sortDeletedCardsByNewest(cards)) {
           const filteredChildren = filterDeletedTree(card.children.filter(c => c.isDeleted), lower);
           const matches = card.title.toLowerCase().includes(lower);
           if (matches || filteredChildren.length > 0) {
@@ -81,7 +85,7 @@ export default function NotesApp() {
         return filtered;
       };
 
-      const deletedRoots = collectDeletedRoots(store.cards);
+      const deletedRoots = sortDeletedCardsByNewest(collectDeletedRoots(store.cards));
       if (searchQuery) {
         const lower = searchQuery.toLowerCase();
         return filterDeletedTree(deletedRoots, lower);
