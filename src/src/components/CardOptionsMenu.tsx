@@ -9,6 +9,8 @@ import {
   ChevronsUpDown,
   FolderInput,
   FolderOpen,
+  ListPlus,
+  ListX,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -41,6 +43,8 @@ interface CardOptionsMenuProps {
   onMove?: () => void;
   onChangeType?: () => void;
   onChangeColor?: () => void;
+  onAddToTodo?: () => void;
+  onRemoveFromTodo?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onExpandAll?: () => void;
@@ -99,6 +103,8 @@ export function CardOptionsMenu({
   onMove,
   onChangeType,
   onChangeColor,
+  onAddToTodo,
+  onRemoveFromTodo,
   onMoveUp,
   onMoveDown,
   onExpandAll,
@@ -161,6 +167,20 @@ export function CardOptionsMenu({
             label: 'Move to...',
             Icon: FolderInput,
             onSelect: onMove,
+          },
+          onAddToTodo && {
+            type: 'action',
+            key: 'add-to-todo',
+            label: 'Add to ToDo',
+            Icon: ListPlus,
+            onSelect: onAddToTodo,
+          },
+          onRemoveFromTodo && {
+            type: 'action',
+            key: 'remove-from-todo',
+            label: 'Remove from ToDo',
+            Icon: ListX,
+            onSelect: onRemoveFromTodo,
           },
           { type: 'separator', key: 'primary-move-separator' },
           onMoveUp && {

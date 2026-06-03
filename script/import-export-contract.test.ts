@@ -3,9 +3,11 @@ import {
   buildExportBackup,
   createExportFilename,
   getImportCards,
+  getImportTodoCardIds,
+  getImportTodoItems,
   stringifyExportBackup,
 } from '../src/src/lib/import-export';
-import type { Card } from '../src/src/lib/types';
+import type { Card, TodoItem } from '../src/src/lib/types';
 
 const exportedAt = new Date(2026, 3, 26, 9, 5, 0, 0);
 
@@ -48,11 +50,18 @@ const cards: Card[] = [
   },
 ];
 
-const backup = buildExportBackup(cards, '1.2.3', exportedAt);
-assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards']);
+const todoItems: TodoItem[] = [
+  { id: 'todo-card-graph-1', type: 'card', cardId: 'graph-1' },
+  { id: 'divider-1', type: 'divider', title: 'End of week' },
+];
+
+const backup = buildExportBackup(cards, '1.2.3', exportedAt, todoItems);
+assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards', 'todoCardIds', 'todoItems']);
 assert.equal(backup.version, '1.2.3');
 assert.equal(backup.exportedAt, exportedAt.toISOString());
 assert.equal(backup.cards, cards);
+assert.deepEqual(backup.todoCardIds, ['graph-1']);
+assert.deepEqual(backup.todoItems, todoItems);
 
 const json = stringifyExportBackup(backup);
 assert.equal(json, JSON.stringify(backup, null, 2));
@@ -62,6 +71,12 @@ assert.equal(createExportFilename(exportedAt), 'notes-backup-2026-04-26_09-05.js
 
 const roundTripCards = getImportCards(JSON.parse(json));
 assert.deepEqual(roundTripCards, cards);
+assert.deepEqual(getImportTodoCardIds(JSON.parse(json)), ['graph-1']);
+assert.deepEqual(getImportTodoItems(JSON.parse(json)), todoItems);
+assert.deepEqual(getImportTodoCardIds({ cards }), []);
+assert.deepEqual(getImportTodoItems({ cards }), []);
+assert.deepEqual(getImportTodoCardIds({ todoItems, cards }), []);
+assert.deepEqual(getImportTodoCardIds({ todoCardIds: ['graph-1'], cards }), ['graph-1']);
 
 const importedWithMissingType = getImportCards({
   cards: [{

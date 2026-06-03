@@ -3,6 +3,34 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-02
+
+### ToDo Priority View and Dividers
+
+**Author**: Codex
+
+**Changes**:
+- Added a selectable ToDo view in the left panel, listed before Home.
+- Added persisted ToDo state separate from the card tree so ToDo organization does not change Home/folder hierarchy.
+- Added `Add to ToDo` / `Remove from ToDo` actions to normal card menus in the tree and workspace.
+- Added in-card ToDo priority badges that render inside card borders across Home, search, treemap, and ToDo surfaces.
+- Added ToDo priority reordering by drag/drop and by editing the priority badge number directly.
+- Added a single-column ToDo page layout that reuses the existing card renderer for ToDo card rows.
+- Added ToDo-only dividers with inline editable labels, drag sorting between cards, bottom insertion, and hover trash removal.
+- Changed ToDo persistence from a card-ID-only list to ordered `todoItems` that can contain both card references and dividers, while preserving `todoCardIds` export compatibility.
+- Updated import/export contract tests for ToDo ordering, dividers, and legacy `todoCardIds`.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Result**:
+- Users can maintain a persistent priority list over existing cards without duplicating cards or changing card hierarchy.
+- Dividers provide ToDo-only grouping labels without appearing in Home, folders, search, or the tree.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+- Dev server verified over Tailscale at `http://100.125.33.21:5000/`.
+
 ## 2026-05-30
 
 ### Card and Folder Color Palette

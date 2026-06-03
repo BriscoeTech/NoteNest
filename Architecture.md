@@ -53,6 +53,14 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Card type changes are non-destructive UI-mode switches (existing data retained) 
 | Notes model | Cards and folders may store custom background and text colors; default cards use theme colors 
 | Notes model | Card color presets are reusable local palette entries, but applying a preset stores resolved colors on the card/folder 
+| ToDo | Selectable left-panel ToDo view separate from Home/card hierarchy
+| ToDo | Cards may be added to or removed from the ToDo list from normal card action menus
+| ToDo | ToDo view displays only cards explicitly added to ToDo, ordered by ToDo priority
+| ToDo | ToDo card priority numbers are derived from ToDo card order and shown as in-card badges wherever cards render
+| ToDo | ToDo cards can be reordered by drag/drop or by editing the in-card priority badge
+| ToDo | Removing a card from ToDo renumbers remaining ToDo cards automatically
+| ToDo | ToDo dividers are persistent ToDo-only items, draggable between ToDo cards, inline editable, and removable from the ToDo view
+| ToDo | ToDo dividers do not affect card priority numbering and must not appear in Home, folders, card search, or card tree hierarchy
 | Notes model | Typed note creation uses a shared type picker dialog (workspace `New Note`) 
 | Content | Card blocks: text, bullets, image, checkbox, link, drawing, graph 
 | Content | Graph notes store a square-cell matrix with per-cell text and background color 
@@ -91,12 +99,14 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action 
 | Data safety | Export JSON backup 
 | Data safety | Export filenames include local date and hour/minute so repeated same-day exports do not collide (`notes-backup-YYYY-MM-DD_HH-MM.json`) 
+| Data safety | Export/import preserves ToDo card order and ToDo dividers
 | Data safety | Import JSON backup with merge/override modes 
 | Data safety | Invalid import file shows error feedback and does not apply changes 
 | Data safety | Import is parse-validated; payload shape validation is minimal 
 | Persistence | IndexedDB persistence via `idb-keyval` 
 | Persistence | Legacy migration fallback from localStorage format 
 | UX | Sidebar collapse/expand 
+| UX | Sidebar exposes ToDo before Home in the main navigation list
 | UX | Dark mode toggle with local preference storage 
 | UX | Sidebar tree expand/collapse state persists across refresh and restores the last expanded folders 
 | UX | Sidebar dark mode and Refresh actions are grouped in one shared utility row with separators above and below 
@@ -107,6 +117,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
+| UX | Normal card action menus show exactly one ToDo action: `Add to ToDo` when absent from ToDo, or `Remove from ToDo` when present
 | UX | Normal card action menus expose a shared card color dialog for cards and folders 
 | UX | Card color dialog provides eight local palette slots; the default/no-color slot cannot be overwritten 
 | UX | Card color palette swatches and active editor preview show sample text on the selected background 
@@ -214,15 +225,36 @@ This section is the authoritative feature contract. Changes must be reflected he
 6. Right-panel Recycle Bin view preserves tree hierarchy (nested deleted items).
 7. `Empty Recycle Bin` permanently purges all deleted items.
 
+### 3.10 ToDo priority list
+1. User selects ToDo from the left panel to open a ToDo-specific right-panel view.
+2. ToDo is a single ordered priority list for the current app state.
+3. User adds a card to ToDo from a normal card action menu.
+4. Adding a card to ToDo appends it after existing ToDo cards as the lowest current priority.
+5. User removes a card from ToDo from a normal card action menu.
+6. Removing a card from ToDo closes the priority-number gap by renumbering remaining ToDo cards.
+7. The ToDo view renders ToDo items in a single vertical sortable list.
+8. User can drag ToDo cards to reorder priority; priority numbers update only after drop.
+9. User can click a card's ToDo badge and enter a priority number; the card is inserted at that card priority position and other cards shift accordingly.
+10. If a user enters a priority number larger than the ToDo card count, the card moves to the end.
+11. User can add a divider from the ToDo view; new dividers appear at the bottom of the ToDo list.
+12. User can drag dividers between cards to create visual groups.
+13. User can edit divider labels inline.
+14. User can remove dividers from the ToDo view using the hover trash action.
+15. Dividers are ToDo-only structure and must not be represented as cards, card types, folders, search results, or tree nodes.
+16. Divider order does not affect card priority numbering; priority numbers count only ToDo card items.
+
 ## 4. Data Model and Invariants
 
 Source of truth for stored data shape: `src/src/lib/types.ts`.
 Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 
 ### 4.1 Core types
-- `AppState`: `{ cards: Card[] }` where `cards` are root cards.
+- `AppState`: `{ cards: Card[], todoItems: TodoItem[] }` where `cards` are root cards and `todoItems` is the ToDo-only ordered list.
 - `Card`:
 - `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
+- `TodoItem` union:
+- `TodoCardItem`: `id`, `type: "card"`, `cardId`.
+- `TodoDividerItem`: `id`, `type: "divider"`, `title`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`, `GraphBlock`.
 - `DrawingBlock` scene data:
@@ -256,6 +288,12 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
 - Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
+- ToDo membership/order is stored separately from cards in `todoItems`.
+- ToDo card priority numbers are derived by counting `TodoCardItem` entries in `todoItems`; divider entries are ignored for numbering.
+- A card may appear at most once in ToDo.
+- ToDo card items referencing missing or deleted cards must be ignored or removed during load/import/delete cleanup.
+- ToDo dividers are not cards and must not have `Card` records, `cardType`, parent links, blocks, children, or tree/search presence.
+- ToDo reorder operations may move card and divider items together, but must not change the underlying card tree order.
 - Current image creation/edit flows keep at most one image block per card by replacing existing image block on add.
 - Drawing editor opens with Select as default tool.
 - Drawing session undo/redo history is reset when opening a drawing note.
@@ -274,8 +312,14 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 5.1 Store responsibilities
 - Owns full card tree state and all mutations.
+- Owns ToDo-only ordered item state and all ToDo mutations.
 - Exposes note operations to UI:
 - add/update/updateBlocks/move/reorder/delete/restore/permanentDelete/search/import/export.
+- Exposes ToDo operations to UI:
+- add/remove card from ToDo,
+- reorder ToDo items,
+- move a ToDo card to a card-priority position,
+- add/update/remove ToDo dividers.
 
 ### 5.2 Persistence contract
 - Storage key: `notecards_data`.
@@ -289,6 +333,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Supports legacy `categories + cards` schema.
 - Converts categories into card nodes and maps legacy card fields into blocks.
 - Normalizes loaded/imported cards to ensure `cardType` exists (inferred from existing card data when missing).
+- Supports legacy `todoCardIds` by converting card IDs into `TodoCardItem` entries when `todoItems` is absent.
+- Normalizes loaded/imported ToDo items by removing duplicate card references, missing/deleted card references, and malformed divider/card items.
 - Persists migrated result back into IndexedDB.
 
 ### 5.4 Theme preference persistence
@@ -339,12 +385,13 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 ### 6.1 Top-level composition
 - `src/src/pages/NotesApp.tsx`:
 - Bridges store to UI components.
-- Owns current navigation scope, selection, search query, sidebar visibility, and dark mode state.
+- Owns current navigation scope, selected top-level view, selection, search query, sidebar visibility, and dark mode state.
 - Restores persisted left-panel UI state after store load and prunes stale saved IDs.
 
 ### 6.2 Sidebar tree
 - `src/src/components/CategoryTree.tsx`:
-- Displays Home, card tree, and Recycle Bin.
+- Displays ToDo, Home, card tree, and Recycle Bin.
+- ToDo is listed before Home.
 - Tree supports:
 - expand/collapse + recursive expand/collapse,
 - persisted expand/collapse restoration across refresh,
@@ -355,6 +402,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - parent reassignment via `Move to...` picker.
 - card checkbox quick toggle when card includes checkbox block.
 - normal tree card action menus are available from both `...` and right-click.
+- normal tree card action menus expose ToDo add/remove actions based on card ToDo membership.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Refresh actions.
 - utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
@@ -396,6 +444,11 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Checkbox-card title rows must preserve `min-w-0` shrink behavior so long titles wrap inside the card instead of overflowing past the card edge first.
 - Non-folder cards hide sub-note area in workspace.
 - Drawing editor in workspace supports tool-based drawing, persistent group selection, transform, and style updates.
+- ToDo view uses a single vertical sortable list rather than the workspace child-card grid.
+- ToDo card rows reuse the shared card renderer and normal card menu behavior where applicable.
+- ToDo view disables card creation because it is an organizing view over existing cards.
+- ToDo divider rows are rendered only in the ToDo view, support inline label editing, support drag sorting with cards, and expose a hover trash action.
+- ToDo badge rendering is inside the card boundary and reflects card priority derived from ToDo card order.
 
 ### 6.4 Dialogs
 - `CategoryPickerDialog` for move target selection.
@@ -430,6 +483,10 @@ This table is the canonical source for subtle action/menu/card-type combinations
 | Rename | Workspace grid normal card menu | all card types |
 | Move to... | Tree normal card menu | all card types |
 | Move to... | Workspace grid normal card menu | all card types |
+| Add to ToDo | Tree normal card menu | all card types not already in ToDo |
+| Add to ToDo | Workspace grid normal card menu | all card types not already in ToDo |
+| Remove from ToDo | Tree normal card menu | all card types already in ToDo |
+| Remove from ToDo | Workspace grid normal card menu | all card types already in ToDo |
 | Move Up | Tree normal card menu | all card types |
 | Move Up | Workspace grid normal card menu | all card types |
 | Move Down | Tree normal card menu | all card types |
@@ -558,20 +615,27 @@ This table is the canonical source for subtle action/menu/card-type combinations
 ### 8.1 Export payload
 - Export formatting is centralized in `src/src/lib/import-export.ts` and covered by `script/import-export-contract.test.ts`.
 - Shape:
-- Top-level key order is `version`, `exportedAt`, `cards`.
+- Top-level key order is `version`, `exportedAt`, `cards`, `todoCardIds`, `todoItems`.
 - `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
-- `cards`: full root card array including nested children.
+- `cards`: full root card array including nested children,
+- `todoCardIds`: compatibility array derived from ToDo card items only,
+- `todoItems`: ordered ToDo item array containing card references and divider items.
 - Export JSON is pretty-printed with two-space indentation.
 - Download filename format: `notes-backup-YYYY-MM-DD_HH-MM.json` using the local device time at export.
 
 ### 8.2 Import accepted formats
 - Current format: `{ cards: Card[] }` optionally with metadata.
+- Current ToDo format: optional `todoItems` containing ToDo card and divider items.
+- Compatibility ToDo format: optional `todoCardIds`; used only when `todoItems` is absent.
 - Legacy format: `{ categories: any[], cards: any[] }` migrated to current tree.
 
 ### 8.3 Merge vs override semantics
 - `merge`: root-level concatenation `[...existing.cards, ...imported.cards]`.
 - `override`: `state.cards = imported.cards`.
+- `merge`: imported valid ToDo items are appended after existing ToDo items.
+- `override`: imported valid ToDo items replace the current ToDo list.
+- ToDo item import normalization removes missing/deleted card references and malformed items.
 - Validation note:
 - current UI enforces JSON parse validity for import, while payload structure validation remains minimal.
 

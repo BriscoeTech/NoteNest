@@ -165,7 +165,22 @@ export interface Card {
 
 export interface AppState {
   cards: Card[]; // Root level cards
+  todoItems: TodoItem[];
 }
+
+export interface TodoCardItem {
+  id: string;
+  type: 'card';
+  cardId: string;
+}
+
+export interface TodoDividerItem {
+  id: string;
+  type: 'divider';
+  title: string;
+}
+
+export type TodoItem = TodoCardItem | TodoDividerItem;
 
 export const RECYCLE_BIN_ID = '__recycle_bin__';
 

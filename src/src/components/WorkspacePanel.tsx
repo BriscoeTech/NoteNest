@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { MutableRefObject, ReactNode, RefObject } from 'react';
 import { Plus, Search, X, Folder, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell } from '@/lib/types';
+import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell, TodoItem } from '@/lib/types';
 import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, findCardById, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
 import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
 import {
@@ -46,8 +46,11 @@ import { CardColorDialog } from './CardColorDialog';
 interface WorkspacePanelProps {
   currentCard: Card | null;
   childrenCards: Card[];
+  todoItems: TodoItem[];
+  todoCardIds: string[];
   allCards: Card[]; // used for search/move picker
   isRecycleBin: boolean;
+  isTodoView: boolean;
   onNavigateCard: (id: string | null) => void;
   onAddCard: (parentId: string | null, cardType?: CardType) => string;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
@@ -59,6 +62,13 @@ interface WorkspacePanelProps {
   onEmptyRecycleBin: () => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren: (parentId: string | null, ids: string[]) => void;
+  onAddToTodo: (id: string) => void;
+  onRemoveFromTodo: (id: string) => void;
+  onReorderTodo: (ids: string[]) => void;
+  onMoveTodoCardToPosition: (id: string, position: number) => void;
+  onAddTodoDivider: () => void;
+  onUpdateTodoDivider: (id: string, title: string) => void;
+  onRemoveTodoDivider: (id: string) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   sidebarOpen?: boolean;
@@ -2011,8 +2021,9 @@ function SortableBlock({ id, ...props }: SortableBlockProps) {
 // Grid Item for Children Cards
 interface GridCardItemProps {
   card: Card;
+  sortableId?: string;
   onNavigate: () => void;
-  onAddNote: () => void;
+  onAddNote?: () => void;
   onMoveStart: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
@@ -2035,6 +2046,13 @@ interface GridCardItemProps {
   onChangeCardColorById?: (id: string, color: string | null, textColor: '#111827' | '#ffffff' | null, textColorHsv: { h: number; s: number; v: number } | null) => void;
   onReorderCardById?: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren?: (parentId: string | null, ids: string[]) => void;
+  todoNumber?: number;
+  getTodoNumber?: (id: string) => number | undefined;
+  onTodoNumberChange?: (id: string, position: number) => void;
+  onAddToTodo?: (id: string) => void;
+  onRemoveFromTodo?: (id: string) => void;
+  canCreateCards?: boolean;
+  forceSingleColumn?: boolean;
   nestingDepth?: number;
 }
 
@@ -2140,8 +2158,187 @@ function SortableCardGrid({
   );
 }
 
+interface SortableTodoListProps {
+  items: TodoItem[];
+  onReorderIds: (ids: string[]) => void;
+  renderItem: (item: TodoItem, dropIndicator: 'before' | 'after' | null) => React.ReactNode;
+}
+
+function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListProps) {
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [overItemId, setOverItemId] = useState<string | null>(null);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveItemId(String(event.active.id));
+    setOverItemId(null);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverItemId(event.over ? String(event.over.id) : null);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveItemId(null);
+    setOverItemId(null);
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((item) => item.id === active.id);
+    const newIndex = items.findIndex((item) => item.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onReorderIds(arrayMove(items, oldIndex, newIndex).map((item) => item.id));
+  };
+
+  const handleDragCancel = () => {
+    setActiveItemId(null);
+    setOverItemId(null);
+  };
+
+  const getDropIndicator = (itemId: string): 'before' | 'after' | null => {
+    if (!activeItemId || !overItemId || itemId !== overItemId || activeItemId === overItemId) {
+      return null;
+    }
+    const activeIndex = items.findIndex((item) => item.id === activeItemId);
+    const overIndex = items.findIndex((item) => item.id === overItemId);
+    if (activeIndex === -1 || overIndex === -1) return null;
+    return activeIndex < overIndex ? 'after' : 'before';
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+        <div className="grid auto-rows-[4px] grid-cols-1 gap-2 transition-all">
+          {items.map((item) => renderItem(item, getDropIndicator(item.id)))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+interface TodoDividerItemProps {
+  item: Extract<TodoItem, { type: 'divider' }>;
+  dropIndicator: 'before' | 'after' | null;
+  onRename: (title: string) => void;
+  onDelete: () => void;
+}
+
+function TodoDividerItem({ item, dropIndicator, onRename, onDelete }: TodoDividerItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+  const labelRef = useRef<HTMLDivElement | null>(null);
+  const [rowSpan, setRowSpan] = useState(6);
+
+  useLayoutEffect(() => {
+    const node = labelRef.current?.parentElement?.parentElement;
+    if (!node) return;
+
+    const updateRowSpan = () => {
+      const height = node.getBoundingClientRect().height;
+      const nextSpan = Math.max(6, Math.ceil((height + MASONRY_GAP) / (MASONRY_ROW_HEIGHT + MASONRY_GAP)));
+      setRowSpan((prev) => (prev === nextSpan ? prev : nextSpan));
+    };
+
+    updateRowSpan();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateRowSpan);
+      return () => window.removeEventListener('resize', updateRowSpan);
+    }
+
+    const observer = new ResizeObserver(() => updateRowSpan());
+    observer.observe(node);
+    window.addEventListener('resize', updateRowSpan);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateRowSpan);
+    };
+  }, [item.id, item.title]);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    gridRowEnd: `span ${rowSpan}`,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group">
+      {dropIndicator && !isDragging && (
+        <div
+          className={cn(
+            "pointer-events-none absolute left-0 right-0 z-30 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]",
+            dropIndicator === 'before' ? "top-[-4px]" : "bottom-[-4px]"
+          )}
+        />
+      )}
+      <div
+        className="relative flex min-h-14 cursor-grab items-center gap-3 rounded-md px-2 py-3 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <div className="h-px flex-1 bg-border" />
+        <div
+          ref={labelRef}
+          contentEditable
+          suppressContentEditableWarning
+          className="min-w-24 max-w-[70%] rounded-sm px-2 py-1 text-center text-sm font-medium text-muted-foreground outline-none focus:bg-background focus:ring-1 focus:ring-ring empty:before:content-['']"
+          onBlur={(e) => onRename(e.currentTarget.textContent || '')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.currentTarget.focus();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {item.title}
+        </div>
+        <div className="h-px flex-1 bg-border" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function GridCardItem({
   card,
+  sortableId,
   onNavigate,
   onAddNote,
   onMoveStart,
@@ -2166,6 +2363,13 @@ function GridCardItem({
   onChangeCardColorById,
   onReorderCardById,
   onReorderChildren,
+  todoNumber,
+  getTodoNumber,
+  onTodoNumberChange,
+  onAddToTodo,
+  onRemoveFromTodo,
+  canCreateCards = true,
+  forceSingleColumn = false,
   nestingDepth = 0,
 }: GridCardItemProps) {
   const {
@@ -2175,13 +2379,21 @@ function GridCardItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: card.id, disabled: !sortable });
+  } = useSortable({ id: sortableId ?? card.id, disabled: !sortable });
   const contentRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
   const [rowSpan, setRowSpan] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
   const [colorDialogOpen, setColorDialogOpen] = useState(false);
+  const [isEditingTodoNumber, setIsEditingTodoNumber] = useState(false);
+  const [todoNumberDraft, setTodoNumberDraft] = useState(todoNumber ? String(todoNumber) : '');
+
+  useEffect(() => {
+    if (!isEditingTodoNumber) {
+      setTodoNumberDraft(todoNumber ? String(todoNumber) : '');
+    }
+  }, [todoNumber, isEditingTodoNumber]);
 
   useLayoutEffect(() => {
     const node = contentRef.current;
@@ -2283,14 +2495,24 @@ function GridCardItem({
     setMenuOpen(true);
   };
 
+  const commitTodoNumber = () => {
+    setIsEditingTodoNumber(false);
+    const nextPosition = Number(todoNumberDraft);
+    if (!todoNumber || !Number.isFinite(nextPosition) || nextPosition < 1) {
+      setTodoNumberDraft(todoNumber ? String(todoNumber) : '');
+      return;
+    }
+    onTodoNumberChange?.(card.id, nextPosition);
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
         "relative group",
-        shouldSpanWide && "md:col-span-2",
-        shouldSpanExtraWide && "xl:col-span-3"
+        !forceSingleColumn && shouldSpanWide && "md:col-span-2",
+        !forceSingleColumn && shouldSpanExtraWide && "xl:col-span-3"
       )}
     >
       {dropIndicator && !isDragging && (
@@ -2301,6 +2523,47 @@ function GridCardItem({
           )}
         />
         )}
+      {todoNumber && (
+        <div
+          className="absolute top-2 right-2 z-30"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isEditingTodoNumber ? (
+            <Input
+              value={todoNumberDraft}
+              onChange={(e) => setTodoNumberDraft(e.target.value)}
+              onBlur={commitTodoNumber}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitTodoNumber();
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setTodoNumberDraft(String(todoNumber));
+                  setIsEditingTodoNumber(false);
+                }
+                e.stopPropagation();
+              }}
+              className="h-7 w-12 rounded-full border-primary bg-background px-1 text-center text-xs font-semibold shadow-sm"
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label={`ToDo priority ${todoNumber}`}
+              className="flex h-7 min-w-7 items-center justify-center rounded-full border border-primary/30 bg-primary px-2 text-xs font-semibold text-primary-foreground shadow-sm"
+              onClick={() => {
+                setTodoNumberDraft(String(todoNumber));
+                setIsEditingTodoNumber(true);
+              }}
+            >
+              {todoNumber}
+            </button>
+          )}
+        </div>
+      )}
       <div
         ref={contentRef}
         className={cn(gridLayout.contentClassName, readableTextColor && "[&_svg]:text-current")}
@@ -2505,6 +2768,13 @@ function GridCardItem({
                     onChangeCardColorById={onChangeCardColorById}
                     onReorderCardById={onReorderCardById}
                     onReorderChildren={onReorderChildren}
+                    todoNumber={getTodoNumber?.(child.id)}
+                    getTodoNumber={getTodoNumber}
+                    onTodoNumberChange={onTodoNumberChange}
+                    onAddToTodo={onAddToTodo}
+                    onRemoveFromTodo={onRemoveFromTodo}
+                    canCreateCards={canCreateCards}
+                    forceSingleColumn={forceSingleColumn}
                   />
                 )}
               />
@@ -2527,13 +2797,15 @@ function GridCardItem({
             onAnchorPointChange={setMenuAnchorPoint}
             anchorPoint={menuAnchorPoint}
             onOpen={onNavigate}
-            onAddNote={onAddNote}
+            onAddNote={canCreateCards ? onAddNote : undefined}
             onRename={handleRenameStart}
             onMove={onMoveStart}
             onMoveUp={onReorder ? () => onReorder('up') : undefined}
             onMoveDown={onReorder ? () => onReorder('down') : undefined}
             onChangeType={onOpenTypePicker}
             onChangeColor={!isRecycleBin ? () => setColorDialogOpen(true) : undefined}
+            onAddToTodo={!isRecycleBin && !todoNumber && onAddToTodo ? () => onAddToTodo(card.id) : undefined}
+            onRemoveFromTodo={!isRecycleBin && todoNumber && onRemoveFromTodo ? () => onRemoveFromTodo(card.id) : undefined}
             onRestore={onRestore}
             onDelete={onDelete}
           />
@@ -2628,8 +2900,11 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
 export function WorkspacePanel({
   currentCard,
   childrenCards,
+  todoItems,
+  todoCardIds,
   allCards,
   isRecycleBin,
+  isTodoView,
   onNavigateCard,
   onAddCard,
   onUpdateCard,
@@ -2641,6 +2916,13 @@ export function WorkspacePanel({
   onEmptyRecycleBin,
   onReorderCard,
   onReorderChildren,
+  onAddToTodo,
+  onRemoveFromTodo,
+  onReorderTodo,
+  onMoveTodoCardToPosition,
+  onAddTodoDivider,
+  onUpdateTodoDivider,
+  onRemoveTodoDivider,
   onSearch,
   searchQuery,
   sidebarOpen = true
@@ -2831,9 +3113,20 @@ export function WorkspacePanel({
   };
 
   const currentCardTypeDefinition = currentCard ? getCardTypeDefinition(currentCard.cardType) : null;
-  const canShowChildrenUI = isRecycleBin || !currentCard || Boolean(currentCardTypeDefinition?.canHaveChildren);
-  const canUseTreemap = !isRecycleBin && !searchQuery && canShowChildrenUI;
+  const canShowChildrenUI = !isTodoView && (isRecycleBin || !currentCard || Boolean(currentCardTypeDefinition?.canHaveChildren));
+  const canUseTreemap = !isTodoView && !isRecycleBin && !searchQuery && canShowChildrenUI;
   const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+  const todoNumberByCardId = useMemo(() => {
+    const map = new Map<string, number>();
+    todoCardIds.forEach((id, index) => map.set(id, index + 1));
+    return map;
+  }, [todoCardIds]);
+  const getTodoNumber = (id: string) => todoNumberByCardId.get(id);
+  const moveTodoCardByStep = (id: string, direction: 'up' | 'down') => {
+    const currentNumber = getTodoNumber(id);
+    if (!currentNumber) return;
+    onMoveTodoCardToPosition(id, direction === 'up' ? currentNumber - 1 : currentNumber + 1);
+  };
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -2848,7 +3141,7 @@ export function WorkspacePanel({
                </Button>
              </>
            ) : (
-             <h2 className="text-lg font-semibold">{isRecycleBin ? "Recycle Bin" : "Home"}</h2>
+             <h2 className="text-lg font-semibold">{isTodoView ? "ToDo" : isRecycleBin ? "Recycle Bin" : "Home"}</h2>
            )}
          </div>
          {canUseTreemap && (
@@ -2863,6 +3156,83 @@ export function WorkspacePanel({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-8">
+        {isTodoView && (
+          <div className="max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Priority List
+              </h3>
+              <Button size="sm" onClick={onAddTodoDivider}>
+                <Plus className="w-4 h-4 mr-1" />
+                Add Divider
+              </Button>
+            </div>
+
+            {todoItems.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground italic border-2 border-dashed rounded-lg">
+                No cards have been added to ToDo.
+              </div>
+            ) : (
+              <SortableTodoList
+                items={todoItems}
+                onReorderIds={onReorderTodo}
+                renderItem={(item, dropIndicator) => {
+                  if (item.type === 'divider') {
+                    return (
+                      <TodoDividerItem
+                        key={item.id}
+                        item={item}
+                        dropIndicator={dropIndicator}
+                        onRename={(title) => onUpdateTodoDivider(item.id, title)}
+                        onDelete={() => onRemoveTodoDivider(item.id)}
+                      />
+                    );
+                  }
+
+                  const card = findCardById(allCards, item.cardId);
+                  if (!card || card.isDeleted) return null;
+
+                  return (
+                    <GridCardItem
+                      key={item.id}
+                      card={card}
+                      sortableId={item.id}
+                      onNavigate={() => onNavigateCard(card.id)}
+                      onAddNote={undefined}
+                      onMoveStart={() => handleMoveStart(card.id)}
+                      onRename={(title) => onUpdateCard(card.id, { title })}
+                      onDelete={() => onDeleteCard(card.id)}
+                      onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                      onOpenTypePicker={() => openChangeTypePicker(card)}
+                      onReorder={(dir) => moveTodoCardByStep(card.id, dir)}
+                      onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
+                      dropIndicator={dropIndicator}
+                      inlineChildren={true}
+                      nestingDepth={0}
+                      onNavigateCardById={onNavigateCard}
+                      onOpenCreateTypePicker={openCreateTypePicker}
+                      onMoveStartById={handleMoveStart}
+                      onUpdateCardTitleById={(id, title) => onUpdateCard(id, { title })}
+                      onDeleteCardById={onDeleteCard}
+                      onUpdateBlocksById={onUpdateCardBlocks}
+                      onOpenChangeTypePickerByCard={openChangeTypePicker}
+                      onReorderCardById={moveTodoCardByStep}
+                      onReorderChildren={onReorderChildren}
+                      todoNumber={getTodoNumber(card.id)}
+                      getTodoNumber={getTodoNumber}
+                      onTodoNumberChange={onMoveTodoCardToPosition}
+                      onAddToTodo={onAddToTodo}
+                      onRemoveFromTodo={onRemoveFromTodo}
+                      canCreateCards={false}
+                      forceSingleColumn={true}
+                    />
+                  );
+                }}
+              />
+            )}
+          </div>
+        )}
+
         {/* Current Card Content (Blocks) */}
         {currentCard && !isRecycleBin && !searchQuery && (
           <div className="max-w-3xl mx-auto space-y-4">
@@ -3002,6 +3372,11 @@ export function WorkspacePanel({
                   onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
                   onReorderCardById={onReorderCard}
                   onReorderChildren={onReorderChildren}
+                  todoNumber={getTodoNumber(card.id)}
+                  getTodoNumber={getTodoNumber}
+                  onTodoNumberChange={onMoveTodoCardToPosition}
+                  onAddToTodo={onAddToTodo}
+                  onRemoveFromTodo={onRemoveFromTodo}
                 />
               )}
             />
@@ -3026,6 +3401,11 @@ export function WorkspacePanel({
                   onRestore={() => onRestoreCard(card.id, null)}
                   onReorder={(dir) => onReorderCard(card.id, dir)}
                   onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
+                  todoNumber={!isRecycleBin ? getTodoNumber(card.id) : undefined}
+                  getTodoNumber={getTodoNumber}
+                  onTodoNumberChange={onMoveTodoCardToPosition}
+                  onAddToTodo={onAddToTodo}
+                  onRemoveFromTodo={onRemoveFromTodo}
                   dropIndicator={dropIndicator}
                 />
               )}

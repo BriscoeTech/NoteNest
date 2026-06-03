@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, RefreshCw } from 'lucide-react';
+import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, RefreshCw, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
@@ -40,7 +40,10 @@ const TREE_EXPANDED_STORAGE_KEY = 'notenest-tree-expanded';
 interface CardTreeProps {
   cards: Card[];
   isLoaded: boolean;
+  selectedView: 'home' | 'todo';
   selectedCardId: string | null;
+  todoCardIds: string[];
+  onSelectView: (view: 'home' | 'todo') => void;
   onSelectCard: (id: string | null) => void;
   onAddCard: (parentId: string | null, cardType?: CardType) => string;
   onRenameCard: (id: string, title: string) => void;
@@ -50,6 +53,8 @@ interface CardTreeProps {
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
+  onAddToTodo: (id: string) => void;
+  onRemoveFromTodo: (id: string) => void;
   deletedCount: number;
   onExport: () => void;
   onImport: (data: any, mode: 'merge' | 'override') => void;
@@ -63,6 +68,7 @@ interface TreeItemProps {
   card: Card;
   depth: number;
   selectedCardId: string | null;
+  todoCardIds: string[];
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
   onExpandRecursively: (id: string, expand: boolean) => void;
@@ -75,6 +81,8 @@ interface TreeItemProps {
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
+  onAddToTodo: (id: string) => void;
+  onRemoveFromTodo: (id: string) => void;
   draggedCardId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -85,6 +93,7 @@ function TreeItem({
   card,
   depth,
   selectedCardId,
+  todoCardIds,
   expandedIds,
   onToggleExpand,
   onExpandRecursively,
@@ -97,6 +106,8 @@ function TreeItem({
   onDeleteCard,
   onUpdateCard,
   onUpdateCardBlocks,
+  onAddToTodo,
+  onRemoveFromTodo,
   draggedCardId,
   onDragStart,
   onDragEnd,
@@ -117,6 +128,7 @@ function TreeItem({
 
   const { checkboxBlock } = getTypedBlocksByCardType(card);
   const canHaveChildren = cardTypeCanHaveChildren(card.cardType);
+  const isInTodo = todoCardIds.includes(card.id);
   const cardBackgroundColor = normalizeCardColor(card.backgroundColor);
   const readableTextColor = normalizeCardTextColor(card.textColor) ?? getReadableTextColor(cardBackgroundColor);
 
@@ -310,6 +322,8 @@ function TreeItem({
           onMove={() => onMoveCard(card.id)}
           onChangeType={() => setTypeDialogOpen(true)}
           onChangeColor={() => setColorDialogOpen(true)}
+          onAddToTodo={!isInTodo ? () => onAddToTodo(card.id) : undefined}
+          onRemoveFromTodo={isInTodo ? () => onRemoveFromTodo(card.id) : undefined}
           onMoveUp={() => onReorderCard(card.id, 'up')}
           onMoveDown={() => onReorderCard(card.id, 'down')}
           onExpandAll={hasChildren ? () => onExpandRecursively(card.id, true) : undefined}
@@ -332,6 +346,7 @@ function TreeItem({
               card={child}
               depth={depth + 1}
               selectedCardId={selectedCardId}
+              todoCardIds={todoCardIds}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
               onSelectCard={onSelectCard}
@@ -343,6 +358,8 @@ function TreeItem({
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
+              onAddToTodo={onAddToTodo}
+              onRemoveFromTodo={onRemoveFromTodo}
               onExpandRecursively={onExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={onDragStart}
@@ -394,7 +411,10 @@ function TreeItem({
 export function CategoryTree({
   cards,
   isLoaded,
+  selectedView,
   selectedCardId,
+  todoCardIds,
+  onSelectView,
   onSelectCard,
   onAddCard,
   onRenameCard,
@@ -404,6 +424,8 @@ export function CategoryTree({
   onDeleteCard,
   onUpdateCard,
   onUpdateCardBlocks,
+  onAddToTodo,
+  onRemoveFromTodo,
   deletedCount,
   onExport,
   onImport,
@@ -628,9 +650,23 @@ export function CategoryTree({
         <div
           className={cn(
             "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground mb-1 group relative",
-            selectedCardId === null && "bg-primary/10 text-primary"
+            selectedView === 'todo' && "bg-primary/10 text-primary"
           )}
-          onClick={() => onSelectCard(null)}
+          onClick={() => onSelectView('todo')}
+        >
+          <ListTodo className="w-4 h-4 ml-6" />
+          <span className="text-sm font-medium flex-1">ToDo</span>
+        </div>
+
+        <div
+          className={cn(
+            "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground mb-1 group relative",
+            selectedView === 'home' && selectedCardId === null && "bg-primary/10 text-primary"
+          )}
+          onClick={() => {
+            onSelectView('home');
+            onSelectCard(null);
+          }}
         >
           <Home className="w-4 h-4 ml-6" />
           <span className="text-sm font-medium flex-1">Home</span>
@@ -664,7 +700,8 @@ export function CategoryTree({
               key={card.id}
               card={card}
               depth={0}
-              selectedCardId={selectedCardId}
+              selectedCardId={selectedView === 'home' ? selectedCardId : null}
+              todoCardIds={todoCardIds}
               expandedIds={expandedIds}
               onToggleExpand={toggleExpand}
               onSelectCard={onSelectCard}
@@ -676,6 +713,8 @@ export function CategoryTree({
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
+              onAddToTodo={onAddToTodo}
+              onRemoveFromTodo={onRemoveFromTodo}
               onExpandRecursively={handleExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={handleDragStart}
@@ -688,9 +727,12 @@ export function CategoryTree({
           <div
             className={cn(
               "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground",
-              selectedCardId === RECYCLE_BIN_ID && "bg-primary/10 text-primary"
+              selectedView === 'home' && selectedCardId === RECYCLE_BIN_ID && "bg-primary/10 text-primary"
             )}
-            onClick={() => onSelectCard(RECYCLE_BIN_ID)}
+            onClick={() => {
+              onSelectView('home');
+              onSelectCard(RECYCLE_BIN_ID);
+            }}
           >
             <Trash2 className="w-4 h-4 ml-6" />
             <span className="text-sm font-medium">Recycle Bin</span>

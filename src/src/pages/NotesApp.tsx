@@ -12,9 +12,14 @@ const TREE_SCOPE_STORAGE_KEY = 'notenest-tree-scope';
 const TREE_SELECTION_STORAGE_KEY = 'notenest-tree-selection';
 const TREE_SEARCH_STORAGE_KEY = 'notenest-tree-search';
 const TREE_SIDEBAR_OPEN_STORAGE_KEY = 'notenest-tree-sidebar-open';
+const APP_VIEW_STORAGE_KEY = 'notenest-selected-view';
 
 export default function NotesApp() {
   const store = useNotesStore();
+  const [selectedView, setSelectedView] = useState<'home' | 'todo'>(() => {
+    if (typeof window === 'undefined') return 'home';
+    return window.localStorage.getItem(APP_VIEW_STORAGE_KEY) === 'todo' ? 'todo' : 'home';
+  });
   const [currentCardId, setCurrentCardId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem(TREE_SCOPE_STORAGE_KEY);
@@ -41,13 +46,14 @@ export default function NotesApp() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const isRecycleBin = selectedCardId === RECYCLE_BIN_ID;
+  const isRecycleBin = selectedView === 'home' && selectedCardId === RECYCLE_BIN_ID;
+  const isTodoView = selectedView === 'todo';
 
   // Derived state
   const currentCard = useMemo(() => {
-     if (isRecycleBin) return null;
+     if (isRecycleBin || isTodoView) return null;
      return store.getCard(currentCardId);
-  }, [currentCardId, store.cards, isRecycleBin]); // store.cards dependency ensures update on change
+  }, [currentCardId, store.cards, isRecycleBin, isTodoView]); // store.cards dependency ensures update on change
 
   // Get children of current card (or root)
   const childrenCards = useMemo(() => {
@@ -99,18 +105,25 @@ export default function NotesApp() {
   }, [currentCardId, searchQuery, store.cards, isRecycleBin]);
 
   const handleNavigateCard = useCallback((id: string | null) => {
+    setSelectedView('home');
     setCurrentCardId(id);
     setSelectedCardId(id); // Sync selection in tree
     setSearchQuery('');
   }, []);
 
   const handleSelectCardInTree = useCallback((id: string | null) => {
+    setSelectedView('home');
     setSelectedCardId(id);
     if (id === RECYCLE_BIN_ID) {
       setCurrentCardId(null); // Recycle bin is a special root view
     } else {
       setCurrentCardId(id); // Also navigate to it? Yes, user said "clicking them will change the scope"
     }
+    setSearchQuery('');
+  }, []);
+
+  const handleSelectView = useCallback((view: 'home' | 'todo') => {
+    setSelectedView(view);
     setSearchQuery('');
   }, []);
 
@@ -184,6 +197,11 @@ export default function NotesApp() {
     window.localStorage.setItem(TREE_SIDEBAR_OPEN_STORAGE_KEY, String(sidebarOpen));
   }, [sidebarOpen]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(APP_VIEW_STORAGE_KEY, selectedView);
+  }, [selectedView]);
+
   return (
     <div data-testid="notes-app" className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -192,7 +210,10 @@ export default function NotesApp() {
             className="flex-1 min-h-0"
             cards={store.cards}
             isLoaded={store.isLoaded}
+            selectedView={selectedView}
             selectedCardId={selectedCardId}
+            todoCardIds={store.todoCardIds}
+            onSelectView={handleSelectView}
             onSelectCard={handleSelectCardInTree}
             onAddCard={handleAddCard}
             onRenameCard={handleRenameCard}
@@ -202,6 +223,8 @@ export default function NotesApp() {
             onDeleteCard={store.deleteCard}
             onUpdateCard={store.updateCard}
             onUpdateCardBlocks={store.updateCardBlocks}
+            onAddToTodo={store.addToTodo}
+            onRemoveFromTodo={store.removeFromTodo}
             deletedCount={deletedCount}
             onExport={store.exportData}
             onImport={store.importData}
@@ -227,8 +250,11 @@ export default function NotesApp() {
         <WorkspacePanel
           currentCard={currentCard || null}
           childrenCards={childrenCards}
+          todoItems={store.todoItems}
+          todoCardIds={store.todoCardIds}
           allCards={store.cards}
-          isRecycleBin={isRecycleBin}
+          isRecycleBin={!isTodoView && isRecycleBin}
+          isTodoView={isTodoView}
           onNavigateCard={handleNavigateCard}
           onAddCard={handleAddCard}
           onUpdateCard={store.updateCard}
@@ -241,6 +267,13 @@ export default function NotesApp() {
           onEmptyRecycleBin={store.emptyRecycleBin}
           onReorderCard={store.moveCardStep}
           onReorderChildren={store.reorderChildren}
+          onAddToTodo={store.addToTodo}
+          onRemoveFromTodo={store.removeFromTodo}
+          onReorderTodo={store.reorderTodo}
+          onMoveTodoCardToPosition={store.moveTodoCardToPosition}
+          onAddTodoDivider={store.addTodoDivider}
+          onUpdateTodoDivider={store.updateTodoDivider}
+          onRemoveTodoDivider={store.removeTodoDivider}
           onSearch={setSearchQuery}
           searchQuery={searchQuery}
           sidebarOpen={sidebarOpen}

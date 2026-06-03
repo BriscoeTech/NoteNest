@@ -1,4 +1,4 @@
-import type { Card, ContentBlock } from '@/lib/types';
+import type { Card, ContentBlock, TodoItem } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { inferCardTypeFromCardData } from '@/lib/card-types';
 import { normalizeContentBlock } from '@/lib/block-types';
@@ -7,6 +7,8 @@ export interface ExportBackup {
   version: string;
   exportedAt: string;
   cards: Card[];
+  todoCardIds?: string[];
+  todoItems?: TodoItem[];
 }
 
 export function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
@@ -112,11 +114,38 @@ export function getImportCards(data: any): Card[] {
   return normalizeCardTree(importedCards);
 }
 
-export function buildExportBackup(cards: Card[], version: string, exportedAt: Date = new Date()): ExportBackup {
+export function getImportTodoCardIds(data: any): string[] {
+  if (!Array.isArray(data?.todoCardIds)) return [];
+  return data.todoCardIds.filter((id: unknown): id is string => typeof id === 'string');
+}
+
+export function getImportTodoItems(data: any): TodoItem[] {
+  if (!Array.isArray(data?.todoItems)) return [];
+  return data.todoItems
+    .map((item: any): TodoItem | null => {
+      if (!item || typeof item.id !== 'string') return null;
+      if (item.type === 'card' && typeof item.cardId === 'string') {
+        return { id: item.id, type: 'card', cardId: item.cardId };
+      }
+      if (item.type === 'divider') {
+        return { id: item.id, type: 'divider', title: typeof item.title === 'string' ? item.title : '' };
+      }
+      return null;
+    })
+    .filter((item: TodoItem | null): item is TodoItem => Boolean(item));
+}
+
+export function buildExportBackup(cards: Card[], version: string, exportedAt: Date = new Date(), todoItems: TodoItem[] = []): ExportBackup {
+  const todoCardIds = todoItems
+    .filter((item): item is Extract<TodoItem, { type: 'card' }> => item.type === 'card')
+    .map((item) => item.cardId);
+
   return {
     version,
     exportedAt: exportedAt.toISOString(),
     cards,
+    todoCardIds,
+    todoItems,
   };
 }
 

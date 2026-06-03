@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock, CardType } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType, TodoItem } from '@/lib/types';
 import { blockMatchesSearch } from '@/lib/block-types';
 import {
   buildExportBackup,
   createExportFilename,
   getImportCards,
+  getImportTodoCardIds,
+  getImportTodoItems,
   normalizeCardTree,
   stringifyExportBackup,
 } from '@/lib/import-export';
@@ -25,9 +27,93 @@ import { RUNTIME_VERSION_DISPLAY, ensureAppVersionLoaded } from '@/lib/app-versi
 const STORAGE_KEY = 'notecards_data';
 
 const defaultState: AppState = {
-  cards: []
+  cards: [],
+  todoItems: []
 };
 
+function createTodoCardItem(cardId: string): TodoItem {
+  return { id: `todo-card-${cardId}`, type: 'card', cardId };
+}
+
+function sanitizeTodoItems(cards: Card[], todoItems: unknown, legacyTodoCardIds?: unknown): TodoItem[] {
+  const rawItems = Array.isArray(todoItems) && todoItems.length > 0
+    ? todoItems
+    : Array.isArray(legacyTodoCardIds)
+      ? legacyTodoCardIds.map((cardId) => typeof cardId === 'string' ? createTodoCardItem(cardId) : null)
+      : [];
+
+  const nextItems: TodoItem[] = [];
+  const seenCardIds = new Set<string>();
+  const seenItemIds = new Set<string>();
+
+  for (const item of rawItems) {
+    if (!item || typeof item !== 'object') continue;
+    const candidate = item as Partial<TodoItem>;
+    if (typeof candidate.id !== 'string' || seenItemIds.has(candidate.id)) continue;
+
+    if (candidate.type === 'card') {
+      const cardId = typeof candidate.cardId === 'string' ? candidate.cardId : '';
+      if (!cardId || seenCardIds.has(cardId)) continue;
+      const card = findCardById(cards, cardId);
+      if (!card || card.isDeleted) continue;
+      nextItems.push({ id: candidate.id, type: 'card', cardId });
+      seenCardIds.add(cardId);
+      seenItemIds.add(candidate.id);
+      continue;
+    }
+
+    if (candidate.type === 'divider') {
+      nextItems.push({
+        id: candidate.id,
+        type: 'divider',
+        title: typeof candidate.title === 'string' ? candidate.title : '',
+      });
+      seenItemIds.add(candidate.id);
+    }
+  }
+
+  return nextItems;
+}
+
+function getTodoCardIds(todoItems: TodoItem[]): string[] {
+  return todoItems
+    .filter((item): item is Extract<TodoItem, { type: 'card' }> => item.type === 'card')
+    .map((item) => item.cardId);
+}
+
+function getTodoCardPosition(todoItems: TodoItem[], cardId: string): number {
+  let position = 0;
+  for (const item of todoItems) {
+    if (item.type !== 'card') continue;
+    position += 1;
+    if (item.cardId === cardId) return position;
+  }
+  return 0;
+}
+
+function insertTodoCardAtPosition(todoItems: TodoItem[], cardId: string, position: number): TodoItem[] {
+  const itemToMove = todoItems.find((item) => item.type === 'card' && item.cardId === cardId) ?? createTodoCardItem(cardId);
+  const withoutCard = todoItems.filter((item) => item.type !== 'card' || item.cardId !== cardId);
+  const cardCount = withoutCard.filter((item) => item.type === 'card').length;
+  const safePosition = Number.isFinite(position) ? Math.floor(position) : cardCount + 1;
+  const targetCardIndex = Math.min(Math.max(safePosition - 1, 0), cardCount);
+  let seenCards = 0;
+  let insertIndex = withoutCard.length;
+
+  for (let index = 0; index < withoutCard.length; index += 1) {
+    const item = withoutCard[index];
+    if (item.type !== 'card') continue;
+    if (seenCards === targetCardIndex) {
+      insertIndex = index;
+      break;
+    }
+    seenCards += 1;
+  }
+
+  const nextItems = [...withoutCard];
+  nextItems.splice(insertIndex, 0, itemToMove);
+  return nextItems;
+}
 export function useNotesStore() {
   const [state, setState] = useState<AppState>(defaultState);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -43,9 +129,10 @@ export function useNotesStore() {
           if (parsed.categories && Array.isArray(parsed.categories)) {
              console.log('Migrating legacy data...');
              const newCards = getImportCards(parsed);
-             setState({ cards: newCards });
+             setState({ cards: newCards, todoItems: [] });
           } else {
-             setState({ cards: normalizeCardTree(parsed.cards || []) });
+             const cards = normalizeCardTree(parsed.cards || []);
+             setState({ cards, todoItems: sanitizeTodoItems(cards, parsed.todoItems, parsed.todoCardIds) });
           }
         } else {
            // Fallback: check localStorage for migration
@@ -54,9 +141,10 @@ export function useNotesStore() {
               console.log('Migrating from localStorage to IDB...');
               const parsed = JSON.parse(localSaved);
               const newCards = getImportCards(parsed);
-              setState({ cards: newCards });
+              const todoItems = sanitizeTodoItems(newCards, parsed.todoItems, parsed.todoCardIds);
+              setState({ cards: newCards, todoItems });
               // Save to IDB immediately
-              await set(STORAGE_KEY, JSON.stringify({ cards: newCards }));
+              await set(STORAGE_KEY, JSON.stringify({ cards: newCards, todoItems }));
            }
         }
       } catch (e) {
@@ -348,18 +436,24 @@ export function useNotesStore() {
         });
       };
       
+      const cards = markDeleted(prev.cards);
       return {
         ...prev,
-        cards: markDeleted(prev.cards)
+        cards,
+        todoItems: sanitizeTodoItems(cards, prev.todoItems)
       };
     });
   }, []);
 
   const permanentlyDeleteCard = useCallback((id: string) => {
-    setState(prev => ({
-      ...prev,
-      cards: removeCardFromTree(prev.cards, id)
-    }));
+    setState(prev => {
+      const cards = removeCardFromTree(prev.cards, id);
+      return {
+        ...prev,
+        cards,
+        todoItems: sanitizeTodoItems(cards, prev.todoItems)
+      };
+    });
   }, []);
 
   const emptyRecycleBin = useCallback(() => {
@@ -371,10 +465,14 @@ export function useNotesStore() {
           children: removeDeleted(c.children)
         }));
 
-    setState(prev => ({
-      ...prev,
-      cards: removeDeleted(prev.cards)
-    }));
+    setState(prev => {
+      const cards = removeDeleted(prev.cards);
+      return {
+        ...prev,
+        cards,
+        todoItems: sanitizeTodoItems(cards, prev.todoItems)
+      };
+    });
   }, []);
 
   const restoreCard = useCallback((id: string, targetParentId: string | null) => {
@@ -466,7 +564,7 @@ export function useNotesStore() {
   const exportData = useCallback(async () => {
     const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
     const now = new Date();
-    const data = buildExportBackup(state.cards, resolvedVersion, now);
+    const data = buildExportBackup(state.cards, resolvedVersion, now, sanitizeTodoItems(state.cards, state.todoItems));
     const jsonString = stringifyExportBackup(data);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const filename = createExportFilename(now);
@@ -488,20 +586,94 @@ export function useNotesStore() {
 
   const importData = useCallback((data: any, mode: 'merge' | 'override') => {
     const importedCards = getImportCards(data);
+    const importedTodoItems = getImportTodoItems(data);
+    const importedTodoCardIds = getImportTodoCardIds(data);
 
     if (mode === 'override') {
-      setState({ cards: importedCards });
+      setState({
+        cards: importedCards,
+        todoItems: sanitizeTodoItems(importedCards, importedTodoItems, importedTodoCardIds)
+      });
     } else {
       setState(prev => {
+        const cards = [...prev.cards, ...importedCards];
         return {
-          cards: [...prev.cards, ...importedCards]
+          cards,
+          todoItems: sanitizeTodoItems(cards, [
+            ...prev.todoItems,
+            ...sanitizeTodoItems(importedCards, importedTodoItems, importedTodoCardIds),
+          ])
         };
       });
     }
   }, []);
 
+  const addToTodo = useCallback((id: string) => {
+    setState(prev => {
+      if (prev.todoItems.some((item) => item.type === 'card' && item.cardId === id)) return prev;
+      const card = findCardById(prev.cards, id);
+      if (!card || card.isDeleted) return prev;
+      return {
+        ...prev,
+        todoItems: [...prev.todoItems, createTodoCardItem(id)]
+      };
+    });
+  }, []);
+
+  const removeFromTodo = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      todoItems: prev.todoItems.filter((item) => item.type !== 'card' || item.cardId !== id)
+    }));
+  }, []);
+
+  const reorderTodo = useCallback((ids: string[]) => {
+    setState(prev => ({
+      ...prev,
+      todoItems: sanitizeTodoItems(prev.cards, ids.map((id) => prev.todoItems.find((item) => item.id === id)))
+    }));
+  }, []);
+
+  const moveTodoCardToPosition = useCallback((id: string, position: number) => {
+    setState(prev => {
+      const currentPosition = getTodoCardPosition(prev.todoItems, id);
+      if (!currentPosition) return prev;
+
+      return {
+        ...prev,
+        todoItems: sanitizeTodoItems(prev.cards, insertTodoCardAtPosition(prev.todoItems, id, position))
+      };
+    });
+  }, []);
+
+  const addTodoDivider = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      todoItems: [
+        ...prev.todoItems,
+        { id: generateId(), type: 'divider', title: '' }
+      ]
+    }));
+  }, []);
+
+  const updateTodoDivider = useCallback((id: string, title: string) => {
+    setState(prev => ({
+      ...prev,
+      todoItems: prev.todoItems.map((item) => item.id === id && item.type === 'divider' ? { ...item, title } : item)
+    }));
+  }, []);
+
+  const removeTodoDivider = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      todoItems: prev.todoItems.filter((item) => item.id !== id || item.type !== 'divider')
+    }));
+  }, []);
+
   return {
     cards: state.cards,
+    todoItems: sanitizeTodoItems(state.cards, state.todoItems),
+    todoCardIds: getTodoCardIds(sanitizeTodoItems(state.cards, state.todoItems)),
     isLoaded,
     addCard,
     updateCard,
@@ -518,6 +690,13 @@ export function useNotesStore() {
     searchCards,
     getDeletedCards,
     exportData,
-    importData
+    importData,
+    addToTodo,
+    removeFromTodo,
+    reorderTodo,
+    moveTodoCardToPosition,
+    addTodoDivider,
+    updateTodoDivider,
+    removeTodoDivider
   };
 }
