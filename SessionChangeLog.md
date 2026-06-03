@@ -3,6 +3,23 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-03
+
+### ToDo Divider Top Insertion
+
+**Author**: Codex
+
+**Changes**:
+- Changed `Add Divider` in the ToDo view so new dividers are inserted at the top of the ToDo list instead of the bottom.
+- Updated `Architecture.md` to reflect the new divider insertion contract.
+- Bumped the app version from `2.54.0` to `2.55.0`.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-02
 
 ### ToDo Priority View and Dividers

@@ -236,7 +236,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 8. User can drag ToDo cards to reorder priority; priority numbers update only after drop.
 9. User can click a card's ToDo badge and enter a priority number; the card is inserted at that card priority position and other cards shift accordingly.
 10. If a user enters a priority number larger than the ToDo card count, the card moves to the end.
-11. User can add a divider from the ToDo view; new dividers appear at the bottom of the ToDo list.
+11. User can add a divider from the ToDo view; new dividers appear at the top of the ToDo list.
 12. User can drag dividers between cards to create visual groups.
 13. User can edit divider labels inline.
 14. User can remove dividers from the ToDo view using the hover trash action.

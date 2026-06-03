@@ -650,8 +650,8 @@ export function useNotesStore() {
     setState(prev => ({
       ...prev,
       todoItems: [
+        { id: generateId(), type: 'divider', title: '' },
         ...prev.todoItems,
-        { id: generateId(), type: 'divider', title: '' }
       ]
     }));
   }, []);
