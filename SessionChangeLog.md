@@ -3,6 +3,37 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-04
+
+### Multi-List ToDo Columns
+
+**Author**: Codex
+
+**Changes**:
+- Converted ToDo persistence from a single ordered `todoItems` list to ordered `todoLists`, each with generated ID, editable title, color, and list-local items.
+- Added migration from legacy `todoItems` / `todoCardIds` into one default `New List` when no `todoLists` data exists.
+- Added ToDo list creation, deletion with confirmation, inline title editing, color selection, and drag-reordering by grabbing the list header.
+- Changed the list color rotation to replace the pink option with a slate option so it is more distinct from red, green, and light blue.
+- Added white and black ToDo list color options with visible white swatch/badge borders.
+- Changed the ToDo page to render lists as horizontal columns with list jump tabs and horizontal scrolling.
+- Added a persisted global Show checked checkbox for the ToDo page.
+- Excluded checked checkbox cards from priority numbering while keeping them in their list positions.
+- Rendered checked ToDo memberships as muted empty badges, and unchecked memberships as list-colored priority badges.
+- Added stacked multi-list badges for cards shown outside ToDo, ordered by list column order.
+- Changed normal card menus to use a ToDo submenu with list-specific add/remove actions and New List creation.
+- Enabled dragging ToDo cards and dividers within and between lists, with cross-list card drag moving rather than copying.
+- Updated import/export contract tests and backup helpers for `todoLists` while preserving compatibility `todoItems` / `todoCardIds`.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Result**:
+- ToDo now supports multiple independently prioritized planning lists without changing Home/folder card hierarchy.
+- Checked checkbox cards can remain visible as completed list members without consuming active priority numbers.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-03
 
 ### Recycle Bin Restore to Original Folder

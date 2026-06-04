@@ -1,4 +1,4 @@
-import type { Card, ContentBlock, TodoItem } from '@/lib/types';
+import type { Card, ContentBlock, TodoItem, TodoList } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { inferCardTypeFromCardData } from '@/lib/card-types';
 import { normalizeContentBlock } from '@/lib/block-types';
@@ -9,6 +9,7 @@ export interface ExportBackup {
   cards: Card[];
   todoCardIds?: string[];
   todoItems?: TodoItem[];
+  todoLists?: TodoList[];
 }
 
 export function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
@@ -135,8 +136,25 @@ export function getImportTodoItems(data: any): TodoItem[] {
     .filter((item: TodoItem | null): item is TodoItem => Boolean(item));
 }
 
-export function buildExportBackup(cards: Card[], version: string, exportedAt: Date = new Date(), todoItems: TodoItem[] = []): ExportBackup {
-  const todoCardIds = todoItems
+export function getImportTodoLists(data: any): TodoList[] {
+  if (!Array.isArray(data?.todoLists)) return [];
+  return data.todoLists
+    .map((list: any): TodoList | null => {
+      if (!list || typeof list.id !== 'string') return null;
+      return {
+        id: list.id,
+        title: typeof list.title === 'string' ? list.title : 'New List',
+        color: typeof list.color === 'string' ? list.color : '#2563eb',
+        items: getImportTodoItems({ todoItems: list.items }),
+      };
+    })
+    .filter((list: TodoList | null): list is TodoList => Boolean(list));
+}
+
+export function buildExportBackup(cards: Card[], version: string, exportedAt: Date = new Date(), todoLists: TodoList[] = []): ExportBackup {
+  const todoItems = todoLists[0]?.items ?? [];
+  const todoCardIds = todoLists
+    .flatMap((list) => list.items)
     .filter((item): item is Extract<TodoItem, { type: 'card' }> => item.type === 'card')
     .map((item) => item.cardId);
 
@@ -146,6 +164,7 @@ export function buildExportBackup(cards: Card[], version: string, exportedAt: Da
     cards,
     todoCardIds,
     todoItems,
+    todoLists,
   };
 }
 

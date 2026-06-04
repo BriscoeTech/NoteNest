@@ -216,7 +216,7 @@ export default function NotesApp() {
             isLoaded={store.isLoaded}
             selectedView={selectedView}
             selectedCardId={selectedCardId}
-            todoCardIds={store.todoCardIds}
+            todoLists={store.todoLists}
             onSelectView={handleSelectView}
             onSelectCard={handleSelectCardInTree}
             onAddCard={handleAddCard}
@@ -227,8 +227,9 @@ export default function NotesApp() {
             onDeleteCard={store.deleteCard}
             onUpdateCard={store.updateCard}
             onUpdateCardBlocks={store.updateCardBlocks}
-            onAddToTodo={store.addToTodo}
-            onRemoveFromTodo={store.removeFromTodo}
+            onAddToTodoList={store.addToTodoList}
+            onRemoveFromTodoList={store.removeFromTodoList}
+            onAddTodoList={store.addTodoList}
             deletedCount={deletedCount}
             onExport={store.exportData}
             onImport={store.importData}
@@ -254,8 +255,7 @@ export default function NotesApp() {
         <WorkspacePanel
           currentCard={currentCard || null}
           childrenCards={childrenCards}
-          todoItems={store.todoItems}
-          todoCardIds={store.todoCardIds}
+          todoLists={store.todoLists}
           allCards={store.cards}
           isRecycleBin={!isTodoView && isRecycleBin}
           isTodoView={isTodoView}
@@ -273,8 +273,15 @@ export default function NotesApp() {
           onReorderChildren={store.reorderChildren}
           onAddToTodo={store.addToTodo}
           onRemoveFromTodo={store.removeFromTodo}
-          onReorderTodo={store.reorderTodo}
+          onAddToTodoList={store.addToTodoList}
+          onRemoveFromTodoList={store.removeFromTodoList}
+          onMoveTodoItem={store.moveTodoItem}
           onMoveTodoCardToPosition={store.moveTodoCardToPosition}
+          onAddTodoList={store.addTodoList}
+          onUpdateTodoListTitle={store.updateTodoListTitle}
+          onUpdateTodoListColor={store.updateTodoListColor}
+          onDeleteTodoList={store.deleteTodoList}
+          onReorderTodoLists={store.reorderTodoLists}
           onAddTodoDivider={store.addTodoDivider}
           onUpdateTodoDivider={store.updateTodoDivider}
           onRemoveTodoDivider={store.removeTodoDivider}

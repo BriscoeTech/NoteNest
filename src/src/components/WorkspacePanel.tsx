@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { MutableRefObject, ReactNode, RefObject } from 'react';
 import { Plus, Search, X, Folder, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
-import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
+import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, horizontalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell, TodoItem } from '@/lib/types';
+import type { Card, CardType, ContentBlock, TextBlock, BulletBlock, ImageBlock, BulletItem, CheckboxBlock, LinkBlock, DrawingBlock, DrawingStroke, DrawingPoint, DrawingGroup, DrawingSnapshot, GraphBlock, GraphCell, TodoItem, TodoList } from '@/lib/types';
 import { createEmptyGraphCell, DEFAULT_GRAPH_CELL_COLOR, findCardById, generateId, getDescendantIds, GRAPH_MIN_SIZE, normalizeGraphBlock, reshapeGraphCells } from '@/lib/types';
 import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
 import {
@@ -39,15 +39,14 @@ import {
 } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { CardOptionsMenu } from './CardOptionsMenu';
+import { CardOptionsMenu, type TodoMenuAction } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
 import { CardColorDialog } from './CardColorDialog';
 
 interface WorkspacePanelProps {
   currentCard: Card | null;
   childrenCards: Card[];
-  todoItems: TodoItem[];
-  todoCardIds: string[];
+  todoLists: TodoList[];
   allCards: Card[]; // used for search/move picker
   isRecycleBin: boolean;
   isTodoView: boolean;
@@ -64,17 +63,48 @@ interface WorkspacePanelProps {
   onReorderChildren: (parentId: string | null, ids: string[]) => void;
   onAddToTodo: (id: string) => void;
   onRemoveFromTodo: (id: string) => void;
-  onReorderTodo: (ids: string[]) => void;
-  onMoveTodoCardToPosition: (id: string, position: number) => void;
-  onAddTodoDivider: () => void;
-  onUpdateTodoDivider: (id: string, title: string) => void;
-  onRemoveTodoDivider: (id: string) => void;
+  onAddToTodoList: (cardId: string, listId: string) => void;
+  onRemoveFromTodoList: (cardId: string, listId: string) => void;
+  onMoveTodoItem: (activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => void;
+  onMoveTodoCardToPosition: (listId: string, cardId: string, position: number, excludedCardIds: Set<string>) => void;
+  onAddTodoList: (cardId?: string) => void;
+  onUpdateTodoListTitle: (listId: string, title: string) => void;
+  onUpdateTodoListColor: (listId: string, color: string) => void;
+  onDeleteTodoList: (listId: string) => void;
+  onReorderTodoLists: (ids: string[]) => void;
+  onAddTodoDivider: (listId: string) => void;
+  onUpdateTodoDivider: (listId: string, id: string, title: string) => void;
+  onRemoveTodoDivider: (listId: string, id: string) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   sidebarOpen?: boolean;
 }
 
 const CHILDREN_VIEW_MODE_STORAGE_KEY = 'notenest-children-view-mode';
+const TODO_SHOW_CHECKED_STORAGE_KEY = 'notenest-todo-show-checked';
+const TODO_LIST_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ca8a04', '#0891b2', '#475569', '#4f46e5', '#ffffff', '#000000'];
+const TODO_LIST_LIGHT_COLOR_BORDER = '#cbd5e1';
+
+interface TodoBadge {
+  listId: string;
+  color: string;
+  number?: number;
+  isChecked: boolean;
+  label: string;
+}
+
+function isCheckedTodoCard(card: Card): boolean {
+  const { checkboxBlock } = getTypedBlocksByCardType(card);
+  return Boolean(checkboxBlock?.checked);
+}
+
+function getTodoListColorBorder(color: string): string {
+  return color.toLowerCase() === '#ffffff' ? TODO_LIST_LIGHT_COLOR_BORDER : color;
+}
+
+function getTodoListBadgeTextColor(color: string): string {
+  return color.toLowerCase() === '#ffffff' ? '#111827' : '#ffffff';
+}
 
 // ... BlockEditor ... (Reusing existing component, need to define it)
 interface BlockEditorProps {
@@ -2046,11 +2076,12 @@ interface GridCardItemProps {
   onChangeCardColorById?: (id: string, color: string | null, textColor: '#111827' | '#ffffff' | null, textColorHsv: { h: number; s: number; v: number } | null) => void;
   onReorderCardById?: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren?: (parentId: string | null, ids: string[]) => void;
-  todoNumber?: number;
-  getTodoNumber?: (id: string) => number | undefined;
-  onTodoNumberChange?: (id: string, position: number) => void;
+  todoBadges?: TodoBadge[];
+  getTodoBadges?: (id: string) => TodoBadge[];
+  onTodoNumberChange?: (listId: string, id: string, position: number) => void;
   onAddToTodo?: (id: string) => void;
   onRemoveFromTodo?: (id: string) => void;
+  getTodoMenuActions?: (id: string) => TodoMenuAction[];
   canCreateCards?: boolean;
   forceSingleColumn?: boolean;
   nestingDepth?: number;
@@ -2158,13 +2189,30 @@ function SortableCardGrid({
   );
 }
 
-interface SortableTodoListProps {
-  items: TodoItem[];
-  onReorderIds: (ids: string[]) => void;
-  renderItem: (item: TodoItem, dropIndicator: 'before' | 'after' | null) => React.ReactNode;
+interface TodoBoardProps {
+  lists: TodoList[];
+  renderList: (list: TodoList, listIndex: number, dropIndicatorForItem: (itemId: string) => 'before' | 'after' | null, dragHandleProps: TodoListDragHandleProps) => React.ReactNode;
+  onMoveItem: (activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => void;
+  onReorderLists: (ids: string[]) => void;
 }
 
-function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListProps) {
+const TODO_LIST_DROPPABLE_PREFIX = 'todo-list:';
+const TODO_LIST_SORTABLE_PREFIX = 'todo-list-sort:';
+
+interface TodoListDragHandleProps {
+  attributes: Record<string, any>;
+  listeners: Record<string, any>;
+}
+
+function getTodoItemLocation(lists: TodoList[], itemId: string): { listId: string; index: number } | null {
+  for (const list of lists) {
+    const index = list.items.findIndex((item) => item.id === itemId);
+    if (index !== -1) return { listId: list.id, index };
+  }
+  return null;
+}
+
+function TodoBoard({ lists, renderList, onMoveItem, onReorderLists }: TodoBoardProps) {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
@@ -2179,7 +2227,12 @@ function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListP
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    setOverItemId(event.over ? String(event.over.id) : null);
+    const overId = event.over ? String(event.over.id) : null;
+    if (overId?.startsWith(TODO_LIST_DROPPABLE_PREFIX)) {
+      setOverItemId(null);
+      return;
+    }
+    setOverItemId(overId);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -2187,10 +2240,35 @@ function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListP
     setActiveItemId(null);
     setOverItemId(null);
     if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    onReorderIds(arrayMove(items, oldIndex, newIndex).map((item) => item.id));
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId.startsWith(TODO_LIST_SORTABLE_PREFIX)) {
+      const activeListId = activeId.slice(TODO_LIST_SORTABLE_PREFIX.length);
+      const overListId = overId.startsWith(TODO_LIST_SORTABLE_PREFIX)
+        ? overId.slice(TODO_LIST_SORTABLE_PREFIX.length)
+        : overId.startsWith(TODO_LIST_DROPPABLE_PREFIX)
+          ? overId.slice(TODO_LIST_DROPPABLE_PREFIX.length)
+          : getTodoItemLocation(lists, overId)?.listId ?? null;
+      if (!overListId || activeListId === overListId) return;
+      const oldIndex = lists.findIndex((list) => list.id === activeListId);
+      const newIndex = lists.findIndex((list) => list.id === overListId);
+      if (oldIndex === -1 || newIndex === -1) return;
+      onReorderLists(arrayMove(lists, oldIndex, newIndex).map((list) => list.id));
+      return;
+    }
+
+    const activeLocation = getTodoItemLocation(lists, activeId);
+    if (!activeLocation) return;
+
+    if (overId.startsWith(TODO_LIST_DROPPABLE_PREFIX)) {
+      onMoveItem(activeId, overId.slice(TODO_LIST_DROPPABLE_PREFIX.length), null, 'after');
+      return;
+    }
+
+    const overLocation = getTodoItemLocation(lists, overId);
+    if (!overLocation) return;
+    const position = activeLocation.listId === overLocation.listId && activeLocation.index < overLocation.index ? 'after' : 'before';
+    onMoveItem(activeId, overLocation.listId, overId, position);
   };
 
   const handleDragCancel = () => {
@@ -2202,10 +2280,10 @@ function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListP
     if (!activeItemId || !overItemId || itemId !== overItemId || activeItemId === overItemId) {
       return null;
     }
-    const activeIndex = items.findIndex((item) => item.id === activeItemId);
-    const overIndex = items.findIndex((item) => item.id === overItemId);
-    if (activeIndex === -1 || overIndex === -1) return null;
-    return activeIndex < overIndex ? 'after' : 'before';
+    const activeLocation = getTodoItemLocation(lists, activeItemId);
+    const overLocation = getTodoItemLocation(lists, overItemId);
+    if (!activeLocation || !overLocation) return null;
+    return activeLocation.listId === overLocation.listId && activeLocation.index < overLocation.index ? 'after' : 'before';
   };
 
   return (
@@ -2217,12 +2295,61 @@ function SortableTodoList({ items, onReorderIds, renderItem }: SortableTodoListP
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-        <div className="grid auto-rows-[4px] grid-cols-1 gap-2 transition-all">
-          {items.map((item) => renderItem(item, getDropIndicator(item.id)))}
+      <SortableContext items={lists.map((list) => `${TODO_LIST_SORTABLE_PREFIX}${list.id}`)} strategy={horizontalListSortingStrategy}>
+        <div className="flex min-w-0 gap-4 overflow-x-auto pb-4">
+          {lists.map((list, index) => (
+            <SortableTodoListColumn key={list.id} listId={list.id}>
+              {(dragHandleProps) => renderList(list, index, getDropIndicator, dragHandleProps)}
+            </SortableTodoListColumn>
+          ))}
         </div>
       </SortableContext>
     </DndContext>
+  );
+}
+
+interface SortableTodoListColumnProps {
+  listId: string;
+  children: (dragHandleProps: TodoListDragHandleProps) => React.ReactNode;
+}
+
+function SortableTodoListColumn({ listId, children }: SortableTodoListColumnProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `${TODO_LIST_SORTABLE_PREFIX}${listId}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.55 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="w-[min(82vw,360px)] shrink-0">
+      {children({ attributes, listeners: listeners || {} })}
+    </div>
+  );
+}
+
+interface TodoColumnDropZoneProps {
+  listId: string;
+  children: React.ReactNode;
+}
+
+function TodoColumnDropZone({ listId, children }: TodoColumnDropZoneProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: `${TODO_LIST_DROPPABLE_PREFIX}${listId}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("min-h-20 rounded-md transition-colors", isOver && "bg-primary/5")}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -2363,11 +2490,12 @@ function GridCardItem({
   onChangeCardColorById,
   onReorderCardById,
   onReorderChildren,
-  todoNumber,
-  getTodoNumber,
+  todoBadges = [],
+  getTodoBadges,
   onTodoNumberChange,
   onAddToTodo,
   onRemoveFromTodo,
+  getTodoMenuActions,
   canCreateCards = true,
   forceSingleColumn = false,
   nestingDepth = 0,
@@ -2386,14 +2514,14 @@ function GridCardItem({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchorPoint, setMenuAnchorPoint] = useState<{ x: number; y: number } | null>(null);
   const [colorDialogOpen, setColorDialogOpen] = useState(false);
-  const [isEditingTodoNumber, setIsEditingTodoNumber] = useState(false);
-  const [todoNumberDraft, setTodoNumberDraft] = useState(todoNumber ? String(todoNumber) : '');
+  const [editingTodoBadgeListId, setEditingTodoBadgeListId] = useState<string | null>(null);
+  const [todoNumberDraft, setTodoNumberDraft] = useState('');
 
   useEffect(() => {
-    if (!isEditingTodoNumber) {
-      setTodoNumberDraft(todoNumber ? String(todoNumber) : '');
+    if (!editingTodoBadgeListId) {
+      setTodoNumberDraft('');
     }
-  }, [todoNumber, isEditingTodoNumber]);
+  }, [todoBadges, editingTodoBadgeListId]);
 
   useLayoutEffect(() => {
     const node = contentRef.current;
@@ -2496,13 +2624,14 @@ function GridCardItem({
   };
 
   const commitTodoNumber = () => {
-    setIsEditingTodoNumber(false);
+    const listId = editingTodoBadgeListId;
+    setEditingTodoBadgeListId(null);
     const nextPosition = Number(todoNumberDraft);
-    if (!todoNumber || !Number.isFinite(nextPosition) || nextPosition < 1) {
-      setTodoNumberDraft(todoNumber ? String(todoNumber) : '');
+    if (!listId || !Number.isFinite(nextPosition) || nextPosition < 1) {
+      setTodoNumberDraft('');
       return;
     }
-    onTodoNumberChange?.(card.id, nextPosition);
+    onTodoNumberChange?.(listId, card.id, nextPosition);
   };
 
   return (
@@ -2523,44 +2652,66 @@ function GridCardItem({
           )}
         />
         )}
-      {todoNumber && (
+      {todoBadges.length > 0 && (
         <div
-          className="absolute top-2 right-2 z-30"
+          className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          {isEditingTodoNumber ? (
-            <Input
-              value={todoNumberDraft}
-              onChange={(e) => setTodoNumberDraft(e.target.value)}
-              onBlur={commitTodoNumber}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitTodoNumber();
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setTodoNumberDraft(String(todoNumber));
-                  setIsEditingTodoNumber(false);
-                }
-                e.stopPropagation();
-              }}
-              className="h-7 w-12 rounded-full border-primary bg-background px-1 text-center text-xs font-semibold shadow-sm"
-              autoFocus
-            />
-          ) : (
-            <button
-              type="button"
-              aria-label={`ToDo priority ${todoNumber}`}
-              className="flex h-7 min-w-7 items-center justify-center rounded-full border border-primary/30 bg-primary px-2 text-xs font-semibold text-primary-foreground shadow-sm"
-              onClick={() => {
-                setTodoNumberDraft(String(todoNumber));
-                setIsEditingTodoNumber(true);
-              }}
-            >
-              {todoNumber}
-            </button>
+          {todoBadges.slice(0, 3).map((badge) => {
+            const isEditing = editingTodoBadgeListId === badge.listId;
+            const canEdit = !badge.isChecked && typeof badge.number === 'number' && onTodoNumberChange;
+            if (isEditing) {
+              return (
+                <Input
+                  key={badge.listId}
+                  value={todoNumberDraft}
+                  onChange={(e) => setTodoNumberDraft(e.target.value)}
+                  onBlur={commitTodoNumber}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitTodoNumber();
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setTodoNumberDraft('');
+                      setEditingTodoBadgeListId(null);
+                    }
+                    e.stopPropagation();
+                  }}
+                  className="h-7 w-12 rounded-full bg-background px-1 text-center text-xs font-semibold shadow-sm"
+                  style={{ borderColor: getTodoListColorBorder(badge.color) }}
+                  autoFocus
+                />
+              );
+            }
+
+            return (
+              <button
+                key={badge.listId}
+                type="button"
+                aria-label={badge.isChecked ? `${badge.label} checked` : `${badge.label} priority ${badge.number}`}
+                className={cn(
+                  "flex h-7 min-w-7 items-center justify-center rounded-full border px-2 text-xs font-semibold shadow-sm",
+                  badge.isChecked && "bg-muted text-muted-foreground border-border",
+                  !canEdit && "cursor-default"
+                )}
+                style={!badge.isChecked ? { backgroundColor: badge.color, borderColor: getTodoListColorBorder(badge.color), color: getTodoListBadgeTextColor(badge.color) } : undefined}
+                onClick={() => {
+                  if (!canEdit) return;
+                  setTodoNumberDraft(String(badge.number));
+                  setEditingTodoBadgeListId(badge.listId);
+                }}
+              >
+                {badge.isChecked ? '' : badge.number}
+              </button>
+            );
+          })}
+          {todoBadges.length > 3 && (
+            <div className="flex h-7 min-w-7 items-center justify-center rounded-full border bg-muted px-2 text-xs font-semibold text-muted-foreground shadow-sm">
+              +{todoBadges.length - 3}
+            </div>
           )}
         </div>
       )}
@@ -2768,11 +2919,12 @@ function GridCardItem({
                     onChangeCardColorById={onChangeCardColorById}
                     onReorderCardById={onReorderCardById}
                     onReorderChildren={onReorderChildren}
-                    todoNumber={getTodoNumber?.(child.id)}
-                    getTodoNumber={getTodoNumber}
+                    todoBadges={getTodoBadges?.(child.id)}
+                    getTodoBadges={getTodoBadges}
                     onTodoNumberChange={onTodoNumberChange}
                     onAddToTodo={onAddToTodo}
                     onRemoveFromTodo={onRemoveFromTodo}
+                    getTodoMenuActions={getTodoMenuActions}
                     canCreateCards={canCreateCards}
                     forceSingleColumn={forceSingleColumn}
                   />
@@ -2804,8 +2956,7 @@ function GridCardItem({
             onMoveDown={onReorder ? () => onReorder('down') : undefined}
             onChangeType={onOpenTypePicker}
             onChangeColor={!isRecycleBin ? () => setColorDialogOpen(true) : undefined}
-            onAddToTodo={!isRecycleBin && !todoNumber && onAddToTodo ? () => onAddToTodo(card.id) : undefined}
-            onRemoveFromTodo={!isRecycleBin && todoNumber && onRemoveFromTodo ? () => onRemoveFromTodo(card.id) : undefined}
+            todoMenuActions={!isRecycleBin ? getTodoMenuActions?.(card.id) : undefined}
             onRestore={onRestore}
             onDelete={onDelete}
           />
@@ -2920,8 +3071,7 @@ function RecycleBinTreeItem({ card, depth, onRestore, onDeleteForever }: Recycle
 export function WorkspacePanel({
   currentCard,
   childrenCards,
-  todoItems,
-  todoCardIds,
+  todoLists,
   allCards,
   isRecycleBin,
   isTodoView,
@@ -2938,8 +3088,15 @@ export function WorkspacePanel({
   onReorderChildren,
   onAddToTodo,
   onRemoveFromTodo,
-  onReorderTodo,
+  onAddToTodoList,
+  onRemoveFromTodoList,
+  onMoveTodoItem,
   onMoveTodoCardToPosition,
+  onAddTodoList,
+  onUpdateTodoListTitle,
+  onUpdateTodoListColor,
+  onDeleteTodoList,
+  onReorderTodoLists,
   onAddTodoDivider,
   onUpdateTodoDivider,
   onRemoveTodoDivider,
@@ -2955,6 +3112,10 @@ export function WorkspacePanel({
   const [typeDialogMode, setTypeDialogMode] = useState<'create' | 'change'>('create');
   const [typeDialogParentId, setTypeDialogParentId] = useState<string | null>(null);
   const [typeDialogCard, setTypeDialogCard] = useState<Card | null>(null);
+  const [showCheckedTodoItems, setShowCheckedTodoItems] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem(TODO_SHOW_CHECKED_STORAGE_KEY) !== 'false';
+  });
   const [childrenViewMode, setChildrenViewMode] = useState<'grid' | 'treemap'>(() => {
     if (typeof window === 'undefined') return 'grid';
     const saved = window.localStorage.getItem(CHILDREN_VIEW_MODE_STORAGE_KEY);
@@ -2992,6 +3153,10 @@ export function WorkspacePanel({
   useEffect(() => {
     window.localStorage.setItem(CHILDREN_VIEW_MODE_STORAGE_KEY, childrenViewMode);
   }, [childrenViewMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(TODO_SHOW_CHECKED_STORAGE_KEY, String(showCheckedTodoItems));
+  }, [showCheckedTodoItems]);
 
   // Block Dnd
   const blockSensors = useSensors(
@@ -3136,16 +3301,75 @@ export function WorkspacePanel({
   const canShowChildrenUI = !isTodoView && (isRecycleBin || !currentCard || Boolean(currentCardTypeDefinition?.canHaveChildren));
   const canUseTreemap = !isTodoView && !isRecycleBin && !searchQuery && canShowChildrenUI;
   const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
-  const todoNumberByCardId = useMemo(() => {
-    const map = new Map<string, number>();
-    todoCardIds.forEach((id, index) => map.set(id, index + 1));
+  const checkedTodoCardIds = useMemo(() => {
+    const ids = new Set<string>();
+    const collect = (cards: Card[]) => {
+      for (const card of cards) {
+        if (isCheckedTodoCard(card)) ids.add(card.id);
+        collect(card.children);
+      }
+    };
+    collect(allCards);
+    return ids;
+  }, [allCards]);
+  const todoBadgesByCardId = useMemo(() => {
+    const map = new Map<string, TodoBadge[]>();
+    for (const list of todoLists) {
+      let priority = 0;
+      for (const item of list.items) {
+        if (item.type !== 'card') continue;
+        const card = findCardById(allCards, item.cardId);
+        if (!card || card.isDeleted) continue;
+        const isChecked = checkedTodoCardIds.has(item.cardId);
+        if (!isChecked) priority += 1;
+        const badge: TodoBadge = {
+          listId: list.id,
+          color: list.color,
+          number: isChecked ? undefined : priority,
+          isChecked,
+          label: list.title || 'New List',
+        };
+        const badges = map.get(item.cardId) ?? [];
+        badges.push(badge);
+        map.set(item.cardId, badges);
+      }
+    }
     return map;
-  }, [todoCardIds]);
-  const getTodoNumber = (id: string) => todoNumberByCardId.get(id);
-  const moveTodoCardByStep = (id: string, direction: 'up' | 'down') => {
-    const currentNumber = getTodoNumber(id);
+  }, [allCards, checkedTodoCardIds, todoLists]);
+  const getTodoBadges = (id: string) => todoBadgesByCardId.get(id) ?? [];
+  const getTodoBadgeForList = (listId: string, id: string) => getTodoBadges(id).filter((badge) => badge.listId === listId);
+  const getTodoPositionInList = (listId: string, id: string) => getTodoBadgeForList(listId, id)[0]?.number;
+  const moveTodoCardByStep = (listId: string, id: string, direction: 'up' | 'down') => {
+    const currentNumber = getTodoPositionInList(listId, id);
     if (!currentNumber) return;
-    onMoveTodoCardToPosition(id, direction === 'up' ? currentNumber - 1 : currentNumber + 1);
+    onMoveTodoCardToPosition(listId, id, direction === 'up' ? currentNumber - 1 : currentNumber + 1, checkedTodoCardIds);
+  };
+  const getTodoMenuActions = (cardId: string): TodoMenuAction[] => {
+    const actions: TodoMenuAction[] = [
+      ...todoLists
+        .filter((list) => !list.items.some((item) => item.type === 'card' && item.cardId === cardId))
+        .map((list) => ({
+          key: `add-${list.id}`,
+          kind: 'add' as const,
+          label: `Add to ${list.title || 'New List'}`,
+          onSelect: () => onAddToTodoList(cardId, list.id),
+        })),
+      ...todoLists
+        .filter((list) => list.items.some((item) => item.type === 'card' && item.cardId === cardId))
+        .map((list) => ({
+          key: `remove-${list.id}`,
+          kind: 'remove' as const,
+          label: `Remove from ${list.title || 'New List'}`,
+          onSelect: () => onRemoveFromTodoList(cardId, list.id),
+        })),
+      {
+        key: 'new-list',
+        kind: 'new' as const,
+        label: 'New List',
+        onSelect: () => onAddTodoList(cardId),
+      },
+    ];
+    return actions;
   };
 
   return (
@@ -3177,75 +3401,194 @@ export function WorkspacePanel({
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-8">
         {isTodoView && (
-          <div className="max-w-5xl mx-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Priority List
-              </h3>
-              <Button size="sm" onClick={onAddTodoDivider}>
-                <Plus className="w-4 h-4 mr-1" />
-                Add Divider
-              </Button>
+          <div className="w-full">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  ToDo Lists
+                </h3>
+                {todoLists.length > 1 && (
+                  <div className="flex max-w-full gap-1 overflow-x-auto rounded-md border bg-muted/30 p-1">
+                    {todoLists.map((list) => (
+                      <button
+                        key={list.id}
+                        type="button"
+                        className="shrink-0 rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground"
+                        onClick={() => document.getElementById(`todo-list-${list.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })}
+                      >
+                        {list.title || 'New List'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex h-8 items-center gap-2 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showCheckedTodoItems}
+                    onChange={(e) => setShowCheckedTodoItems(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  Show checked
+                </label>
+                <Button size="sm" onClick={() => onAddTodoList()}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  New List
+                </Button>
+              </div>
             </div>
 
-            {todoItems.length === 0 ? (
+            {todoLists.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground italic border-2 border-dashed rounded-lg">
-                No cards have been added to ToDo.
+                No ToDo lists yet.
               </div>
             ) : (
-              <SortableTodoList
-                items={todoItems}
-                onReorderIds={onReorderTodo}
-                renderItem={(item, dropIndicator) => {
-                  if (item.type === 'divider') {
-                    return (
-                      <TodoDividerItem
-                        key={item.id}
-                        item={item}
-                        dropIndicator={dropIndicator}
-                        onRename={(title) => onUpdateTodoDivider(item.id, title)}
-                        onDelete={() => onRemoveTodoDivider(item.id)}
-                      />
-                    );
-                  }
-
-                  const card = findCardById(allCards, item.cardId);
-                  if (!card || card.isDeleted) return null;
-
+              <TodoBoard
+                lists={todoLists}
+                onMoveItem={onMoveTodoItem}
+                onReorderLists={onReorderTodoLists}
+                renderList={(list, listIndex, getDropIndicator, dragHandleProps) => {
+                  const visibleItems = list.items.filter((item) => {
+                    if (item.type !== 'card') return true;
+                    return showCheckedTodoItems || !checkedTodoCardIds.has(item.cardId);
+                  });
                   return (
-                    <GridCardItem
-                      key={item.id}
-                      card={card}
-                      sortableId={item.id}
-                      onNavigate={() => onNavigateCard(card.id)}
-                      onAddNote={undefined}
-                      onMoveStart={() => handleMoveStart(card.id)}
-                      onRename={(title) => onUpdateCard(card.id, { title })}
-                      onDelete={() => onDeleteCard(card.id)}
-                      onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
-                      onOpenTypePicker={() => openChangeTypePicker(card)}
-                      onReorder={(dir) => moveTodoCardByStep(card.id, dir)}
-                      onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
-                      dropIndicator={dropIndicator}
-                      inlineChildren={true}
-                      nestingDepth={0}
-                      onNavigateCardById={onNavigateCard}
-                      onOpenCreateTypePicker={openCreateTypePicker}
-                      onMoveStartById={handleMoveStart}
-                      onUpdateCardTitleById={(id, title) => onUpdateCard(id, { title })}
-                      onDeleteCardById={onDeleteCard}
-                      onUpdateBlocksById={onUpdateCardBlocks}
-                      onOpenChangeTypePickerByCard={openChangeTypePicker}
-                      onReorderCardById={moveTodoCardByStep}
-                      onReorderChildren={onReorderChildren}
-                      todoNumber={getTodoNumber(card.id)}
-                      getTodoNumber={getTodoNumber}
-                      onTodoNumberChange={onMoveTodoCardToPosition}
-                      onAddToTodo={onAddToTodo}
-                      onRemoveFromTodo={onRemoveFromTodo}
-                      canCreateCards={false}
-                      forceSingleColumn={true}
-                    />
+                    <section
+                      key={list.id}
+                      id={`todo-list-${list.id}`}
+                      className="rounded-md border bg-card p-3"
+                    >
+                      <div
+                        className="group mb-3 flex cursor-grab items-center gap-2 rounded-sm active:cursor-grabbing"
+                        {...dragHandleProps.attributes}
+                        {...dragHandleProps.listeners}
+                      >
+                        <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-5 w-5 shrink-0 rounded-full border shadow-sm"
+                              style={{ backgroundColor: list.color, borderColor: getTodoListColorBorder(list.color) }}
+                              aria-label="List color"
+                              onPointerDown={(e) => e.stopPropagation()}
+                            />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="grid grid-cols-4 gap-1 p-2">
+                            {TODO_LIST_COLORS.map((color) => (
+                              <DropdownMenuItem
+                                key={color}
+                                className="h-7 w-7 cursor-pointer rounded-full border p-0"
+                                style={{ backgroundColor: color, borderColor: getTodoListColorBorder(color) }}
+                                onClick={() => onUpdateTodoListColor(list.id, color)}
+                              />
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div
+                          contentEditable
+                          suppressContentEditableWarning
+                          className="min-w-0 flex-1 rounded-sm px-1 text-base font-semibold outline-none focus:bg-background focus:ring-1 focus:ring-ring"
+                          onBlur={(e) => onUpdateTodoListTitle(list.id, e.currentTarget.textContent || '')}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            }
+                            e.stopPropagation();
+                          }}
+                        >
+                          {list.title || 'New List'}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={() => {
+                            if (window.confirm(`Delete ToDo list "${list.title || 'New List'}"? Cards will not be deleted.`)) {
+                              onDeleteTodoList(list.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="mb-3 flex justify-end">
+                        <Button size="sm" variant="outline" onClick={() => onAddTodoDivider(list.id)}>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add Divider
+                        </Button>
+                      </div>
+
+                      <TodoColumnDropZone listId={list.id}>
+                        <SortableContext items={visibleItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+                          <div className="grid auto-rows-[4px] grid-cols-1 gap-2 transition-all">
+                            {visibleItems.length === 0 ? (
+                              <div className="rounded-md border border-dashed py-8 text-center text-sm italic text-muted-foreground">
+                                Empty list.
+                              </div>
+                            ) : (
+                              visibleItems.map((item) => {
+                                const dropIndicator = getDropIndicator(item.id);
+                                if (item.type === 'divider') {
+                                  return (
+                                    <TodoDividerItem
+                                      key={item.id}
+                                      item={item}
+                                      dropIndicator={dropIndicator}
+                                      onRename={(title) => onUpdateTodoDivider(list.id, item.id, title)}
+                                      onDelete={() => onRemoveTodoDivider(list.id, item.id)}
+                                    />
+                                  );
+                                }
+
+                                const card = findCardById(allCards, item.cardId);
+                                if (!card || card.isDeleted) return null;
+
+                                return (
+                                  <GridCardItem
+                                    key={item.id}
+                                    card={card}
+                                    sortableId={item.id}
+                                    onNavigate={() => onNavigateCard(card.id)}
+                                    onAddNote={undefined}
+                                    onMoveStart={() => handleMoveStart(card.id)}
+                                    onRename={(title) => onUpdateCard(card.id, { title })}
+                                    onDelete={() => onDeleteCard(card.id)}
+                                    onUpdateBlocks={(blocks) => onUpdateCardBlocks(card.id, blocks)}
+                                    onOpenTypePicker={() => openChangeTypePicker(card)}
+                                    onReorder={(dir) => moveTodoCardByStep(list.id, card.id, dir)}
+                                    onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
+                                    dropIndicator={dropIndicator}
+                                    inlineChildren={true}
+                                    nestingDepth={0}
+                                    onNavigateCardById={onNavigateCard}
+                                    onOpenCreateTypePicker={openCreateTypePicker}
+                                    onMoveStartById={handleMoveStart}
+                                    onUpdateCardTitleById={(id, title) => onUpdateCard(id, { title })}
+                                    onDeleteCardById={onDeleteCard}
+                                    onUpdateBlocksById={onUpdateCardBlocks}
+                                    onOpenChangeTypePickerByCard={openChangeTypePicker}
+                                    onReorderCardById={(id, dir) => moveTodoCardByStep(list.id, id, dir)}
+                                    onReorderChildren={onReorderChildren}
+                                    todoBadges={getTodoBadgeForList(list.id, card.id)}
+                                    getTodoBadges={(id) => getTodoBadgeForList(list.id, id)}
+                                    onTodoNumberChange={(targetListId, id, position) => onMoveTodoCardToPosition(targetListId, id, position, checkedTodoCardIds)}
+                                    getTodoMenuActions={getTodoMenuActions}
+                                    canCreateCards={false}
+                                    forceSingleColumn={true}
+                                  />
+                                );
+                              })
+                            )}
+                          </div>
+                        </SortableContext>
+                      </TodoColumnDropZone>
+                    </section>
                   );
                 }}
               />
@@ -3389,11 +3732,12 @@ export function WorkspacePanel({
                   onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
                   onReorderCardById={onReorderCard}
                   onReorderChildren={onReorderChildren}
-                  todoNumber={getTodoNumber(card.id)}
-                  getTodoNumber={getTodoNumber}
-                  onTodoNumberChange={onMoveTodoCardToPosition}
+                  todoBadges={getTodoBadges(card.id)}
+                  getTodoBadges={getTodoBadges}
+                  onTodoNumberChange={(listId, id, position) => onMoveTodoCardToPosition(listId, id, position, checkedTodoCardIds)}
                   onAddToTodo={onAddToTodo}
                   onRemoveFromTodo={onRemoveFromTodo}
+                  getTodoMenuActions={getTodoMenuActions}
                 />
               )}
             />
@@ -3418,11 +3762,12 @@ export function WorkspacePanel({
                   onRestore={() => onRestoreCard(card.id, null)}
                   onReorder={(dir) => onReorderCard(card.id, dir)}
                   onChangeCardColorById={(id, backgroundColor, textColor, textColorHsv) => onUpdateCard(id, { backgroundColor, textColor, textColorHsv })}
-                  todoNumber={!isRecycleBin ? getTodoNumber(card.id) : undefined}
-                  getTodoNumber={getTodoNumber}
-                  onTodoNumberChange={onMoveTodoCardToPosition}
+                  todoBadges={!isRecycleBin ? getTodoBadges(card.id) : []}
+                  getTodoBadges={getTodoBadges}
+                  onTodoNumberChange={(listId, id, position) => onMoveTodoCardToPosition(listId, id, position, checkedTodoCardIds)}
                   onAddToTodo={onAddToTodo}
                   onRemoveFromTodo={onRemoveFromTodo}
+                  getTodoMenuActions={getTodoMenuActions}
                   dropIndicator={dropIndicator}
                 />
               )}

@@ -5,9 +5,10 @@ import {
   getImportCards,
   getImportTodoCardIds,
   getImportTodoItems,
+  getImportTodoLists,
   stringifyExportBackup,
 } from '../src/src/lib/import-export';
-import type { Card, TodoItem } from '../src/src/lib/types';
+import type { Card, TodoItem, TodoList } from '../src/src/lib/types';
 
 const exportedAt = new Date(2026, 3, 26, 9, 5, 0, 0);
 
@@ -55,13 +56,19 @@ const todoItems: TodoItem[] = [
   { id: 'divider-1', type: 'divider', title: 'End of week' },
 ];
 
-const backup = buildExportBackup(cards, '1.2.3', exportedAt, todoItems);
-assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards', 'todoCardIds', 'todoItems']);
+const todoLists: TodoList[] = [
+  { id: 'list-1', title: 'New List', color: '#2563eb', items: todoItems },
+  { id: 'list-2', title: 'Vacation', color: '#16a34a', items: [] },
+];
+
+const backup = buildExportBackup(cards, '1.2.3', exportedAt, todoLists);
+assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards', 'todoCardIds', 'todoItems', 'todoLists']);
 assert.equal(backup.version, '1.2.3');
 assert.equal(backup.exportedAt, exportedAt.toISOString());
 assert.equal(backup.cards, cards);
 assert.deepEqual(backup.todoCardIds, ['graph-1']);
 assert.deepEqual(backup.todoItems, todoItems);
+assert.deepEqual(backup.todoLists, todoLists);
 
 const json = stringifyExportBackup(backup);
 assert.equal(json, JSON.stringify(backup, null, 2));
@@ -73,8 +80,10 @@ const roundTripCards = getImportCards(JSON.parse(json));
 assert.deepEqual(roundTripCards, cards);
 assert.deepEqual(getImportTodoCardIds(JSON.parse(json)), ['graph-1']);
 assert.deepEqual(getImportTodoItems(JSON.parse(json)), todoItems);
+assert.deepEqual(getImportTodoLists(JSON.parse(json)), todoLists);
 assert.deepEqual(getImportTodoCardIds({ cards }), []);
 assert.deepEqual(getImportTodoItems({ cards }), []);
+assert.deepEqual(getImportTodoLists({ cards }), []);
 assert.deepEqual(getImportTodoCardIds({ todoItems, cards }), []);
 assert.deepEqual(getImportTodoCardIds({ todoCardIds: ['graph-1'], cards }), ['graph-1']);
 

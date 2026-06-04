@@ -23,8 +23,18 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+export interface TodoMenuAction {
+  key: string;
+  label: string;
+  kind: 'add' | 'remove' | 'new';
+  onSelect: () => void;
+}
 
 interface CardOptionsMenuProps {
   isFolder?: boolean;
@@ -45,6 +55,7 @@ interface CardOptionsMenuProps {
   onChangeColor?: () => void;
   onAddToTodo?: () => void;
   onRemoveFromTodo?: () => void;
+  todoMenuActions?: TodoMenuAction[];
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onExpandAll?: () => void;
@@ -64,6 +75,10 @@ type CardMenuEntry =
     }
   | {
       type: 'separator';
+      key: string;
+    }
+  | {
+      type: 'todo-submenu';
       key: string;
     };
 
@@ -105,6 +120,7 @@ export function CardOptionsMenu({
   onChangeColor,
   onAddToTodo,
   onRemoveFromTodo,
+  todoMenuActions = [],
   onMoveUp,
   onMoveDown,
   onExpandAll,
@@ -118,6 +134,7 @@ export function CardOptionsMenu({
   const isControlled = typeof open === 'boolean';
   const menuOpen = isControlled ? open : internalOpen;
   const menuAnchorPoint = anchorPoint ?? internalAnchorPoint ?? { x: 0, y: 0 };
+  const hasTodoSubmenu = todoMenuActions.length > 0;
   const menuEntries = compactMenuEntries(
     isRecycleBin
       ? [
@@ -181,6 +198,10 @@ export function CardOptionsMenu({
             label: 'Remove from ToDo',
             Icon: ListX,
             onSelect: onRemoveFromTodo,
+          },
+          hasTodoSubmenu && {
+            type: 'todo-submenu',
+            key: 'todo-submenu',
           },
           { type: 'separator', key: 'primary-move-separator' },
           onMoveUp && {
@@ -285,6 +306,34 @@ export function CardOptionsMenu({
         {menuEntries.map((entry) => {
           if (entry.type === 'separator') {
             return <DropdownMenuSeparator key={entry.key} />;
+          }
+          if (entry.type === 'todo-submenu') {
+            return (
+              <DropdownMenuSub key={entry.key}>
+                <DropdownMenuSubTrigger>
+                  <ListPlus className="mr-2 h-4 w-4" />
+                  ToDo
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-52">
+                  {todoMenuActions.map((action) => {
+                    const Icon = action.kind === 'remove' ? ListX : ListPlus;
+                    return (
+                      <DropdownMenuItem
+                        key={action.key}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          action.onSelect();
+                        }}
+                        className={action.kind === 'remove' ? 'text-destructive focus:text-destructive' : undefined}
+                      >
+                        <Icon className="mr-2 h-4 w-4" />
+                        {action.label}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            );
           }
           const Icon = entry.Icon;
           return (

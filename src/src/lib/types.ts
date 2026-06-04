@@ -165,7 +165,14 @@ export interface Card {
 
 export interface AppState {
   cards: Card[]; // Root level cards
-  todoItems: TodoItem[];
+  todoLists: TodoList[];
+}
+
+export interface TodoList {
+  id: string;
+  title: string;
+  color: string;
+  items: TodoItem[];
 }
 
 export interface TodoCardItem {

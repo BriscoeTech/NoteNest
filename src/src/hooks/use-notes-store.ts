@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock, CardType, TodoItem } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType, TodoItem, TodoList } from '@/lib/types';
 import { blockMatchesSearch } from '@/lib/block-types';
 import {
   buildExportBackup,
@@ -7,6 +7,7 @@ import {
   getImportCards,
   getImportTodoCardIds,
   getImportTodoItems,
+  getImportTodoLists,
   normalizeCardTree,
   stringifyExportBackup,
 } from '@/lib/import-export';
@@ -25,14 +26,20 @@ import {
 import { RUNTIME_VERSION_DISPLAY, ensureAppVersionLoaded } from '@/lib/app-version';
 
 const STORAGE_KEY = 'notecards_data';
+const DEFAULT_TODO_LIST_TITLE = 'New List';
+const TODO_LIST_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ca8a04', '#0891b2', '#475569', '#4f46e5', '#ffffff', '#000000'];
 
 const defaultState: AppState = {
   cards: [],
-  todoItems: []
+  todoLists: []
 };
 
 function createTodoCardItem(cardId: string): TodoItem {
-  return { id: `todo-card-${cardId}`, type: 'card', cardId };
+  return { id: generateId(), type: 'card', cardId };
+}
+
+function getTodoListColor(index: number): string {
+  return TODO_LIST_COLORS[index % TODO_LIST_COLORS.length];
 }
 
 function sanitizeTodoItems(cards: Card[], todoItems: unknown, legacyTodoCardIds?: unknown): TodoItem[] {
@@ -75,7 +82,49 @@ function sanitizeTodoItems(cards: Card[], todoItems: unknown, legacyTodoCardIds?
   return nextItems;
 }
 
-function getTodoCardIds(todoItems: TodoItem[]): string[] {
+function createTodoList(items: TodoItem[] = [], index = 0, overrides: Partial<Omit<TodoList, 'items'>> = {}): TodoList {
+  return {
+    id: overrides.id ?? generateId(),
+    title: overrides.title ?? DEFAULT_TODO_LIST_TITLE,
+    color: overrides.color ?? getTodoListColor(index),
+    items,
+  };
+}
+
+function sanitizeTodoLists(cards: Card[], todoLists: unknown, legacyTodoItems?: unknown, legacyTodoCardIds?: unknown): TodoList[] {
+  if (Array.isArray(todoLists)) {
+    return todoLists
+      .map((list, index): TodoList | null => {
+        if (!list || typeof list !== 'object') return null;
+        const candidate = list as Partial<TodoList>;
+        const items = sanitizeTodoItems(cards, candidate.items);
+        return createTodoList(items, index, {
+          id: typeof candidate.id === 'string' ? candidate.id : undefined,
+          title: typeof candidate.title === 'string' ? candidate.title : DEFAULT_TODO_LIST_TITLE,
+          color: typeof candidate.color === 'string' ? candidate.color : getTodoListColor(index),
+        });
+      })
+      .filter((list): list is TodoList => Boolean(list));
+  }
+
+  const migratedItems = sanitizeTodoItems(cards, legacyTodoItems, legacyTodoCardIds);
+  return migratedItems.length > 0 ? [createTodoList(migratedItems)] : [];
+}
+
+function getTodoCardIds(todoLists: TodoList[]): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const list of todoLists) {
+    for (const item of list.items) {
+      if (item.type !== 'card' || seen.has(item.cardId)) continue;
+      ids.push(item.cardId);
+      seen.add(item.cardId);
+    }
+  }
+  return ids;
+}
+
+function getTodoListCardIds(todoItems: TodoItem[]): string[] {
   return todoItems
     .filter((item): item is Extract<TodoItem, { type: 'card' }> => item.type === 'card')
     .map((item) => item.cardId);
@@ -91,10 +140,10 @@ function getTodoCardPosition(todoItems: TodoItem[], cardId: string): number {
   return 0;
 }
 
-function insertTodoCardAtPosition(todoItems: TodoItem[], cardId: string, position: number): TodoItem[] {
+function insertTodoCardAtPosition(todoItems: TodoItem[], cardId: string, position: number, excludedCardIds: Set<string> = new Set()): TodoItem[] {
   const itemToMove = todoItems.find((item) => item.type === 'card' && item.cardId === cardId) ?? createTodoCardItem(cardId);
   const withoutCard = todoItems.filter((item) => item.type !== 'card' || item.cardId !== cardId);
-  const cardCount = withoutCard.filter((item) => item.type === 'card').length;
+  const cardCount = withoutCard.filter((item) => item.type === 'card' && !excludedCardIds.has(item.cardId)).length;
   const safePosition = Number.isFinite(position) ? Math.floor(position) : cardCount + 1;
   const targetCardIndex = Math.min(Math.max(safePosition - 1, 0), cardCount);
   let seenCards = 0;
@@ -102,7 +151,7 @@ function insertTodoCardAtPosition(todoItems: TodoItem[], cardId: string, positio
 
   for (let index = 0; index < withoutCard.length; index += 1) {
     const item = withoutCard[index];
-    if (item.type !== 'card') continue;
+    if (item.type !== 'card' || excludedCardIds.has(item.cardId)) continue;
     if (seenCards === targetCardIndex) {
       insertIndex = index;
       break;
@@ -129,10 +178,10 @@ export function useNotesStore() {
           if (parsed.categories && Array.isArray(parsed.categories)) {
              console.log('Migrating legacy data...');
              const newCards = getImportCards(parsed);
-             setState({ cards: newCards, todoItems: [] });
+             setState({ cards: newCards, todoLists: [] });
           } else {
              const cards = normalizeCardTree(parsed.cards || []);
-             setState({ cards, todoItems: sanitizeTodoItems(cards, parsed.todoItems, parsed.todoCardIds) });
+             setState({ cards, todoLists: sanitizeTodoLists(cards, parsed.todoLists, parsed.todoItems, parsed.todoCardIds) });
           }
         } else {
            // Fallback: check localStorage for migration
@@ -141,10 +190,10 @@ export function useNotesStore() {
               console.log('Migrating from localStorage to IDB...');
               const parsed = JSON.parse(localSaved);
               const newCards = getImportCards(parsed);
-              const todoItems = sanitizeTodoItems(newCards, parsed.todoItems, parsed.todoCardIds);
-              setState({ cards: newCards, todoItems });
+              const todoLists = sanitizeTodoLists(newCards, parsed.todoLists, parsed.todoItems, parsed.todoCardIds);
+              setState({ cards: newCards, todoLists });
               // Save to IDB immediately
-              await set(STORAGE_KEY, JSON.stringify({ cards: newCards, todoItems }));
+              await set(STORAGE_KEY, JSON.stringify({ cards: newCards, todoLists }));
            }
         }
       } catch (e) {
@@ -440,7 +489,7 @@ export function useNotesStore() {
       return {
         ...prev,
         cards,
-        todoItems: sanitizeTodoItems(cards, prev.todoItems)
+        todoLists: sanitizeTodoLists(cards, prev.todoLists)
       };
     });
   }, []);
@@ -451,7 +500,7 @@ export function useNotesStore() {
       return {
         ...prev,
         cards,
-        todoItems: sanitizeTodoItems(cards, prev.todoItems)
+        todoLists: sanitizeTodoLists(cards, prev.todoLists)
       };
     });
   }, []);
@@ -470,7 +519,7 @@ export function useNotesStore() {
       return {
         ...prev,
         cards,
-        todoItems: sanitizeTodoItems(cards, prev.todoItems)
+        todoLists: sanitizeTodoLists(cards, prev.todoLists)
       };
     });
   }, []);
@@ -583,7 +632,7 @@ export function useNotesStore() {
   const exportData = useCallback(async () => {
     const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
     const now = new Date();
-    const data = buildExportBackup(state.cards, resolvedVersion, now, sanitizeTodoItems(state.cards, state.todoItems));
+    const data = buildExportBackup(state.cards, resolvedVersion, now, sanitizeTodoLists(state.cards, state.todoLists));
     const jsonString = stringifyExportBackup(data);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const filename = createExportFilename(now);
@@ -605,36 +654,83 @@ export function useNotesStore() {
 
   const importData = useCallback((data: any, mode: 'merge' | 'override') => {
     const importedCards = getImportCards(data);
+    const importedTodoLists = getImportTodoLists(data);
     const importedTodoItems = getImportTodoItems(data);
     const importedTodoCardIds = getImportTodoCardIds(data);
 
     if (mode === 'override') {
       setState({
         cards: importedCards,
-        todoItems: sanitizeTodoItems(importedCards, importedTodoItems, importedTodoCardIds)
+        todoLists: sanitizeTodoLists(importedCards, importedTodoLists, importedTodoItems, importedTodoCardIds)
       });
     } else {
       setState(prev => {
         const cards = [...prev.cards, ...importedCards];
         return {
           cards,
-          todoItems: sanitizeTodoItems(cards, [
-            ...prev.todoItems,
-            ...sanitizeTodoItems(importedCards, importedTodoItems, importedTodoCardIds),
+          todoLists: sanitizeTodoLists(cards, [
+            ...prev.todoLists,
+            ...sanitizeTodoLists(importedCards, importedTodoLists, importedTodoItems, importedTodoCardIds),
           ])
         };
       });
     }
   }, []);
 
+  const addTodoList = useCallback((cardId?: string) => {
+    setState(prev => {
+      const item = cardId ? createTodoCardItem(cardId) : null;
+      if (cardId) {
+        const card = findCardById(prev.cards, cardId);
+        if (!card || card.isDeleted) return prev;
+      }
+      const nextList = createTodoList(item ? [item] : [], prev.todoLists.length);
+      return {
+        ...prev,
+        todoLists: [...prev.todoLists, nextList]
+      };
+    });
+  }, []);
+
+  const addToTodoList = useCallback((cardId: string, listId: string) => {
+    setState(prev => {
+      const card = findCardById(prev.cards, cardId);
+      if (!card || card.isDeleted) return prev;
+      return {
+        ...prev,
+        todoLists: prev.todoLists.map((list) => {
+          if (list.id !== listId) return list;
+          if (list.items.some((item) => item.type === 'card' && item.cardId === cardId)) return list;
+          return { ...list, items: [...list.items, createTodoCardItem(cardId)] };
+        })
+      };
+    });
+  }, []);
+
+  const removeFromTodoList = useCallback((cardId: string, listId: string) => {
+    setState(prev => ({
+      ...prev,
+      todoLists: prev.todoLists.map((list) => list.id === listId
+        ? { ...list, items: list.items.filter((item) => item.type !== 'card' || item.cardId !== cardId) }
+        : list
+      )
+    }));
+  }, []);
+
   const addToTodo = useCallback((id: string) => {
     setState(prev => {
-      if (prev.todoItems.some((item) => item.type === 'card' && item.cardId === id)) return prev;
+      if (prev.todoLists.length === 0) {
+        const card = findCardById(prev.cards, id);
+        if (!card || card.isDeleted) return prev;
+        return { ...prev, todoLists: [createTodoList([createTodoCardItem(id)])] };
+      }
+      const targetList = prev.todoLists[0];
+      if (targetList.items.some((item) => item.type === 'card' && item.cardId === id)) return prev;
       const card = findCardById(prev.cards, id);
       if (!card || card.isDeleted) return prev;
       return {
         ...prev,
-        todoItems: [...prev.todoItems, createTodoCardItem(id)]
+        todoLists: prev.todoLists.map((list) => list.id === targetList.id ? { ...list, items: [...list.items, createTodoCardItem(id)] } : list)
       };
     });
   }, []);
@@ -642,57 +738,141 @@ export function useNotesStore() {
   const removeFromTodo = useCallback((id: string) => {
     setState(prev => ({
       ...prev,
-      todoItems: prev.todoItems.filter((item) => item.type !== 'card' || item.cardId !== id)
+      todoLists: prev.todoLists.map((list) => ({
+        ...list,
+        items: list.items.filter((item) => item.type !== 'card' || item.cardId !== id)
+      }))
     }));
   }, []);
 
-  const reorderTodo = useCallback((ids: string[]) => {
-    setState(prev => ({
-      ...prev,
-      todoItems: sanitizeTodoItems(prev.cards, ids.map((id) => prev.todoItems.find((item) => item.id === id)))
-    }));
-  }, []);
-
-  const moveTodoCardToPosition = useCallback((id: string, position: number) => {
+  const moveTodoItem = useCallback((activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => {
     setState(prev => {
-      const currentPosition = getTodoCardPosition(prev.todoItems, id);
+      let movingItem: TodoItem | null = null;
+      let sourceListId: string | null = null;
+      const listsWithoutItem = prev.todoLists.map((list) => {
+        const found = list.items.find((item) => item.id === activeItemId);
+        if (found) {
+          movingItem = found;
+          sourceListId = list.id;
+          return { ...list, items: list.items.filter((item) => item.id !== activeItemId) };
+        }
+        return list;
+      });
+      if (!movingItem) return prev;
+
+      const nextLists = listsWithoutItem.map((list) => {
+        if (list.id !== targetListId) return list;
+        let insertIndex = list.items.length;
+        if (overItemId) {
+          const overIndex = list.items.findIndex((item) => item.id === overItemId);
+          if (overIndex !== -1) insertIndex = position === 'before' ? overIndex : overIndex + 1;
+        }
+        const nextItems = [...list.items];
+        nextItems.splice(insertIndex, 0, movingItem!);
+        if (movingItem!.type === 'card') {
+          const seen = new Set<string>();
+          return {
+            ...list,
+            items: nextItems.filter((item) => {
+              if (item.type !== 'card') return true;
+              if (seen.has(item.cardId)) return false;
+              seen.add(item.cardId);
+              return true;
+            })
+          };
+        }
+        return { ...list, items: nextItems };
+      });
+
+      if (!sourceListId || !nextLists.some((list) => list.id === targetListId)) return prev;
+      return { ...prev, todoLists: sanitizeTodoLists(prev.cards, nextLists) };
+    });
+  }, []);
+
+  const moveTodoCardToPosition = useCallback((listId: string, cardId: string, position: number, excludedCardIds: Set<string> = new Set()) => {
+    setState(prev => {
+      const targetList = prev.todoLists.find((list) => list.id === listId);
+      if (!targetList) return prev;
+      const currentPosition = getTodoCardPosition(targetList.items.filter((item) => item.type !== 'card' || !excludedCardIds.has(item.cardId)), cardId);
       if (!currentPosition) return prev;
 
       return {
         ...prev,
-        todoItems: sanitizeTodoItems(prev.cards, insertTodoCardAtPosition(prev.todoItems, id, position))
+        todoLists: prev.todoLists.map((list) => list.id === listId
+          ? { ...list, items: sanitizeTodoItems(prev.cards, insertTodoCardAtPosition(list.items, cardId, position, excludedCardIds)) }
+          : list
+        )
       };
     });
   }, []);
 
-  const addTodoDivider = useCallback(() => {
+  const addTodoDivider = useCallback((listId: string) => {
     setState(prev => ({
       ...prev,
-      todoItems: [
-        { id: generateId(), type: 'divider', title: '' },
-        ...prev.todoItems,
-      ]
+      todoLists: prev.todoLists.map((list) => list.id === listId
+        ? { ...list, items: [{ id: generateId(), type: 'divider', title: '' }, ...list.items] }
+        : list
+      )
     }));
   }, []);
 
-  const updateTodoDivider = useCallback((id: string, title: string) => {
+  const updateTodoDivider = useCallback((listId: string, id: string, title: string) => {
     setState(prev => ({
       ...prev,
-      todoItems: prev.todoItems.map((item) => item.id === id && item.type === 'divider' ? { ...item, title } : item)
+      todoLists: prev.todoLists.map((list) => list.id === listId
+        ? { ...list, items: list.items.map((item) => item.id === id && item.type === 'divider' ? { ...item, title } : item) }
+        : list
+      )
     }));
   }, []);
 
-  const removeTodoDivider = useCallback((id: string) => {
+  const removeTodoDivider = useCallback((listId: string, id: string) => {
     setState(prev => ({
       ...prev,
-      todoItems: prev.todoItems.filter((item) => item.id !== id || item.type !== 'divider')
+      todoLists: prev.todoLists.map((list) => list.id === listId
+        ? { ...list, items: list.items.filter((item) => item.id !== id || item.type !== 'divider') }
+        : list
+      )
     }));
+  }, []);
+
+  const updateTodoListTitle = useCallback((listId: string, title: string) => {
+    setState(prev => ({
+      ...prev,
+      todoLists: prev.todoLists.map((list) => list.id === listId ? { ...list, title } : list)
+    }));
+  }, []);
+
+  const updateTodoListColor = useCallback((listId: string, color: string) => {
+    setState(prev => ({
+      ...prev,
+      todoLists: prev.todoLists.map((list) => list.id === listId ? { ...list, color } : list)
+    }));
+  }, []);
+
+  const deleteTodoList = useCallback((listId: string) => {
+    setState(prev => ({
+      ...prev,
+      todoLists: prev.todoLists.filter((list) => list.id !== listId)
+    }));
+  }, []);
+
+  const reorderTodoLists = useCallback((ids: string[]) => {
+    setState(prev => {
+      const listMap = new Map(prev.todoLists.map((list) => [list.id, list]));
+      const nextLists = ids
+        .map((id) => listMap.get(id))
+        .filter((list): list is TodoList => Boolean(list));
+      const remainingLists = prev.todoLists.filter((list) => !ids.includes(list.id));
+      return { ...prev, todoLists: [...nextLists, ...remainingLists] };
+    });
   }, []);
 
   return {
     cards: state.cards,
-    todoItems: sanitizeTodoItems(state.cards, state.todoItems),
-    todoCardIds: getTodoCardIds(sanitizeTodoItems(state.cards, state.todoItems)),
+    todoLists: sanitizeTodoLists(state.cards, state.todoLists),
+    todoItems: sanitizeTodoLists(state.cards, state.todoLists)[0]?.items ?? [],
+    todoCardIds: getTodoCardIds(sanitizeTodoLists(state.cards, state.todoLists)),
     isLoaded,
     addCard,
     updateCard,
@@ -711,11 +891,18 @@ export function useNotesStore() {
     exportData,
     importData,
     addToTodo,
+    addToTodoList,
     removeFromTodo,
-    reorderTodo,
+    removeFromTodoList,
+    moveTodoItem,
     moveTodoCardToPosition,
+    addTodoList,
     addTodoDivider,
     updateTodoDivider,
-    removeTodoDivider
+    removeTodoDivider,
+    updateTodoListTitle,
+    updateTodoListColor,
+    deleteTodoList,
+    reorderTodoLists
   };
 }
