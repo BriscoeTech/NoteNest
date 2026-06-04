@@ -477,7 +477,8 @@ export function useNotesStore() {
 
   const restoreCard = useCallback((id: string, targetParentId: string | null) => {
     setState(prev => {
-      let restoredCard: Card | null = null;
+      let detachedCard: Card | null = null;
+      let originalParentId: string | null = null;
       const now = Date.now();
 
       const rebuildRestoredSubtree = (card: Card, parentId: string | null): Card => {
@@ -492,11 +493,23 @@ export function useNotesStore() {
         return rebuilt;
       };
 
+      const findNearestActiveParentId = (cards: Card[], parentId: string | null): string | null => {
+        let currentParentId = parentId;
+        while (currentParentId !== null) {
+          const parent = findCardById(cards, currentParentId);
+          if (!parent) return null;
+          if (!parent.isDeleted) return parent.id;
+          currentParentId = parent.parentId;
+        }
+        return null;
+      };
+
       const detachCard = (cards: Card[]): Card[] => {
         const next: Card[] = [];
         for (const card of cards) {
           if (card.id === id) {
-            restoredCard = rebuildRestoredSubtree(card, targetParentId);
+            detachedCard = card;
+            originalParentId = card.parentId;
             continue;
           }
           next.push({ ...card, children: detachCard(card.children) });
@@ -505,9 +518,15 @@ export function useNotesStore() {
       };
 
       const withoutCard = detachCard(prev.cards);
-      if (!restoredCard) return prev;
+      if (!detachedCard) return prev;
 
-      const withCardAdded = addCardToParent(withoutCard, targetParentId, restoredCard);
+      const resolvedTargetParentId =
+        findNearestActiveParentId(withoutCard, targetParentId) ??
+        findNearestActiveParentId(withoutCard, originalParentId) ??
+        null;
+
+      const restoredCard = rebuildRestoredSubtree(detachedCard, resolvedTargetParentId);
+      const withCardAdded = addCardToParent(withoutCard, resolvedTargetParentId, restoredCard);
       return { ...prev, cards: withCardAdded };
     });
   }, []);

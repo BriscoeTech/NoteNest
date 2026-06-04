@@ -5,6 +5,19 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ## 2026-06-03
 
+### Recycle Bin Restore to Original Folder
+
+**Author**: Codex
+
+**Changes**:
+- Changed deleted-card restore behavior so Recycle Bin restore returns cards to their original parent folder when that parent is still available.
+- Added fallback restore resolution so cards restore to the nearest non-deleted ancestor, then to Home root only when no live ancestor remains.
+- Updated `Architecture.md` to reflect the new restore contract.
+
+**Validation**:
+- `npm run check`
+- `npm run build`
+
 ### Recycle Bin Deleted-State Sorting and Card-Type Rendering
 
 **Author**: Codex

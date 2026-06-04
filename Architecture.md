@@ -196,10 +196,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
 2. Deleted cards appear in Recycle Bin view.
-3. Current UI restore action restores deleted cards to root.
+3. Restore returns a deleted card to its original parent when that parent chain still exists outside the Recycle Bin.
 4. Permanent delete removes card subtree from state.
-5. Store supports restore to an arbitrary target parent, but current UI only exposes restore-to-root.
-6. Restore is recursive: restoring a deleted parent restores all descendants in that subtree.
+5. If the original parent is deleted or unavailable, restore falls back to the nearest non-deleted ancestor and then to root if no live ancestor remains.
+6. Store supports restore to an arbitrary target parent, and automatic restore resolution must validate that the final target is not deleted.
+7. Restore is recursive: restoring a deleted parent restores all descendants in that subtree.
 
 ### 3.5 Import and export
 1. Export serializes full tree with version metadata.
@@ -223,7 +224,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 1. Recycle Bin is a recovery/cleanup view for deleted cards.
 2. Content blocks are non-editable in recycle-bin mode.
 3. New note creation actions are hidden in recycle-bin mode.
-4. Available actions are restore-to-root and permanent delete.
+4. Available actions are restore and permanent delete.
 5. Deleted descendants are listed in Recycle Bin even if a deleted ancestor is also present.
 6. Right-panel Recycle Bin view preserves tree hierarchy (nested deleted items).
 7. Deleted items must be ordered by deleted time newest-first within each visible sibling group in the Recycle Bin.
@@ -287,7 +288,8 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - Children are allowed under any card in data model; UI gating controls when sub-note area is shown.
 - Soft delete marks whole subtree deleted.
 - Restore restores whole subtree deleted flags.
-- Restore rebuilds subtree parent links consistently under the chosen restore target.
+- Restore rebuilds subtree parent links consistently under the chosen or automatically resolved restore target.
+- Automatic restore resolution prefers the card's original parent, then the nearest non-deleted ancestor, and falls back to root only when no live ancestor remains.
 - Sorting uses `sortOrder` (higher value renders earlier).
 - Reordering operates on non-deleted sibling sets while preserving deleted siblings in the resulting list.
 - Search results exclude deleted cards except in recycle bin workflows.
