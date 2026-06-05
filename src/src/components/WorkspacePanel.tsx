@@ -2694,10 +2694,9 @@ function GridCardItem({
                 aria-label={badge.isChecked ? `${badge.label} checked` : `${badge.label} priority ${badge.number}`}
                 className={cn(
                   "flex h-7 min-w-7 items-center justify-center rounded-full border px-2 text-xs font-semibold shadow-sm",
-                  badge.isChecked && "bg-muted text-muted-foreground border-border",
                   !canEdit && "cursor-default"
                 )}
-                style={!badge.isChecked ? { backgroundColor: badge.color, borderColor: getTodoListColorBorder(badge.color), color: getTodoListBadgeTextColor(badge.color) } : undefined}
+                style={{ backgroundColor: badge.color, borderColor: getTodoListColorBorder(badge.color), color: getTodoListBadgeTextColor(badge.color) }}
                 onClick={() => {
                   if (!canEdit) return;
                   setTodoNumberDraft(String(badge.number));

@@ -61,7 +61,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | ToDo | ToDo card priority numbers are derived per list and shown as list-colored in-card badges wherever cards render
 | ToDo | ToDo list color selection includes white and black options; white swatches/badges must retain visible borders and readable badge text
 | ToDo | Multiple list memberships render as stacked in-card badges, ordered by list column order
-| ToDo | Checked checkbox cards remain in lists but are excluded from priority numbering and show muted empty ToDo badges
+| ToDo | Checked checkbox cards remain in lists but are excluded from priority numbering and show list-colored empty ToDo badges
 | ToDo | ToDo cards and dividers can be dragged within and between lists; cross-list card drag moves rather than copies
 | ToDo | ToDo lists can be renamed, recolored, drag-reordered by header, created, and deleted without deleting cards
 | ToDo | ToDo dividers are persistent list-local items, draggable between ToDo cards/lists, inline editable, and removable from the ToDo view
@@ -262,7 +262,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 22. User can remove dividers from the ToDo view using the hover trash action.
 23. The ToDo view has a persisted global Show checked checkbox.
 24. Checked checkbox cards remain in their list positions but are excluded from priority numbering.
-25. When checked cards are shown, they render muted empty ToDo badges; when hidden, they are omitted from the ToDo view but remain stored in their lists.
+25. When checked cards are shown, they render list-colored empty ToDo badges; when hidden, they are omitted from the ToDo view but remain stored in their lists.
 26. Dividers are ToDo-only structure and must not be represented as cards, card types, folders, search results, or tree nodes.
 27. Divider order does not affect card priority numbering; priority numbers count only unchecked ToDo card items.
 

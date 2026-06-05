@@ -3,6 +3,21 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-05
+
+### Checked ToDo Badge Color
+
+**Author**: Codex
+
+**Changes**:
+- Changed checked ToDo membership badges to keep their list color while omitting the priority number.
+- Updated architecture notes so checked ToDo badges are described as list-colored empty badges instead of muted badges.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-04
 
 ### Multi-List ToDo Columns
@@ -18,7 +33,7 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - Changed the ToDo page to render lists as horizontal columns with list jump tabs and horizontal scrolling.
 - Added a persisted global Show checked checkbox for the ToDo page.
 - Excluded checked checkbox cards from priority numbering while keeping them in their list positions.
-- Rendered checked ToDo memberships as muted empty badges, and unchecked memberships as list-colored priority badges.
+- Rendered checked ToDo memberships as list-colored empty badges, and unchecked memberships as list-colored priority badges.
 - Added stacked multi-list badges for cards shown outside ToDo, ordered by list column order.
 - Changed normal card menus to use a ToDo submenu with list-specific add/remove actions and New List creation.
 - Enabled dragging ToDo cards and dividers within and between lists, with cross-list card drag moving rather than copying.
