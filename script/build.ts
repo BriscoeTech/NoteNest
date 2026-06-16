@@ -2,20 +2,9 @@ import { build as viteBuild } from "vite";
 import path from "path";
 import fs from "fs";
 
-type VersionFile = { version?: string };
-
-function readVersion(versionFilePath: string): string {
-  const raw = fs.readFileSync(versionFilePath, "utf8");
-  const parsed = JSON.parse(raw) as VersionFile;
-  if (!parsed.version || !/^\d+\.\d+\.\d+$/.test(parsed.version)) {
-    throw new Error("version.json must contain semver `version`.");
-  }
-  return parsed.version;
-}
-
-function buildServiceWorkerFromTemplate(templatePath: string, version: string): string {
+function buildServiceWorkerFromTemplate(templatePath: string, builtAt: string): string {
   const template = fs.readFileSync(templatePath, "utf8");
-  return template.replaceAll("__VERSION_JSON_SEMVER__", version);
+  return template.replaceAll("__BUILT_AT__", builtAt);
 }
 
 function collectBuiltAssetEntries(assetsRoot: string): string[] {
@@ -33,7 +22,7 @@ function collectBuiltAssetEntries(assetsRoot: string): string[] {
 }
 
 function injectBuiltAssets(swSource: string, assetEntries: string[]): string {
-  const serializedAssets = assetEntries.map((entry) => `  '${entry}',`).join("\n");
+  const serializedAssets = assetEntries.map((entry) => `'${entry}',`).join("\n  ");
   return swSource.replaceAll("__APP_ASSET_LIST__", serializedAssets);
 }
 
@@ -41,8 +30,9 @@ async function buildAll() {
   console.log("building client for GitHub Pages...");
   const projectRoot = path.resolve(import.meta.dirname, "..");
   const docsRoot = path.resolve(projectRoot, "docs");
-  const versionPath = path.resolve(projectRoot, "version.json");
   const swTemplatePath = path.resolve(projectRoot, "public", "sw.js");
+  const builtAt = new Date().toISOString();
+  process.env.NOTENEST_BUILT_AT = builtAt;
 
   await viteBuild({
     configFile: path.resolve(projectRoot, "vite.config.ts"),
@@ -55,9 +45,8 @@ async function buildAll() {
     base: "./", 
   });
 
-  const version = readVersion(versionPath);
   const builtAssetEntries = collectBuiltAssetEntries(path.resolve(docsRoot, "assets"));
-  const swTemplate = buildServiceWorkerFromTemplate(swTemplatePath, version);
+  const swTemplate = buildServiceWorkerFromTemplate(swTemplatePath, builtAt);
   const resolvedSw = injectBuiltAssets(swTemplate, builtAssetEntries);
   fs.writeFileSync(path.resolve(docsRoot, "sw.js"), resolvedSw, "utf8");
 }

@@ -15,7 +15,7 @@ import {
   getTreeCardTypeIcon,
   getTypedBlocksByCardType,
 } from '@/lib/card-types';
-import { RUNTIME_VERSION_DISPLAY } from '@/lib/app-version';
+import { RUNTIME_BUILD_DISPLAY } from '@/lib/build-info';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -773,7 +773,7 @@ export function CategoryTree({
           </div>
           <div className="mb-2 border-t border-border" />
           <div className="text-[10px] text-muted-foreground/40 text-center select-none">
-            {RUNTIME_VERSION_DISPLAY}
+            {RUNTIME_BUILD_DISPLAY}
           </div>
         </div>
       </div>

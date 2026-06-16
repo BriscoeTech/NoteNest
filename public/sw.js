@@ -1,13 +1,14 @@
 // Offline-first service worker for the NoteNest app shell.
-const CACHE_PREFIX = 'notenest-v';
-const CACHE_NAME = `${CACHE_PREFIX}__VERSION_JSON_SEMVER__`;
+const CACHE_PREFIX = 'notenest-built-';
+const LEGACY_CACHE_PREFIX = 'notenest-v';
+const CACHE_NAME = `${CACHE_PREFIX}__BUILT_AT__`;
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
   './',
   './icons/pwa-icon.png',
   './manifest.json',
   './icons/favicon.ico',
-  './version.json',
+  './build-info.json',
   __APP_ASSET_LIST__
 ];
 
@@ -27,7 +28,10 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .filter((key) => (
+            (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME) ||
+            key.startsWith(LEGACY_CACHE_PREFIX)
+          ))
           .map((key) => caches.delete(key))
       );
       await self.clients.claim();
@@ -68,8 +72,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Always fetch latest runtime version file.
-  if (request.url.includes('/version.json')) {
+  // Always fetch latest runtime build-info file.
+  if (request.url.includes('/build-info.json')) {
     event.respondWith(
       (async () => {
         try {
@@ -84,7 +88,7 @@ self.addEventListener('fetch', (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          throw new Error('Offline and no cached version metadata available.');
+          throw new Error('Offline and no cached build metadata available.');
         }
       })()
     );

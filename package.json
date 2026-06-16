@@ -7,11 +7,7 @@
     "dev": "vite dev --port 5000",
     "build": "tsx script/build.ts",
     "check": "tsc",
-    "test": "tsx script/card-types-contract.test.tsx && tsx script/import-export-contract.test.ts",
-    "version:patch": "node -e \"console.error('Patch releases are not part of this project\\'s versioning protocol. Use npm run version:minor instead.'); process.exit(1)\"",
-    "version:minor": "tsx script/version-bump.ts minor",
-    "release:patch": "node -e \"console.error('Patch releases are not part of this project\\'s release protocol. Use npm run release:minor instead.'); process.exit(1)\"",
-    "release:minor": "npm run version:minor && npm run build"
+    "test": "tsx script/card-types-contract.test.tsx && tsx script/import-export-contract.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

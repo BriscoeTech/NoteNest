@@ -4,50 +4,51 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
-const versionJsonPath = path.resolve(import.meta.dirname, "version.json");
+
 const swTemplatePath = path.resolve(import.meta.dirname, "public", "sw.js");
 
-function getVersionFromJson(): string {
-  const json = fs.readFileSync(versionJsonPath, "utf8");
-  const parsed = JSON.parse(json) as { version?: string };
-  if (!parsed.version || !/^\d+\.\d+\.\d+$/.test(parsed.version)) {
-    throw new Error("version.json must contain semver `version`.");
+function getBuildTimestamp(): string {
+  const builtAt = process.env.NOTENEST_BUILT_AT || new Date().toISOString();
+  if (Number.isNaN(Date.parse(builtAt))) {
+    throw new Error("Build timestamp must be a valid date string.");
   }
-  return parsed.version;
+  return builtAt;
 }
 
-function resolveServiceWorkerTemplate(version: string): string {
+function serializeBuildInfo(builtAt: string): string {
+  return `${JSON.stringify({ builtAt }, null, 2)}\n`;
+}
+
+function resolveServiceWorkerTemplate(builtAt: string): string {
   const swTemplate = fs.readFileSync(swTemplatePath, "utf8");
   return swTemplate
-    .replaceAll("__VERSION_JSON_SEMVER__", version)
+    .replaceAll("__BUILT_AT__", builtAt)
     .replaceAll("__APP_ASSET_LIST__", "");
 }
 
-const versionJsonPlugin = (): Plugin => ({
-  name: "version-json-plugin",
+const buildInfoPlugin = (): Plugin => ({
+  name: "build-info-plugin",
   configureServer(server) {
-    server.middlewares.use("/version.json", (_req: any, res: any) => {
-      const json = fs.readFileSync(versionJsonPath, "utf8");
+    const builtAt = getBuildTimestamp();
+    server.middlewares.use("/build-info.json", (_req: any, res: any) => {
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "no-store");
-      res.end(json);
+      res.end(serializeBuildInfo(builtAt));
     });
     server.middlewares.use("/sw.js", (_req: any, res: any) => {
-      const version = getVersionFromJson();
-      const sw = resolveServiceWorkerTemplate(version);
+      const sw = resolveServiceWorkerTemplate(builtAt);
       res.setHeader("Content-Type", "application/javascript");
       res.setHeader("Cache-Control", "no-store");
       res.end(sw);
     });
   },
   generateBundle() {
-    const json = fs.readFileSync(versionJsonPath, "utf8");
-    const version = getVersionFromJson();
-    const sw = resolveServiceWorkerTemplate(version);
+    const builtAt = getBuildTimestamp();
+    const sw = resolveServiceWorkerTemplate(builtAt);
     this.emitFile({
       type: "asset",
-      fileName: "version.json",
-      source: json,
+      fileName: "build-info.json",
+      source: serializeBuildInfo(builtAt),
     });
     this.emitFile({
       type: "asset",
@@ -59,7 +60,7 @@ const versionJsonPlugin = (): Plugin => ({
 
 export default defineConfig({
   plugins: [
-    versionJsonPlugin(),
+    buildInfoPlugin(),
     react(),
     tailwindcss(),
   ],

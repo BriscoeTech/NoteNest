@@ -4,7 +4,7 @@ import { inferCardTypeFromCardData } from '@/lib/card-types';
 import { normalizeContentBlock } from '@/lib/block-types';
 
 export interface ExportBackup {
-  version: string;
+  builtAt: string;
   exportedAt: string;
   cards: Card[];
 }
@@ -125,9 +125,9 @@ export function getImportCards(data: any): Card[] {
   return normalizeCardTree(importedCards);
 }
 
-export function buildExportBackup(cards: Card[], version: string, exportedAt: Date = new Date()): ExportBackup {
+export function buildExportBackup(cards: Card[], builtAt: string, exportedAt: Date = new Date()): ExportBackup {
   return {
-    version,
+    builtAt,
     exportedAt: exportedAt.toISOString(),
     cards,
   };

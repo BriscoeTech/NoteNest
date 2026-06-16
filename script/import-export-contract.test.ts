@@ -54,15 +54,16 @@ const cards: Card[] = [
   },
 ];
 
-const backup = buildExportBackup(cards, '1.2.3', exportedAt);
-assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards']);
-assert.equal(backup.version, '1.2.3');
+const builtAt = '2026-04-26T16:05:00.000Z';
+const backup = buildExportBackup(cards, builtAt, exportedAt);
+assert.deepEqual(Object.keys(backup), ['builtAt', 'exportedAt', 'cards']);
+assert.equal(backup.builtAt, builtAt);
 assert.equal(backup.exportedAt, exportedAt.toISOString());
 assert.equal(backup.cards, cards);
 
 const json = stringifyExportBackup(backup);
 assert.equal(json, JSON.stringify(backup, null, 2));
-assert.equal(json.startsWith('{\n  "version": "1.2.3",\n  "exportedAt":'), true);
+assert.equal(json.startsWith('{\n  "builtAt": "2026-04-26T16:05:00.000Z",\n  "exportedAt":'), true);
 assert.deepEqual(JSON.parse(json), backup);
 assert.equal(createExportFilename(exportedAt), 'notes-backup-2026-04-26_09-05.json');
 

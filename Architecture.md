@@ -117,7 +117,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Sidebar dark mode and Refresh actions are grouped in one shared utility row with separators above and below 
 | UX | Sidebar Refresh action reloads the app without clearing service worker or Cache Storage state 
 | UX | Initial theme fallback to system `prefers-color-scheme` when no saved preference exists 
-| UX | Sidebar footer app version display (runtime-derived from `version.json`) 
+| UX | Sidebar footer last-build timestamp display (runtime-derived from `build-info.json`)
 | UX | Recycle Bin displays deleted-card count badge 
 | UX | Recycle Bin view is read-only for content editing and note creation 
 | UX | Recycle Bin rows show the deleted-time label inline on the right side of the row 
@@ -183,7 +183,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 3. Sidebar tree expand/collapse state must survive normal browser refresh and sidebar Refresh action reloads.
 4. On startup, the tree must restore the last persisted expanded-folder state for cards that still exist.
 5. Offline startup must succeed from a previously cached app shell even when navigation requests cannot reach the network.
-6. Sidebar utility controls must present dark mode and Refresh adjacent in a shared row, visually separated from import/export above and version display below.
+6. Sidebar utility controls must present dark mode and Refresh adjacent in a shared row, visually separated from import/export above and last-build display below.
 
 ### 3.3 Move and reorder
 1. User uses "Move to..." picker to move a card to another parent or to root.
@@ -206,7 +206,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 7. Restore is recursive: restoring a deleted parent restores all descendants in that subtree.
 
 ### 3.5 Import and export
-1. Export serializes full tree with version metadata.
+1. Export serializes full tree with build timestamp metadata.
 2. Export filename includes local date plus hour/minute so repeated exports on the same day produce distinct files: `notes-backup-YYYY-MM-DD_HH-MM.json`.
 3. Import accepts JSON and prompts for mode:
 - `merge`: append imported root cards to existing cards.
@@ -386,17 +386,18 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Editable palette slots store background color, text color, and text-color HSV metadata.
 - Older string-only palette slots must be accepted and treated as background-only presets with derived text defaults.
 
-### 5.5 Versioning Contract
-- App version source is runtime `version.json`.
-- Version must be controlled in one place only: `version.json` (`version` field).
-- Runtime/UI/export/service-worker version consumers must read from `version.json`.
-- If live runtime version retrieval fails, UI/export may fall back to the last successfully loaded runtime version cached locally.
-- If neither live nor cached runtime version is available, version display/export may degrade to an explicit unknown value rather than fabricating a version.
+### 5.5 Build Identity Contract
+- The app does not maintain a manual application version.
+- Runtime build identity source is generated `build-info.json`.
+- Build identity must be controlled in one place only: `build-info.json` (`builtAt` field), generated automatically by the build pipeline.
+- Runtime/UI/export/service-worker build identity consumers must read from `build-info.json`.
+- If live runtime build-info retrieval fails, UI/export may fall back to the last successfully loaded runtime `builtAt` cached locally.
+- If neither live nor cached runtime build info is available, footer/export may degrade to an explicit unknown value rather than fabricating a build timestamp.
 - `package.json`'s npm `version` field is not used as an application version source and may remain an inert placeholder value.
-- Required source version format (`version.json`): semver `MAJOR.MINOR.PATCH` (e.g., `2.19.0`).
-- Display format in UI is normalized to `vMAJOR.MINOR` (e.g., `v2.9`).
-- Version is shown in sidebar footer and included in export metadata.
-- Service worker cache versioning derives from `version.json`.
+- Required build timestamp format (`build-info.json`): parseable ISO timestamp emitted by the build pipeline.
+- Sidebar footer displays a human-readable last-build day/date/time derived from runtime `builtAt`.
+- Export metadata includes `builtAt`.
+- Service worker cache identity derives from `builtAt`.
 
 ## 6. UI Architecture
 
@@ -422,8 +423,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - normal tree card action menus are available from both `...` and right-click.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Refresh actions.
-- utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
-- utility section displays current app version derived from runtime `version.json`.
+- utility section uses dividers to separate import/export, dark-mode/refresh actions, and last-build display.
+- utility section displays the current build timestamp derived from runtime `build-info.json`.
 - Recycle Bin row shows a count badge for deleted cards when count > 0.
 
 ### 6.2.1 Tree Visual Semantics
@@ -632,8 +633,8 @@ This table is the canonical source for subtle action/menu/card-type combinations
 ### 8.1 Export payload
 - Export formatting is centralized in `src/src/lib/import-export.ts` and covered by `script/import-export-contract.test.ts`.
 - Shape:
-- Top-level key order is `version`, `exportedAt`, `cards`.
-- `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
+- Top-level key order is `builtAt`, `exportedAt`, `cards`.
+- `builtAt`: app build timestamp derived from runtime `build-info.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
 - `cards`: full root card array including nested children and list-card metadata.
 - Export JSON is pretty-printed with two-space indentation.
@@ -660,7 +661,7 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - Caching model:
 - install precaches the root app shell plus build output assets required for offline boot,
 - navigation requests use network-first with cache fallback so the last working shell still loads offline,
-- `version.json` uses network-first with cache fallback,
+- `build-info.json` uses network-first with cache fallback,
 - GET assets are served cache-first with runtime cache fill.
 - App shell startup should not depend on third-party font CDNs.
 
@@ -791,7 +792,7 @@ Verify the product behavior items below:
 - Restoring a deleted parent undeletes all nested descendants recursively.
 - Permanent delete removes note permanently.
 - Empty Recycle Bin permanently deletes all deleted items.
-- Export downloads valid JSON with version and timestamps.
+- Export downloads valid JSON with build and export timestamps.
 - Import merge adds without wiping existing notes.
 - Import override replaces notes.
 - Invalid import file shows error feedback and does not import.
@@ -805,8 +806,8 @@ Verify the product behavior items below:
 - Initial theme follows system preference when no saved theme exists.
 - Recycle Bin shows deleted-item count badge when non-zero.
 - Recycle Bin mode is read-only for block editing and hides new-note creation.
-- App version is visible in sidebar footer.
-- App version display format in UI is `vMAJOR.MINOR`.
+- Last build timestamp is visible in sidebar footer.
+- Last build display includes day/date/time.
 - Normal refresh renders app without white-screen failure when service worker is active.
 - Local dev origins unregister existing app service workers and clear Cache Storage before boot so localhost does not reuse the production offline shell.
 - Sidebar Refresh button reloads without clearing SW/cache state.

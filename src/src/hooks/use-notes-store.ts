@@ -20,7 +20,7 @@ import {
   findCardById,
   getDescendantIds
 } from '@/lib/types';
-import { RUNTIME_VERSION_DISPLAY, ensureAppVersionLoaded } from '@/lib/app-version';
+import { RUNTIME_BUILT_AT, ensureRuntimeBuiltAtLoaded } from '@/lib/build-info';
 
 const STORAGE_KEY = 'notecards_data';
 const TODO_LIST_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ca8a04', '#0891b2', '#475569', '#4f46e5', '#ffffff', '#000000'];
@@ -593,9 +593,9 @@ export function useNotesStore() {
   }, [state.cards]);
 
   const exportData = useCallback(async () => {
-    const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
+    const resolvedBuiltAt = (await ensureRuntimeBuiltAtLoaded()) || RUNTIME_BUILT_AT || "unknown";
     const now = new Date();
-    const data = buildExportBackup(state.cards, resolvedVersion, now);
+    const data = buildExportBackup(state.cards, resolvedBuiltAt, now);
     const jsonString = stringifyExportBackup(data);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const filename = createExportFilename(now);

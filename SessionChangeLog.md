@@ -5,6 +5,24 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ## 2026-06-16
 
+### Build Timestamp Identity
+
+**Author**: Codex
+
+**Changes**:
+- Replaced manual app-version identity with generated `builtAt` metadata from `build-info.json`.
+- Switched sidebar footer display from semantic version to human-readable last-build day/date/time.
+- Updated export metadata to use top-level `builtAt` instead of `version`.
+- Updated service-worker cache identity and runtime metadata caching to derive from `builtAt`.
+- Removed `version.json`, version bump scripts, and the manual minor-release workflow.
+- Updated architecture/process docs and import/export contract tests for the new build identity contract.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run test`
+- `npm run check`
+- `npm run build`
+
 ### List Card Type and Folder-Backed ToDo
 
 **Author**: Codex
