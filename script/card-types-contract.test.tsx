@@ -19,7 +19,7 @@ import {
 } from '../src/src/lib/block-types';
 import type { Card, CardType, ContentBlock } from '../src/src/lib/types';
 
-const expectedOrder: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder'];
+const expectedOrder: CardType[] = ['note', 'checkbox', 'link', 'image', 'drawing', 'graph', 'folder', 'list'];
 
 assert.deepEqual(CARD_TYPE_ORDER, expectedOrder);
 
@@ -42,7 +42,8 @@ const makeCard = (type: CardType, blocks: Card['blocks'] = [], children: Card[] 
 });
 
 assert.equal(cardTypeCanHaveChildren('folder'), true);
-for (const type of expectedOrder.filter((type) => type !== 'folder')) {
+assert.equal(cardTypeCanHaveChildren('list'), true);
+for (const type of expectedOrder.filter((type) => type !== 'folder' && type !== 'list')) {
   assert.equal(cardTypeCanHaveChildren(type), false);
 }
 assert.equal(cardTypeUsesCreateFilePicker('image'), true);
@@ -53,6 +54,7 @@ assert.equal(cardTypeOpensOnCreate('note'), false);
 
 assert.equal(createInitialBlocksForCardType('note').length, 0);
 assert.equal(createInitialBlocksForCardType('folder').length, 0);
+assert.equal(createInitialBlocksForCardType('list').length, 0);
 assert.equal(createInitialBlocksForCardType('image').length, 0);
 assert.equal(createInitialBlocksForCardType('image', { imageDataUrl: 'data:image/png;base64,x' })[0]?.type, 'image');
 assert.equal(createInitialBlocksForCardType('checkbox')[0]?.type, 'checkbox');
@@ -67,9 +69,11 @@ assert.equal(ensureCardBlocksForTypeChange(makeCard('drawing'), 'drawing')[0]?.t
 assert.equal(ensureCardBlocksForTypeChange(makeCard('graph'), 'graph')[0]?.type, 'graph');
 assert.deepEqual(ensureCardBlocksForTypeChange(makeCard('image'), 'image'), []);
 assert.deepEqual(ensureCardBlocksForTypeChange(makeCard('folder'), 'folder'), []);
+assert.deepEqual(ensureCardBlocksForTypeChange(makeCard('list'), 'list'), []);
 
 assert.equal(getVisibleBlocksByCardType(makeCard('note', [{ id: 'text', type: 'text', content: '' }])).length, 1);
 assert.equal(getVisibleBlocksByCardType(makeCard('folder')).length, 0);
+assert.equal(getVisibleBlocksByCardType(makeCard('list')).length, 0);
 assert.equal(getTypedBlocksByCardType(makeCard('checkbox', [{ id: 'check', type: 'checkbox', checked: false }])).checkboxBlock?.type, 'checkbox');
 assert.equal(getTypedBlocksByCardType(makeCard('link', [{ id: 'link', type: 'link', url: '' }])).linkBlock?.type, 'link');
 assert.equal(getCardTypeDefinition('image').emptyGridMessage, 'No image yet');
@@ -85,6 +89,17 @@ const folderGridLayout = getCardTypeDefinition('folder').getGridLayout({
 assert.equal(folderGridLayout.canHaveChildren, true);
 assert.equal(folderGridLayout.showInlineChildren, true);
 assert.equal(folderGridLayout.shouldSpanWide, true);
+
+const listGridLayout = getCardTypeDefinition('list').getGridLayout({
+  hasCheckboxBlock: false,
+  inlineChildren: true,
+  isRecycleBin: false,
+  visibleChildrenCount: 1,
+  nestingDepth: 0,
+});
+assert.equal(listGridLayout.canHaveChildren, true);
+assert.equal(listGridLayout.showInlineChildren, true);
+assert.equal(listGridLayout.shouldSpanWide, true);
 
 const imageGridLayout = getCardTypeDefinition('image').getGridLayout({
   hasCheckboxBlock: false,

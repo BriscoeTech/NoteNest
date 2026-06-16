@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Card, AppState, ContentBlock, CardType, TodoItem, TodoList } from '@/lib/types';
+import type { Card, AppState, ContentBlock, CardType, TodoCardItem, TodoList } from '@/lib/types';
 import { blockMatchesSearch } from '@/lib/block-types';
 import {
   buildExportBackup,
   createExportFilename,
   getImportCards,
-  getImportTodoCardIds,
-  getImportTodoItems,
-  getImportTodoLists,
   normalizeCardTree,
   stringifyExportBackup,
 } from '@/lib/import-export';
@@ -26,142 +23,110 @@ import {
 import { RUNTIME_VERSION_DISPLAY, ensureAppVersionLoaded } from '@/lib/app-version';
 
 const STORAGE_KEY = 'notecards_data';
-const DEFAULT_TODO_LIST_TITLE = 'New List';
 const TODO_LIST_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#9333ea', '#ca8a04', '#0891b2', '#475569', '#4f46e5', '#ffffff', '#000000'];
 
 const defaultState: AppState = {
   cards: [],
-  todoLists: []
 };
-
-function createTodoCardItem(cardId: string): TodoItem {
-  return { id: generateId(), type: 'card', cardId };
-}
 
 function getTodoListColor(index: number): string {
   return TODO_LIST_COLORS[index % TODO_LIST_COLORS.length];
 }
 
-function sanitizeTodoItems(cards: Card[], todoItems: unknown, legacyTodoCardIds?: unknown): TodoItem[] {
-  const rawItems = Array.isArray(todoItems) && todoItems.length > 0
-    ? todoItems
-    : Array.isArray(legacyTodoCardIds)
-      ? legacyTodoCardIds.map((cardId) => typeof cardId === 'string' ? createTodoCardItem(cardId) : null)
-      : [];
-
-  const nextItems: TodoItem[] = [];
-  const seenCardIds = new Set<string>();
-  const seenItemIds = new Set<string>();
-
-  for (const item of rawItems) {
-    if (!item || typeof item !== 'object') continue;
-    const candidate = item as Partial<TodoItem>;
-    if (typeof candidate.id !== 'string' || seenItemIds.has(candidate.id)) continue;
-
-    if (candidate.type === 'card') {
-      const cardId = typeof candidate.cardId === 'string' ? candidate.cardId : '';
-      if (!cardId || seenCardIds.has(cardId)) continue;
-      const card = findCardById(cards, cardId);
-      if (!card || card.isDeleted) continue;
-      nextItems.push({ id: candidate.id, type: 'card', cardId });
-      seenCardIds.add(cardId);
-      seenItemIds.add(candidate.id);
-      continue;
-    }
-
-    if (candidate.type === 'divider') {
-      nextItems.push({
-        id: candidate.id,
-        type: 'divider',
-        title: typeof candidate.title === 'string' ? candidate.title : '',
-      });
-      seenItemIds.add(candidate.id);
-    }
-  }
-
-  return nextItems;
+function sortCardsByVisualOrder(cards: Card[]): Card[] {
+  return [...cards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
 }
 
-function createTodoList(items: TodoItem[] = [], index = 0, overrides: Partial<Omit<TodoList, 'items'>> = {}): TodoList {
-  return {
-    id: overrides.id ?? generateId(),
-    title: overrides.title ?? DEFAULT_TODO_LIST_TITLE,
-    color: overrides.color ?? getTodoListColor(index),
-    items,
+function collectTodoCheckboxItems(listCard: Card): TodoCardItem[] {
+  const items: TodoCardItem[] = [];
+  const visit = (cards: Card[]) => {
+    for (const card of sortCardsByVisualOrder(cards.filter((candidate) => !candidate.isDeleted))) {
+      if (card.cardType === 'checkbox') {
+        items.push({ id: card.id, type: 'card', cardId: card.id });
+      }
+      visit(card.children);
+    }
   };
+  visit(listCard.children);
+  return items;
 }
 
-function sanitizeTodoLists(cards: Card[], todoLists: unknown, legacyTodoItems?: unknown, legacyTodoCardIds?: unknown): TodoList[] {
-  if (Array.isArray(todoLists)) {
-    return todoLists
-      .map((list, index): TodoList | null => {
-        if (!list || typeof list !== 'object') return null;
-        const candidate = list as Partial<TodoList>;
-        const items = sanitizeTodoItems(cards, candidate.items);
-        return createTodoList(items, index, {
-          id: typeof candidate.id === 'string' ? candidate.id : undefined,
-          title: typeof candidate.title === 'string' ? candidate.title : DEFAULT_TODO_LIST_TITLE,
-          color: typeof candidate.color === 'string' ? candidate.color : getTodoListColor(index),
+function getTodoListsFromCards(cards: Card[]): TodoList[] {
+  const lists: TodoList[] = [];
+  const visit = (items: Card[]) => {
+    for (const card of items) {
+      if (!card.isDeleted && card.cardType === 'list') {
+        lists.push({
+          id: card.id,
+          title: card.title || 'Untitled',
+          color: card.todoListColor || getTodoListColor(lists.length),
+          items: collectTodoCheckboxItems(card),
         });
-      })
-      .filter((list): list is TodoList => Boolean(list));
-  }
-
-  const migratedItems = sanitizeTodoItems(cards, legacyTodoItems, legacyTodoCardIds);
-  return migratedItems.length > 0 ? [createTodoList(migratedItems)] : [];
-}
-
-function getTodoCardIds(todoLists: TodoList[]): string[] {
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  for (const list of todoLists) {
-    for (const item of list.items) {
-      if (item.type !== 'card' || seen.has(item.cardId)) continue;
-      ids.push(item.cardId);
-      seen.add(item.cardId);
+      }
+      visit(card.children);
     }
-  }
-  return ids;
+  };
+  visit(cards);
+  return lists.sort((a, b) => {
+    const cardA = findCardById(cards, a.id);
+    const cardB = findCardById(cards, b.id);
+    return (cardB?.todoListOrder ?? cardB?.sortOrder ?? 0) - (cardA?.todoListOrder ?? cardA?.sortOrder ?? 0);
+  });
 }
 
-function getTodoListCardIds(todoItems: TodoItem[]): string[] {
-  return todoItems
-    .filter((item): item is Extract<TodoItem, { type: 'card' }> => item.type === 'card')
-    .map((item) => item.cardId);
+function updateCardTree(cards: Card[], id: string, updater: (card: Card) => Card): Card[] {
+  return cards.map((card) => {
+    if (card.id === id) return updater(card);
+    return { ...card, children: updateCardTree(card.children, id, updater) };
+  });
 }
 
-function getTodoCardPosition(todoItems: TodoItem[], cardId: string): number {
-  let position = 0;
-  for (const item of todoItems) {
-    if (item.type !== 'card') continue;
-    position += 1;
-    if (item.cardId === cardId) return position;
-  }
-  return 0;
-}
+function moveCardRelativeInTree(cards: Card[], cardId: string, targetId: string, position: 'before' | 'after'): Card[] {
+  const targetCard = findCardById(cards, targetId);
+  if (!targetCard || cardId === targetId || !canMoveCard(cards, cardId, targetCard.parentId)) return cards;
 
-function insertTodoCardAtPosition(todoItems: TodoItem[], cardId: string, position: number, excludedCardIds: Set<string> = new Set()): TodoItem[] {
-  const itemToMove = todoItems.find((item) => item.type === 'card' && item.cardId === cardId) ?? createTodoCardItem(cardId);
-  const withoutCard = todoItems.filter((item) => item.type !== 'card' || item.cardId !== cardId);
-  const cardCount = withoutCard.filter((item) => item.type === 'card' && !excludedCardIds.has(item.cardId)).length;
-  const safePosition = Number.isFinite(position) ? Math.floor(position) : cardCount + 1;
-  const targetCardIndex = Math.min(Math.max(safePosition - 1, 0), cardCount);
-  let seenCards = 0;
-  let insertIndex = withoutCard.length;
-
-  for (let index = 0; index < withoutCard.length; index += 1) {
-    const item = withoutCard[index];
-    if (item.type !== 'card' || excludedCardIds.has(item.cardId)) continue;
-    if (seenCards === targetCardIndex) {
-      insertIndex = index;
-      break;
+  let detachedCard: Card | null = null;
+  const targetParentId = targetCard.parentId;
+  const detachCard = (items: Card[]): Card[] => {
+    const next: Card[] = [];
+    for (const card of items) {
+      if (card.id === cardId) {
+        detachedCard = { ...card, parentId: targetParentId, updatedAt: Date.now() };
+        continue;
+      }
+      next.push({ ...card, children: detachCard(card.children) });
     }
-    seenCards += 1;
+    return next;
+  };
+
+  const withoutCard = detachCard(cards);
+  if (!detachedCard) return cards;
+  const movedCard = detachedCard;
+  const now = Date.now();
+
+  const insertIntoList = (items: Card[]): Card[] => {
+    const targetIndex = items.findIndex((card) => card.id === targetId);
+    if (targetIndex === -1) return items;
+    const next = [...items];
+    next.splice(position === 'before' ? targetIndex : targetIndex + 1, 0, movedCard);
+    const len = next.length;
+    return next.map((card, index) => ({
+      ...card,
+      parentId: targetParentId,
+      sortOrder: now + (len - index),
+    }));
+  };
+
+  if (targetParentId === null) {
+    return insertIntoList(withoutCard);
   }
 
-  const nextItems = [...withoutCard];
-  nextItems.splice(insertIndex, 0, itemToMove);
-  return nextItems;
+  return withoutCard.map((card) => {
+    if (card.id === targetParentId) {
+      return { ...card, children: insertIntoList(card.children) };
+    }
+    return { ...card, children: updateCardTree(card.children, targetParentId, (parent) => ({ ...parent, children: insertIntoList(parent.children) })) };
+  });
 }
 export function useNotesStore() {
   const [state, setState] = useState<AppState>(defaultState);
@@ -178,10 +143,10 @@ export function useNotesStore() {
           if (parsed.categories && Array.isArray(parsed.categories)) {
              console.log('Migrating legacy data...');
              const newCards = getImportCards(parsed);
-             setState({ cards: newCards, todoLists: [] });
+             setState({ cards: newCards });
           } else {
              const cards = normalizeCardTree(parsed.cards || []);
-             setState({ cards, todoLists: sanitizeTodoLists(cards, parsed.todoLists, parsed.todoItems, parsed.todoCardIds) });
+             setState({ cards });
           }
         } else {
            // Fallback: check localStorage for migration
@@ -190,10 +155,9 @@ export function useNotesStore() {
               console.log('Migrating from localStorage to IDB...');
               const parsed = JSON.parse(localSaved);
               const newCards = getImportCards(parsed);
-              const todoLists = sanitizeTodoLists(newCards, parsed.todoLists, parsed.todoItems, parsed.todoCardIds);
-              setState({ cards: newCards, todoLists });
+              setState({ cards: newCards });
               // Save to IDB immediately
-              await set(STORAGE_KEY, JSON.stringify({ cards: newCards, todoLists }));
+              await set(STORAGE_KEY, JSON.stringify({ cards: newCards }));
            }
         }
       } catch (e) {
@@ -221,6 +185,9 @@ export function useNotesStore() {
       textColor: null,
       textColorHsv: null,
       blocks: [],
+      isTodoList: false,
+      todoListColor: null,
+      todoListOrder: null,
       parentId,
       children: [],
       sortOrder: Date.now(),
@@ -485,11 +452,9 @@ export function useNotesStore() {
         });
       };
       
-      const cards = markDeleted(prev.cards);
       return {
         ...prev,
-        cards,
-        todoLists: sanitizeTodoLists(cards, prev.todoLists)
+        cards: markDeleted(prev.cards),
       };
     });
   }, []);
@@ -500,7 +465,6 @@ export function useNotesStore() {
       return {
         ...prev,
         cards,
-        todoLists: sanitizeTodoLists(cards, prev.todoLists)
       };
     });
   }, []);
@@ -519,7 +483,6 @@ export function useNotesStore() {
       return {
         ...prev,
         cards,
-        todoLists: sanitizeTodoLists(cards, prev.todoLists)
       };
     });
   }, []);
@@ -632,7 +595,7 @@ export function useNotesStore() {
   const exportData = useCallback(async () => {
     const resolvedVersion = (await ensureAppVersionLoaded()) || RUNTIME_VERSION_DISPLAY || "unknown";
     const now = new Date();
-    const data = buildExportBackup(state.cards, resolvedVersion, now, sanitizeTodoLists(state.cards, state.todoLists));
+    const data = buildExportBackup(state.cards, resolvedVersion, now);
     const jsonString = stringifyExportBackup(data);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const filename = createExportFilename(now);
@@ -654,225 +617,86 @@ export function useNotesStore() {
 
   const importData = useCallback((data: any, mode: 'merge' | 'override') => {
     const importedCards = getImportCards(data);
-    const importedTodoLists = getImportTodoLists(data);
-    const importedTodoItems = getImportTodoItems(data);
-    const importedTodoCardIds = getImportTodoCardIds(data);
 
     if (mode === 'override') {
       setState({
         cards: importedCards,
-        todoLists: sanitizeTodoLists(importedCards, importedTodoLists, importedTodoItems, importedTodoCardIds)
       });
     } else {
       setState(prev => {
         const cards = [...prev.cards, ...importedCards];
         return {
           cards,
-          todoLists: sanitizeTodoLists(cards, [
-            ...prev.todoLists,
-            ...sanitizeTodoLists(importedCards, importedTodoLists, importedTodoItems, importedTodoCardIds),
-          ])
         };
       });
     }
   }, []);
 
-  const addTodoList = useCallback((cardId?: string) => {
-    setState(prev => {
-      const item = cardId ? createTodoCardItem(cardId) : null;
-      if (cardId) {
-        const card = findCardById(prev.cards, cardId);
-        if (!card || card.isDeleted) return prev;
-      }
-      const nextList = createTodoList(item ? [item] : [], prev.todoLists.length);
-      return {
-        ...prev,
-        todoLists: [...prev.todoLists, nextList]
-      };
-    });
-  }, []);
-
-  const addToTodoList = useCallback((cardId: string, listId: string) => {
-    setState(prev => {
-      const card = findCardById(prev.cards, cardId);
-      if (!card || card.isDeleted) return prev;
-      return {
-        ...prev,
-        todoLists: prev.todoLists.map((list) => {
-          if (list.id !== listId) return list;
-          if (list.items.some((item) => item.type === 'card' && item.cardId === cardId)) return list;
-          return { ...list, items: [...list.items, createTodoCardItem(cardId)] };
-        })
-      };
-    });
-  }, []);
-
-  const removeFromTodoList = useCallback((cardId: string, listId: string) => {
-    setState(prev => ({
-      ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId
-        ? { ...list, items: list.items.filter((item) => item.type !== 'card' || item.cardId !== cardId) }
-        : list
-      )
-    }));
-  }, []);
-
-  const addToTodo = useCallback((id: string) => {
-    setState(prev => {
-      if (prev.todoLists.length === 0) {
-        const card = findCardById(prev.cards, id);
-        if (!card || card.isDeleted) return prev;
-        return { ...prev, todoLists: [createTodoList([createTodoCardItem(id)])] };
-      }
-      const targetList = prev.todoLists[0];
-      if (targetList.items.some((item) => item.type === 'card' && item.cardId === id)) return prev;
-      const card = findCardById(prev.cards, id);
-      if (!card || card.isDeleted) return prev;
-      return {
-        ...prev,
-        todoLists: prev.todoLists.map((list) => list.id === targetList.id ? { ...list, items: [...list.items, createTodoCardItem(id)] } : list)
-      };
-    });
-  }, []);
-
-  const removeFromTodo = useCallback((id: string) => {
-    setState(prev => ({
-      ...prev,
-      todoLists: prev.todoLists.map((list) => ({
-        ...list,
-        items: list.items.filter((item) => item.type !== 'card' || item.cardId !== id)
-      }))
-    }));
-  }, []);
-
-  const moveTodoItem = useCallback((activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => {
-    setState(prev => {
-      let movingItem: TodoItem | null = null;
-      let sourceListId: string | null = null;
-      const listsWithoutItem = prev.todoLists.map((list) => {
-        const found = list.items.find((item) => item.id === activeItemId);
-        if (found) {
-          movingItem = found;
-          sourceListId = list.id;
-          return { ...list, items: list.items.filter((item) => item.id !== activeItemId) };
-        }
-        return list;
-      });
-      if (!movingItem) return prev;
-
-      const nextLists = listsWithoutItem.map((list) => {
-        if (list.id !== targetListId) return list;
-        let insertIndex = list.items.length;
-        if (overItemId) {
-          const overIndex = list.items.findIndex((item) => item.id === overItemId);
-          if (overIndex !== -1) insertIndex = position === 'before' ? overIndex : overIndex + 1;
-        }
-        const nextItems = [...list.items];
-        nextItems.splice(insertIndex, 0, movingItem!);
-        if (movingItem!.type === 'card') {
-          const seen = new Set<string>();
-          return {
-            ...list,
-            items: nextItems.filter((item) => {
-              if (item.type !== 'card') return true;
-              if (seen.has(item.cardId)) return false;
-              seen.add(item.cardId);
-              return true;
-            })
-          };
-        }
-        return { ...list, items: nextItems };
-      });
-
-      if (!sourceListId || !nextLists.some((list) => list.id === targetListId)) return prev;
-      return { ...prev, todoLists: sanitizeTodoLists(prev.cards, nextLists) };
-    });
-  }, []);
-
-  const moveTodoCardToPosition = useCallback((listId: string, cardId: string, position: number, excludedCardIds: Set<string> = new Set()) => {
-    setState(prev => {
-      const targetList = prev.todoLists.find((list) => list.id === listId);
-      if (!targetList) return prev;
-      const currentPosition = getTodoCardPosition(targetList.items.filter((item) => item.type !== 'card' || !excludedCardIds.has(item.cardId)), cardId);
-      if (!currentPosition) return prev;
-
-      return {
-        ...prev,
-        todoLists: prev.todoLists.map((list) => list.id === listId
-          ? { ...list, items: sanitizeTodoItems(prev.cards, insertTodoCardAtPosition(list.items, cardId, position, excludedCardIds)) }
-          : list
-        )
-      };
-    });
-  }, []);
-
-  const addTodoDivider = useCallback((listId: string) => {
-    setState(prev => ({
-      ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId
-        ? { ...list, items: [{ id: generateId(), type: 'divider', title: '' }, ...list.items] }
-        : list
-      )
-    }));
-  }, []);
-
-  const updateTodoDivider = useCallback((listId: string, id: string, title: string) => {
-    setState(prev => ({
-      ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId
-        ? { ...list, items: list.items.map((item) => item.id === id && item.type === 'divider' ? { ...item, title } : item) }
-        : list
-      )
-    }));
-  }, []);
-
-  const removeTodoDivider = useCallback((listId: string, id: string) => {
-    setState(prev => ({
-      ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId
-        ? { ...list, items: list.items.filter((item) => item.id !== id || item.type !== 'divider') }
-        : list
-      )
-    }));
-  }, []);
-
   const updateTodoListTitle = useCallback((listId: string, title: string) => {
     setState(prev => ({
       ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId ? { ...list, title } : list)
+      cards: updateCardInTree(prev.cards, listId, { title })
     }));
   }, []);
 
   const updateTodoListColor = useCallback((listId: string, color: string) => {
     setState(prev => ({
       ...prev,
-      todoLists: prev.todoLists.map((list) => list.id === listId ? { ...list, color } : list)
+      cards: updateCardInTree(prev.cards, listId, { todoListColor: color })
     }));
   }, []);
 
   const deleteTodoList = useCallback((listId: string) => {
     setState(prev => ({
       ...prev,
-      todoLists: prev.todoLists.filter((list) => list.id !== listId)
+      cards: updateCardInTree(prev.cards, listId, { cardType: 'folder' })
     }));
   }, []);
 
   const reorderTodoLists = useCallback((ids: string[]) => {
     setState(prev => {
-      const listMap = new Map(prev.todoLists.map((list) => [list.id, list]));
-      const nextLists = ids
-        .map((id) => listMap.get(id))
-        .filter((list): list is TodoList => Boolean(list));
-      const remainingLists = prev.todoLists.filter((list) => !ids.includes(list.id));
-      return { ...prev, todoLists: [...nextLists, ...remainingLists] };
+      const now = Date.now();
+      const len = ids.length;
+      let cards = prev.cards;
+      ids.forEach((id, index) => {
+        cards = updateCardInTree(cards, id, { todoListOrder: now + (len - index) });
+      });
+      return { ...prev, cards };
+    });
+  }, []);
+
+  const moveTodoItem = useCallback((activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => {
+    setState(prev => {
+      const todoLists = getTodoListsFromCards(prev.cards);
+      const sourceList = todoLists.find((list) => list.items.some((item) => item.id === activeItemId));
+      if (!sourceList || sourceList.id !== targetListId) return prev;
+      const targetCardId = overItemId ?? sourceList.items[sourceList.items.length - 1]?.cardId;
+      if (!targetCardId || targetCardId === activeItemId) return prev;
+      return { ...prev, cards: moveCardRelativeInTree(prev.cards, activeItemId, targetCardId, position) };
+    });
+  }, []);
+
+  const moveTodoCardToPosition = useCallback((listId: string, cardId: string, position: number, excludedCardIds: Set<string> = new Set()) => {
+    setState(prev => {
+      const targetList = getTodoListsFromCards(prev.cards).find((list) => list.id === listId);
+      if (!targetList || !targetList.items.some((item) => item.cardId === cardId)) return prev;
+      const eligibleItems = targetList.items.filter((item) => !excludedCardIds.has(item.cardId));
+      const withoutActive = eligibleItems.filter((item) => item.cardId !== cardId);
+      if (withoutActive.length === 0) return prev;
+      const safePosition = Math.min(Math.max(Math.floor(position), 1), withoutActive.length + 1);
+      const targetIndex = safePosition > withoutActive.length ? withoutActive.length - 1 : safePosition - 1;
+      const targetCardId = withoutActive[targetIndex]?.cardId;
+      if (!targetCardId) return prev;
+      return {
+        ...prev,
+        cards: moveCardRelativeInTree(prev.cards, cardId, targetCardId, safePosition > withoutActive.length ? 'after' : 'before')
+      };
     });
   }, []);
 
   return {
     cards: state.cards,
-    todoLists: sanitizeTodoLists(state.cards, state.todoLists),
-    todoItems: sanitizeTodoLists(state.cards, state.todoLists)[0]?.items ?? [],
-    todoCardIds: getTodoCardIds(sanitizeTodoLists(state.cards, state.todoLists)),
+    todoLists: getTodoListsFromCards(state.cards),
     isLoaded,
     addCard,
     updateCard,
@@ -890,16 +714,8 @@ export function useNotesStore() {
     getDeletedCards,
     exportData,
     importData,
-    addToTodo,
-    addToTodoList,
-    removeFromTodo,
-    removeFromTodoList,
     moveTodoItem,
     moveTodoCardToPosition,
-    addTodoList,
-    addTodoDivider,
-    updateTodoDivider,
-    removeTodoDivider,
     updateTodoListTitle,
     updateTodoListColor,
     deleteTodoList,

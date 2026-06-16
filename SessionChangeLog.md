@@ -3,6 +3,29 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-16
+
+### List Card Type and Folder-Backed ToDo
+
+**Author**: Codex
+
+**Changes**:
+- Replaced standalone ToDo list persistence with ToDo columns derived from `list`-type cards in the normal note hierarchy.
+- Added `List` as a first-class card type with its own icon in type pickers, tree rows, and card headers.
+- Preserved folder/list children during type changes so an existing folder can become a list and a list can be converted back to a folder.
+- Derived each ToDo column's items from checkbox-type descendants of its backing List card in depth-first visual order.
+- Made ToDo item reordering update the underlying checkbox card order, while disabling cross-list item moves.
+- Kept list color and list column order as list-specific card metadata separate from normal card/folder color and hierarchy order.
+- Removed standalone list creation, explicit card add/remove membership actions, ToDo-only dividers, and legacy ToDo import/export fields.
+- Migrated legacy folders marked as ToDo lists into `list` card type during load/import normalization.
+- Updated `Architecture.md` and import/card-type contract tests for the new model.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-05
 
 ### Checked ToDo Badge Color

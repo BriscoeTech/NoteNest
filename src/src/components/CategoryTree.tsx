@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Trash2, MoreHorizontal, ChevronsDownUp, ChevronsUpDown, ArrowUp, Download, Upload, Home, Search, X, Moon, Sun, RefreshCw, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Card, CardType, ContentBlock, TodoList } from '@/lib/types';
+import type { Card, CardType, ContentBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
 import {
@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { CardOptionsMenu, type TodoMenuAction } from './CardOptionsMenu';
+import { CardOptionsMenu } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog'; // We can reuse this or rename it
 import { CardColorDialog } from './CardColorDialog';
 
@@ -42,7 +42,6 @@ interface CardTreeProps {
   isLoaded: boolean;
   selectedView: 'home' | 'todo';
   selectedCardId: string | null;
-  todoLists: TodoList[];
   onSelectView: (view: 'home' | 'todo') => void;
   onSelectCard: (id: string | null) => void;
   onAddCard: (parentId: string | null, cardType?: CardType) => string;
@@ -53,9 +52,6 @@ interface CardTreeProps {
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
-  onAddToTodoList: (cardId: string, listId: string) => void;
-  onRemoveFromTodoList: (cardId: string, listId: string) => void;
-  onAddTodoList: (cardId?: string) => void;
   deletedCount: number;
   onExport: () => void;
   onImport: (data: any, mode: 'merge' | 'override') => void;
@@ -69,7 +65,6 @@ interface TreeItemProps {
   card: Card;
   depth: number;
   selectedCardId: string | null;
-  todoLists: TodoList[];
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
   onExpandRecursively: (id: string, expand: boolean) => void;
@@ -82,9 +77,6 @@ interface TreeItemProps {
   onDeleteCard: (id: string) => void;
   onUpdateCard: (id: string, updates: Partial<Card>) => void;
   onUpdateCardBlocks: (id: string, blocks: ContentBlock[]) => void;
-  onAddToTodoList: (cardId: string, listId: string) => void;
-  onRemoveFromTodoList: (cardId: string, listId: string) => void;
-  onAddTodoList: (cardId?: string) => void;
   draggedCardId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -95,7 +87,6 @@ function TreeItem({
   card,
   depth,
   selectedCardId,
-  todoLists,
   expandedIds,
   onToggleExpand,
   onExpandRecursively,
@@ -108,9 +99,6 @@ function TreeItem({
   onDeleteCard,
   onUpdateCard,
   onUpdateCardBlocks,
-  onAddToTodoList,
-  onRemoveFromTodoList,
-  onAddTodoList,
   draggedCardId,
   onDragStart,
   onDragEnd,
@@ -131,30 +119,6 @@ function TreeItem({
 
   const { checkboxBlock } = getTypedBlocksByCardType(card);
   const canHaveChildren = cardTypeCanHaveChildren(card.cardType);
-  const todoMenuActions: TodoMenuAction[] = [
-    ...todoLists
-      .filter((list) => !list.items.some((item) => item.type === 'card' && item.cardId === card.id))
-      .map((list) => ({
-        key: `add-${list.id}`,
-        kind: 'add' as const,
-        label: `Add to ${list.title || 'New List'}`,
-        onSelect: () => onAddToTodoList(card.id, list.id),
-      })),
-    ...todoLists
-      .filter((list) => list.items.some((item) => item.type === 'card' && item.cardId === card.id))
-      .map((list) => ({
-        key: `remove-${list.id}`,
-        kind: 'remove' as const,
-        label: `Remove from ${list.title || 'New List'}`,
-        onSelect: () => onRemoveFromTodoList(card.id, list.id),
-      })),
-    {
-      key: 'new-list',
-      kind: 'new' as const,
-      label: 'New List',
-      onSelect: () => onAddTodoList(card.id),
-    },
-  ];
   const cardBackgroundColor = normalizeCardColor(card.backgroundColor);
   const readableTextColor = normalizeCardTextColor(card.textColor) ?? getReadableTextColor(cardBackgroundColor);
 
@@ -348,7 +312,6 @@ function TreeItem({
           onMove={() => onMoveCard(card.id)}
           onChangeType={() => setTypeDialogOpen(true)}
           onChangeColor={() => setColorDialogOpen(true)}
-          todoMenuActions={todoMenuActions}
           onMoveUp={() => onReorderCard(card.id, 'up')}
           onMoveDown={() => onReorderCard(card.id, 'down')}
           onExpandAll={hasChildren ? () => onExpandRecursively(card.id, true) : undefined}
@@ -371,7 +334,6 @@ function TreeItem({
               card={child}
               depth={depth + 1}
               selectedCardId={selectedCardId}
-              todoLists={todoLists}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
               onSelectCard={onSelectCard}
@@ -383,9 +345,6 @@ function TreeItem({
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
-              onAddToTodoList={onAddToTodoList}
-              onRemoveFromTodoList={onRemoveFromTodoList}
-              onAddTodoList={onAddTodoList}
               onExpandRecursively={onExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={onDragStart}
@@ -439,7 +398,6 @@ export function CategoryTree({
   isLoaded,
   selectedView,
   selectedCardId,
-  todoLists,
   onSelectView,
   onSelectCard,
   onAddCard,
@@ -450,9 +408,6 @@ export function CategoryTree({
   onDeleteCard,
   onUpdateCard,
   onUpdateCardBlocks,
-  onAddToTodoList,
-  onRemoveFromTodoList,
-  onAddTodoList,
   deletedCount,
   onExport,
   onImport,
@@ -728,7 +683,6 @@ export function CategoryTree({
               card={card}
               depth={0}
               selectedCardId={selectedView === 'home' ? selectedCardId : null}
-              todoLists={todoLists}
               expandedIds={expandedIds}
               onToggleExpand={toggleExpand}
               onSelectCard={onSelectCard}
@@ -740,9 +694,6 @@ export function CategoryTree({
               onDeleteCard={onDeleteCard}
               onUpdateCard={onUpdateCard}
               onUpdateCardBlocks={onUpdateCardBlocks}
-              onAddToTodoList={onAddToTodoList}
-              onRemoveFromTodoList={onRemoveFromTodoList}
-              onAddTodoList={onAddTodoList}
               onExpandRecursively={handleExpandRecursively}
               draggedCardId={draggedCardId}
               onDragStart={handleDragStart}

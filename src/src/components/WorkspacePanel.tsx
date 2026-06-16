@@ -61,20 +61,12 @@ interface WorkspacePanelProps {
   onEmptyRecycleBin: () => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
   onReorderChildren: (parentId: string | null, ids: string[]) => void;
-  onAddToTodo: (id: string) => void;
-  onRemoveFromTodo: (id: string) => void;
-  onAddToTodoList: (cardId: string, listId: string) => void;
-  onRemoveFromTodoList: (cardId: string, listId: string) => void;
   onMoveTodoItem: (activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => void;
   onMoveTodoCardToPosition: (listId: string, cardId: string, position: number, excludedCardIds: Set<string>) => void;
-  onAddTodoList: (cardId?: string) => void;
   onUpdateTodoListTitle: (listId: string, title: string) => void;
   onUpdateTodoListColor: (listId: string, color: string) => void;
   onDeleteTodoList: (listId: string) => void;
   onReorderTodoLists: (ids: string[]) => void;
-  onAddTodoDivider: (listId: string) => void;
-  onUpdateTodoDivider: (listId: string, id: string, title: string) => void;
-  onRemoveTodoDivider: (listId: string, id: string) => void;
   onSearch: (query: string) => void;
   searchQuery: string;
   sidebarOpen?: boolean;
@@ -2079,8 +2071,6 @@ interface GridCardItemProps {
   todoBadges?: TodoBadge[];
   getTodoBadges?: (id: string) => TodoBadge[];
   onTodoNumberChange?: (listId: string, id: string, position: number) => void;
-  onAddToTodo?: (id: string) => void;
-  onRemoveFromTodo?: (id: string) => void;
   getTodoMenuActions?: (id: string) => TodoMenuAction[];
   canCreateCards?: boolean;
   forceSingleColumn?: boolean;
@@ -2261,12 +2251,16 @@ function TodoBoard({ lists, renderList, onMoveItem, onReorderLists }: TodoBoardP
     if (!activeLocation) return;
 
     if (overId.startsWith(TODO_LIST_DROPPABLE_PREFIX)) {
-      onMoveItem(activeId, overId.slice(TODO_LIST_DROPPABLE_PREFIX.length), null, 'after');
+      const targetListId = overId.slice(TODO_LIST_DROPPABLE_PREFIX.length);
+      if (activeLocation.listId === targetListId) {
+        onMoveItem(activeId, targetListId, null, 'after');
+      }
       return;
     }
 
     const overLocation = getTodoItemLocation(lists, overId);
     if (!overLocation) return;
+    if (activeLocation.listId !== overLocation.listId) return;
     const position = activeLocation.listId === overLocation.listId && activeLocation.index < overLocation.index ? 'after' : 'before';
     onMoveItem(activeId, overLocation.listId, overId, position);
   };
@@ -2493,8 +2487,6 @@ function GridCardItem({
   todoBadges = [],
   getTodoBadges,
   onTodoNumberChange,
-  onAddToTodo,
-  onRemoveFromTodo,
   getTodoMenuActions,
   canCreateCards = true,
   forceSingleColumn = false,
@@ -2921,8 +2913,6 @@ function GridCardItem({
                     todoBadges={getTodoBadges?.(child.id)}
                     getTodoBadges={getTodoBadges}
                     onTodoNumberChange={onTodoNumberChange}
-                    onAddToTodo={onAddToTodo}
-                    onRemoveFromTodo={onRemoveFromTodo}
                     getTodoMenuActions={getTodoMenuActions}
                     canCreateCards={canCreateCards}
                     forceSingleColumn={forceSingleColumn}
@@ -3085,20 +3075,12 @@ export function WorkspacePanel({
   onEmptyRecycleBin,
   onReorderCard,
   onReorderChildren,
-  onAddToTodo,
-  onRemoveFromTodo,
-  onAddToTodoList,
-  onRemoveFromTodoList,
   onMoveTodoItem,
   onMoveTodoCardToPosition,
-  onAddTodoList,
   onUpdateTodoListTitle,
   onUpdateTodoListColor,
   onDeleteTodoList,
   onReorderTodoLists,
-  onAddTodoDivider,
-  onUpdateTodoDivider,
-  onRemoveTodoDivider,
   onSearch,
   searchQuery,
   sidebarOpen = true
@@ -3326,7 +3308,7 @@ export function WorkspacePanel({
           color: list.color,
           number: isChecked ? undefined : priority,
           isChecked,
-          label: list.title || 'New List',
+          label: list.title || 'Untitled',
         };
         const badges = map.get(item.cardId) ?? [];
         badges.push(badge);
@@ -3343,33 +3325,7 @@ export function WorkspacePanel({
     if (!currentNumber) return;
     onMoveTodoCardToPosition(listId, id, direction === 'up' ? currentNumber - 1 : currentNumber + 1, checkedTodoCardIds);
   };
-  const getTodoMenuActions = (cardId: string): TodoMenuAction[] => {
-    const actions: TodoMenuAction[] = [
-      ...todoLists
-        .filter((list) => !list.items.some((item) => item.type === 'card' && item.cardId === cardId))
-        .map((list) => ({
-          key: `add-${list.id}`,
-          kind: 'add' as const,
-          label: `Add to ${list.title || 'New List'}`,
-          onSelect: () => onAddToTodoList(cardId, list.id),
-        })),
-      ...todoLists
-        .filter((list) => list.items.some((item) => item.type === 'card' && item.cardId === cardId))
-        .map((list) => ({
-          key: `remove-${list.id}`,
-          kind: 'remove' as const,
-          label: `Remove from ${list.title || 'New List'}`,
-          onSelect: () => onRemoveFromTodoList(cardId, list.id),
-        })),
-      {
-        key: 'new-list',
-        kind: 'new' as const,
-        label: 'New List',
-        onSelect: () => onAddTodoList(cardId),
-      },
-    ];
-    return actions;
-  };
+  const getTodoMenuActions = (_cardId: string): TodoMenuAction[] => [];
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -3415,7 +3371,7 @@ export function WorkspacePanel({
                         className="shrink-0 rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground"
                         onClick={() => document.getElementById(`todo-list-${list.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })}
                       >
-                        {list.title || 'New List'}
+                        {list.title || 'Untitled'}
                       </button>
                     ))}
                   </div>
@@ -3431,16 +3387,12 @@ export function WorkspacePanel({
                   />
                   Show checked
                 </label>
-                <Button size="sm" onClick={() => onAddTodoList()}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  New List
-                </Button>
               </div>
             </div>
 
             {todoLists.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground italic border-2 border-dashed rounded-lg">
-                No ToDo lists yet.
+                Create a List note or change a folder to List to show its checkbox cards here.
               </div>
             ) : (
               <TodoBoard
@@ -3448,8 +3400,8 @@ export function WorkspacePanel({
                 onMoveItem={onMoveTodoItem}
                 onReorderLists={onReorderTodoLists}
                 renderList={(list, listIndex, getDropIndicator, dragHandleProps) => {
-                  const visibleItems = list.items.filter((item) => {
-                    if (item.type !== 'card') return true;
+                  const visibleItems = list.items.filter((item): item is Extract<TodoItem, { type: 'card' }> => {
+                    if (item.type !== 'card') return false;
                     return showCheckedTodoItems || !checkedTodoCardIds.has(item.cardId);
                   });
                   return (
@@ -3499,7 +3451,7 @@ export function WorkspacePanel({
                             e.stopPropagation();
                           }}
                         >
-                          {list.title || 'New List'}
+                          {list.title || 'Untitled'}
                         </div>
                         <Button
                           variant="ghost"
@@ -3507,19 +3459,12 @@ export function WorkspacePanel({
                           className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
                           onPointerDown={(e) => e.stopPropagation()}
                           onClick={() => {
-                            if (window.confirm(`Delete ToDo list "${list.title || 'New List'}"? Cards will not be deleted.`)) {
+                            if (window.confirm(`Change "${list.title || 'Untitled'}" back to a folder? Cards will not be deleted.`)) {
                               onDeleteTodoList(list.id);
                             }
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="mb-3 flex justify-end">
-                        <Button size="sm" variant="outline" onClick={() => onAddTodoDivider(list.id)}>
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Divider
                         </Button>
                       </div>
 
@@ -3533,18 +3478,6 @@ export function WorkspacePanel({
                             ) : (
                               visibleItems.map((item) => {
                                 const dropIndicator = getDropIndicator(item.id);
-                                if (item.type === 'divider') {
-                                  return (
-                                    <TodoDividerItem
-                                      key={item.id}
-                                      item={item}
-                                      dropIndicator={dropIndicator}
-                                      onRename={(title) => onUpdateTodoDivider(list.id, item.id, title)}
-                                      onDelete={() => onRemoveTodoDivider(list.id, item.id)}
-                                    />
-                                  );
-                                }
-
                                 const card = findCardById(allCards, item.cardId);
                                 if (!card || card.isDeleted) return null;
 
@@ -3734,8 +3667,6 @@ export function WorkspacePanel({
                   todoBadges={getTodoBadges(card.id)}
                   getTodoBadges={getTodoBadges}
                   onTodoNumberChange={(listId, id, position) => onMoveTodoCardToPosition(listId, id, position, checkedTodoCardIds)}
-                  onAddToTodo={onAddToTodo}
-                  onRemoveFromTodo={onRemoveFromTodo}
                   getTodoMenuActions={getTodoMenuActions}
                 />
               )}
@@ -3764,8 +3695,6 @@ export function WorkspacePanel({
                   todoBadges={!isRecycleBin ? getTodoBadges(card.id) : []}
                   getTodoBadges={getTodoBadges}
                   onTodoNumberChange={(listId, id, position) => onMoveTodoCardToPosition(listId, id, position, checkedTodoCardIds)}
-                  onAddToTodo={onAddToTodo}
-                  onRemoveFromTodo={onRemoveFromTodo}
                   getTodoMenuActions={getTodoMenuActions}
                   dropIndicator={dropIndicator}
                 />

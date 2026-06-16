@@ -49,23 +49,22 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Notes model | Prevent invalid cyclic moves 
 | Notes model | Manual reorder (up/down and drag reorder) 
 | Notes model | Move picker excludes self/descendant targets; store also rejects invalid move targets as safety 
-| Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `graph`, `folder` 
+| Notes model | Explicit card type model: `note`, `checkbox`, `link`, `image`, `drawing`, `graph`, `folder`, `list` 
 | Notes model | Card type changes are non-destructive UI-mode switches (existing data retained) 
-| Notes model | Cards and folders may store custom background and text colors; default cards use theme colors 
-| Notes model | Card color presets are reusable local palette entries, but applying a preset stores resolved colors on the card/folder 
+| Notes model | Cards, folders, and lists may store custom background and text colors; default cards use theme colors 
+| Notes model | Card color presets are reusable local palette entries, but applying a preset stores resolved colors on the card/folder/list 
 | ToDo | Selectable left-panel ToDo view separate from Home/card hierarchy
-| ToDo | Cards may be added to or removed from the ToDo list from normal card action menus
-| ToDo | ToDo view supports zero or more user-created lists rendered as horizontal columns
-| ToDo | Each ToDo list owns its own card/divider order, title, color, and priority numbering
-| ToDo | Cards may appear in multiple ToDo lists but at most once per list
+| ToDo | ToDo view supports zero or more `list`-type cards rendered as horizontal columns
+| ToDo | Each ToDo list column is backed by a card in the normal hierarchy; standalone ToDo lists are not stored
+| ToDo | Checkbox-type descendants of a `list` card become that list's Todo items in depth-first visual order
+| ToDo | List item order and priority numbering are derived from the underlying card tree order
 | ToDo | ToDo card priority numbers are derived per list and shown as list-colored in-card badges wherever cards render
 | ToDo | ToDo list color selection includes white and black options; white swatches/badges must retain visible borders and readable badge text
-| ToDo | Multiple list memberships render as stacked in-card badges, ordered by list column order
+| ToDo | Checkbox cards may appear in multiple ToDo columns only by being descendants of nested/ancestor `list` cards; badges are ordered by list column order
 | ToDo | Checked checkbox cards remain in lists but are excluded from priority numbering and show list-colored empty ToDo badges
-| ToDo | ToDo cards and dividers can be dragged within and between lists; cross-list card drag moves rather than copies
-| ToDo | ToDo lists can be renamed, recolored, drag-reordered by header, created, and deleted without deleting cards
-| ToDo | ToDo dividers are persistent list-local items, draggable between ToDo cards/lists, inline editable, and removable from the ToDo view
-| ToDo | ToDo dividers do not affect card priority numbering and must not appear in Home, folders, card search, or card tree hierarchy
+| ToDo | ToDo cards can be dragged within their source list; cross-list item moves are disabled
+| ToDo | ToDo lists can be renamed, recolored, and drag-reordered by header without changing normal folder order
+| ToDo | Removing a ToDo list from the ToDo view converts its backing `list` card back to `folder` without deleting cards
 | Notes model | Typed note creation uses a shared type picker dialog (workspace `New Note`) 
 | Content | Card blocks: text, bullets, image, checkbox, link, drawing, graph 
 | Content | Graph notes store a square-cell matrix with per-cell text and background color 
@@ -105,7 +104,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | Deletion | Recycle Bin supports "Empty Recycle Bin" permanent purge action 
 | Data safety | Export JSON backup 
 | Data safety | Export filenames include local date and hour/minute so repeated same-day exports do not collide (`notes-backup-YYYY-MM-DD_HH-MM.json`) 
-| Data safety | Export/import preserves ToDo card order and ToDo dividers
+| Data safety | Export/import preserves list cards, list color, list order, and checkbox card order through the normal card tree
 | Data safety | Import JSON backup with merge/override modes 
 | Data safety | Invalid import file shows error feedback and does not apply changes 
 | Data safety | Import is parse-validated; payload shape validation is minimal 
@@ -125,19 +124,18 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin rows use the card type iconography; checkbox cards show a non-interactive checked or unchecked state preview 
 | UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
-| UX | Normal card action menus expose a ToDo submenu with list-specific add/remove actions plus New List
-| UX | Normal card action menus expose a shared card color dialog for cards and folders 
+| UX | Normal card action menus expose a shared card color dialog for cards, folders, and lists 
 | UX | Card color dialog provides eight local palette slots; the default/no-color slot cannot be overwritten 
 | UX | Card color palette swatches and active editor preview show sample text on the selected background 
 | UX | Card color dialog supports HSV background selection and black/white text color selection, persisting text HSV metadata for future text-color expansion 
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
-| UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline folder-child rendering 
-| UX | Treemap folder cards use adaptive nested masonry columns for visible inline children instead of a fixed single-column stack 
-| UX | Oversized treemap folder child regions are height-constrained and scroll internally instead of expanding without bound 
+| UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline container-child rendering 
+| UX | Treemap folder/list cards use adaptive nested masonry columns for visible inline children instead of a fixed single-column stack 
+| UX | Oversized treemap folder/list child regions are height-constrained and scroll internally instead of expanding without bound 
 | UX | Workspace child-card grids use denser responsive column counts so cards render narrower by default than in earlier releases 
-| UX | Deep nested treemap folders preserve a two-column child layout at medium-and-up widths when space is available 
-| UX | Ancestor treemap folders may widen across additional parent-grid columns to preserve readable deeper child-card widths 
+| UX | Deep nested treemap folders/lists preserve a two-column child layout at medium-and-up widths when space is available 
+| UX | Ancestor treemap folders/lists may widen across additional parent-grid columns to preserve readable deeper child-card widths 
 | UX | Long checkbox-card titles in workspace cards wrap within the card boundary and must not overflow before multiline layout engages 
 | UX | Treemap view preference persists across refresh in local browser storage 
 | UX | Grid image/drawing previews disable native image drag to preserve card reorder behavior 
@@ -153,7 +151,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.1 Create and edit note
 1. User creates a new note at root or under current scope.
-2. User selects note type from a type picker dialog: note, checkbox, link, image, drawing, graph, or folder.
+2. User selects note type from a type picker dialog: note, checkbox, link, image, drawing, graph, folder, or list.
 3. New card is inserted under target parent with generated ID and timestamps.
 4. Template note creation can initialize first block based on selected template.
 5. Drawing and graph template creation immediately open the created note for editing.
@@ -163,21 +161,21 @@ This section is the authoritative feature contract. Changes must be reflected he
 9. For `graph` type, the editor shows column controls before row controls, includes `+` and `-` resize actions, and presents a selectable square grid where each cell stores text and color.
 10. During a graph editing session, trimming rows or columns must buffer hidden cells so an immediate re-expand restores them while the editor remains open.
 11. When the graph editor is closed, only the currently visible matrix remains persisted; session-only buffered cells are discarded.
-12. For `folder` type, the content editor is hidden and sub-note area is shown.
+12. For `folder` and `list` types, the content editor is hidden and sub-note area is shown.
 13. Changes are persisted to IndexedDB after state updates.
 14. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile.
-15. User may open the shared card color dialog from a normal card action menu to choose a card/folder background and black/white text color.
-16. Applying a palette color writes the resolved background/text values onto the selected card/folder only; later palette edits must not mutate cards that previously used that preset.
+15. User may open the shared card color dialog from a normal card action menu to choose a card/folder/list background and black/white text color.
+16. Applying a palette color writes the resolved background/text values onto the selected card/folder/list only; later palette edits must not mutate cards that previously used that preset.
 
 ### 3.2 Navigate hierarchy
 1. User selects Home, a tree card, or a grid card.
 2. In workspace grid, opening cards is triggered by double-click.
 3. App updates current scope (`currentCardId`) and tree selection state.
 4. Workspace shows current card content and, when applicable, children grid.
-5. When treemap mode is enabled, workspace still uses the same card tiles and actions, but folder cards also render visible descendants inline inside the folder card.
-6. Dense treemap folders should trade horizontal space before vertical overflow by adding nested columns for visible inline children.
-7. If an inline child region still becomes too tall, it should become internally scrollable rather than forcing one folder card to grow without bound.
-8. In deeper nesting, the innermost visible folder should prefer a readable two-column child layout when viewport width allows, with ancestors widening first when necessary.
+5. When treemap mode is enabled, workspace still uses the same card tiles and actions, but folder/list cards also render visible descendants inline inside the container card.
+6. Dense treemap folders/lists should trade horizontal space before vertical overflow by adding nested columns for visible inline children.
+7. If an inline child region still becomes too tall, it should become internally scrollable rather than forcing one container card to grow without bound.
+8. In deeper nesting, the innermost visible folder/list should prefer a readable two-column child layout when viewport width allows, with ancestors widening first when necessary.
 
 ### 3.9 Refresh and recovery behavior
 1. Normal browser refresh must reload and render app shell reliably with service worker enabled.
@@ -196,7 +194,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 6. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
 7. In treemap mode, drag-reorder is scoped per visible sibling group:
 - top-level visible cards reorder among top-level siblings,
-- cards rendered inside a folder reorder only within that folder's visible children.
+- cards rendered inside a folder/list reorder only within that container's visible children.
 
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
@@ -239,32 +237,24 @@ This section is the authoritative feature contract. Changes must be reflected he
 
 ### 3.10 ToDo priority list
 1. User selects ToDo from the left panel to open a ToDo-specific right-panel view.
-2. ToDo may contain zero or more lists; an empty ToDo view shows no lists until the user creates one.
-3. User creates a list from the ToDo view or by choosing New List from a card's ToDo submenu.
-4. New list titles default to `New List`; list identity is the generated list ID, not the title.
-5. User edits a list title inline by clicking the list title text.
-6. User changes a list color from the list header color swatch.
-7. User reorders whole lists by dragging the list header.
-8. User deletes a list from the list header after confirmation; deleting a list never deletes cards.
-9. User adds a card to a specific ToDo list from a normal card action submenu.
-10. Adding a card to a list appends it after existing list items as the lowest current priority in that list.
-11. A card cannot appear more than once in the same list.
-12. A card may appear in multiple lists.
-13. User removes a card from a specific list from a normal card action submenu.
-14. Removing a card from a list closes that list's priority-number gap by renumbering remaining eligible cards.
-15. The ToDo view renders lists as horizontal columns; narrow layouts may horizontally scroll and expose list jump tabs.
-16. User can drag ToDo cards and dividers within a list or between lists; dragging between lists moves the item rather than copying it.
-17. User can click a card's list-specific ToDo badge and enter a priority number; the card is inserted at that list priority position and other eligible cards shift accordingly.
+2. ToDo may contain zero or more lists; an empty ToDo view shows no lists until at least one `list` card exists.
+3. User creates a list by creating a `List` note type or changing an existing folder/card to the `List` type.
+4. List identity is the backing card ID; list title is the backing card title.
+5. User edits a list title inline by clicking the list title text, which renames the backing card.
+6. User changes a list color from the list header color swatch; this stores list color separately from the card/folder background color.
+7. User reorders whole lists by dragging the list header; this updates list-column order only, not normal hierarchy order.
+8. User removes a list from ToDo after confirmation; this changes the backing card type from `list` to `folder` without deleting cards.
+9. The ToDo view renders lists as horizontal columns; narrow layouts may horizontally scroll and expose list jump tabs.
+10. A list's items are all non-deleted checkbox-type descendants of the backing list card.
+11. Nested folder/list contents are flattened into list items in depth-first visual order.
+12. Priority numbers are derived from that flattened visual order and count only unchecked checkbox cards.
+13. Checked checkbox cards remain in their tree positions but are excluded from priority numbering.
+14. When checked cards are shown, they render list-colored empty ToDo badges; when hidden, they are omitted from the ToDo view but remain in the card tree.
+15. User can drag ToDo cards within their source list; this reorders the underlying checkbox cards in the card tree.
+16. Dragging ToDo cards between list columns is disabled.
+17. User can click a card's list-specific ToDo badge and enter a priority number; the underlying checkbox card is moved within its source list's card tree order.
 18. If a user enters a priority number larger than the eligible card count in that list, the card moves to the end of eligible priority order.
-19. User can add a divider to a list from that list header; new dividers appear at the top of that list.
-20. User can drag dividers between cards/lists to create visual groups.
-21. User can edit divider labels inline.
-22. User can remove dividers from the ToDo view using the hover trash action.
-23. The ToDo view has a persisted global Show checked checkbox.
-24. Checked checkbox cards remain in their list positions but are excluded from priority numbering.
-25. When checked cards are shown, they render list-colored empty ToDo badges; when hidden, they are omitted from the ToDo view but remain stored in their lists.
-26. Dividers are ToDo-only structure and must not be represented as cards, card types, folders, search results, or tree nodes.
-27. Divider order does not affect card priority numbering; priority numbers count only unchecked ToDo card items.
+19. Standalone ToDo lists, ToDo-only card membership records, and ToDo dividers are not part of the current model.
 
 ## 4. Data Model and Invariants
 
@@ -272,13 +262,11 @@ Source of truth for stored data shape: `src/src/lib/types.ts`.
 Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 
 ### 4.1 Core types
-- `AppState`: `{ cards: Card[], todoLists: TodoList[] }` where `cards` are root cards and `todoLists` are ToDo-only list columns.
-- `TodoList`: `id`, `title`, `color`, `items`.
+- `AppState`: `{ cards: Card[] }` where `cards` are root cards.
+- `TodoList`: derived UI view model, not persisted as standalone app state; `id`, `title`, `color`, `items`.
 - `Card`:
-- `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
-- `TodoItem` union:
-- `TodoCardItem`: `id`, `type: "card"`, `cardId`.
-- `TodoDividerItem`: `id`, `type: "divider"`, `title`.
+- `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, optional `todoListColor`, optional `todoListOrder`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
+- `TodoCardItem`: derived UI view model for checkbox cards in list columns: `id`, `type: "card"`, `cardId`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`, `GraphBlock`.
 - `DrawingBlock` scene data:
@@ -314,16 +302,15 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
 - Recycle Bin right-panel presentation uses deleted roots with nested deleted descendants.
 - Recycle Bin ordering is based on deleted time using `updatedAt` descending, not normal visible-tree `sortOrder`.
-- ToDo membership/order is stored separately from cards in `todoLists`.
-- ToDo card priority numbers are derived per list by counting unchecked `TodoCardItem` entries; checked card entries and divider entries are ignored for numbering.
-- A card may appear at most once per ToDo list.
-- A card may appear in multiple ToDo lists.
-- ToDo list titles are user-facing labels and do not need to be unique.
-- ToDo list IDs are generated identities and must be unique.
-- ToDo list colors drive ToDo badge color.
-- ToDo card items referencing missing or deleted cards must be ignored or removed during load/import/delete cleanup.
-- ToDo dividers are not cards and must not have `Card` records, `cardType`, parent links, blocks, children, or tree/search presence.
-- ToDo reorder operations may move card and divider items within or between lists, but must not change the underlying card tree order.
+- ToDo list identity comes from cards with `cardType: "list"`.
+- ToDo list titles come from the backing list card title.
+- ToDo list color is stored separately from normal card color in `todoListColor`.
+- ToDo list column order is stored separately from normal folder/card order in `todoListOrder`.
+- ToDo list items are derived from non-deleted checkbox-type descendants of each list card in depth-first visual order.
+- ToDo card priority numbers are derived per list by counting unchecked derived `TodoCardItem` entries; checked card entries are ignored for numbering.
+- ToDo item drag reorder within a list updates the underlying card tree order.
+- ToDo item drag reorder between lists is disabled.
+- Standalone ToDo membership/order, ToDo dividers, and persisted `todoLists` are not part of the current data model.
 - Current image creation/edit flows keep at most one image block per card by replacing existing image block on add.
 - Drawing editor opens with Select as default tool.
 - Drawing session undo/redo history is reset when opening a drawing note.
@@ -342,15 +329,15 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 ### 5.1 Store responsibilities
 - Owns full card tree state and all mutations.
-- Owns ToDo-only ordered item state and all ToDo mutations.
+- Derives ToDo lists from `list`-type cards and owns list-specific card metadata updates.
 - Exposes note operations to UI:
 - add/update/updateBlocks/move/reorder/delete/restore/permanentDelete/search/import/export.
 - Exposes ToDo operations to UI:
-- add/remove card from a ToDo list,
-- add/update/delete/reorder ToDo lists,
-- move ToDo card/divider items within and between lists,
-- move a ToDo card to a list-specific card-priority position,
-- add/update/remove ToDo dividers.
+- update list title/color,
+- remove a list by changing its backing card to `folder`,
+- reorder ToDo list columns via `todoListOrder`,
+- move a ToDo card within its source list by updating the underlying card tree order,
+- move a ToDo card to a list-specific priority position within its source list.
 
 ### 5.2 Persistence contract
 - Storage key: `notecards_data`.
@@ -364,8 +351,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Supports legacy `categories + cards` schema.
 - Converts categories into card nodes and maps legacy card fields into blocks.
 - Normalizes loaded/imported cards to ensure `cardType` exists (inferred from existing card data when missing).
-- Supports legacy `todoItems` and `todoCardIds` by converting them into a single `New List` when `todoLists` is absent.
-- Normalizes loaded/imported ToDo lists and items by removing duplicate same-list card references, missing/deleted card references, and malformed divider/card/list items.
+- Normalizes legacy folder cards marked with `isTodoList` into `list` card type.
+- Ignores legacy standalone `todoLists`, `todoItems`, and `todoCardIds` fields; current ToDo state is represented by `list` cards and checkbox descendants.
 - Persists migrated result back into IndexedDB.
 
 ### 5.4 Theme preference persistence
@@ -433,7 +420,6 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - parent reassignment via `Move to...` picker.
 - card checkbox quick toggle when card includes checkbox block.
 - normal tree card action menus are available from both `...` and right-click.
-- normal tree card action menus expose a ToDo submenu with list-specific add/remove actions based on card ToDo membership.
 - Below the Recycle Bin row (inside the scrollable tree), a divider separates the "utility" section:
 - utility section supports export/import plus a shared row containing dark mode and Refresh actions.
 - utility section uses dividers to separate import/export, dark-mode/refresh actions, and version display.
@@ -444,6 +430,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 
 - Tree row icon behavior is card-type-driven and part of the UI contract:
 - `folder`: folder/open-folder icon based on expanded state.
+- `list`: list icon.
 - `checkbox`: no separate type icon in tree rows; the checkbox control is the leading visual marker.
 - `link`: link icon.
 - `image`: image icon.
@@ -460,27 +447,26 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Workspace child-card grids should use dense responsive column counts so note cards render narrower than earlier wider-grid layouts.
 - The child-content toolbar contains section-local actions such as `New Note` and recycle-bin purge, but not workspace-shell view-mode toggles.
 - Uses `@dnd-kit` for block and child-card drag sorting.
-- `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/folder).
+- `New Note` opens a shared type picker dialog (note/checkbox/link/image/drawing/graph/folder/list).
 - Grid cards open on double-click (all types).
 - Grid-card action menus are available from both `...` and right-click.
 - Masonry layout must preserve the existing responsive column-count rules; it changes vertical packing only.
 - Child-card drag reorder semantics and store reorder logic must remain unchanged under masonry layout.
 - Child-card drag reorder UI shows a before/after insertion indicator while dragging.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
-- Folder cards in grid use folder-style shape while keeping standard card color theme.
-- In treemap mode, folder-card inline children use adaptive nested masonry columns rather than a fixed single-column stack.
-- Treemap folder inline-child regions may become internally scrollable once they exceed a practical height budget.
+- Folder and list cards in grid use folder-style shape while keeping standard card color theme.
+- In treemap mode, folder/list-card inline children use adaptive nested masonry columns rather than a fixed single-column stack.
+- Treemap folder/list inline-child regions may become internally scrollable once they exceed a practical height budget.
 - In deeper nested treemap levels, inline child grids should stabilize around a two-column layout on medium-and-up widths when practical.
-- Parent treemap folders may widen across additional parent-grid columns to preserve readable child width for deeper visible folders.
+- Parent treemap folders/lists may widen across additional parent-grid columns to preserve readable child width for deeper visible containers.
 - Checkbox-card title rows must preserve `min-w-0` shrink behavior so long titles wrap inside the card instead of overflowing past the card edge first.
-- Non-folder cards hide sub-note area in workspace.
+- Non-container cards hide sub-note area in workspace.
 - Drawing editor in workspace supports tool-based drawing, persistent group selection, transform, and style updates.
 - ToDo view uses horizontal list columns rather than the workspace child-card grid.
 - ToDo card rows reuse the shared card renderer and normal card menu behavior where applicable.
-- ToDo view disables card creation because it is an organizing view over existing cards.
-- ToDo list columns support inline title editing, color selection, drag-reordering by list header, delete confirmation, and list-local Add Divider.
+- ToDo view disables card creation because list creation uses the normal `List` note type.
+- ToDo list columns support inline title editing, color selection, drag-reordering by list header, and removal by converting the backing list card to a folder.
 - ToDo list color controls include white and black choices; white list badges render with dark text and a visible border.
-- ToDo divider rows are rendered only in the ToDo view, support inline label editing, support drag sorting with cards across lists, and expose a hover trash action.
 - ToDo badge rendering is inside the card boundary and reflects list-specific priority derived from ToDo card order.
 - Normal card surfaces outside ToDo render up to three stacked list badges plus a remaining-count badge when a card belongs to more than three lists.
 
@@ -510,19 +496,13 @@ This table is the canonical source for subtle action/menu/card-type combinations
 
 | Action Type | Menu / Surface | Card Type Applicability |
 |---|---|---|
-| Add Note | Tree normal card menu | `folder` only |
-| Add Note | Workspace grid normal card menu | `folder` only |
+| Add Note | Tree normal card menu | `folder` and `list` only |
+| Add Note | Workspace grid normal card menu | `folder` and `list` only |
 | Open | Workspace grid normal card menu | all card types |
 | Rename | Tree normal card menu | all card types |
 | Rename | Workspace grid normal card menu | all card types |
 | Move to... | Tree normal card menu | all card types |
 | Move to... | Workspace grid normal card menu | all card types |
-| Add to ToDo list | Tree normal card menu ToDo submenu | all card/list combinations where card is not already in that list |
-| Add to ToDo list | Workspace grid normal card menu ToDo submenu | all card/list combinations where card is not already in that list |
-| New List | Tree normal card menu ToDo submenu | all card types |
-| New List | Workspace grid normal card menu ToDo submenu | all card types |
-| Remove from ToDo list | Tree normal card menu ToDo submenu | all card/list combinations where card is already in that list |
-| Remove from ToDo list | Workspace grid normal card menu ToDo submenu | all card/list combinations where card is already in that list |
 | Move Up | Tree normal card menu | all card types |
 | Move Up | Workspace grid normal card menu | all card types |
 | Move Down | Tree normal card menu | all card types |
@@ -534,11 +514,11 @@ This table is the canonical source for subtle action/menu/card-type combinations
 | Delete | Tree normal card menu | all card types |
 | Delete | Workspace grid normal card menu | all card types |
 
-### 6.5.2 Folder Menu Ordering Contract
+### 6.5.2 Container Menu Ordering Contract
 
-- In normal-card menus, folder cards must place `Add Note` first.
-- `Add Note` must be followed immediately by a divider before the remaining folder actions.
-- Tree and workspace grid folder menus must preserve this ordering consistently.
+- In normal-card menus, folder and list cards must place `Add Note` first.
+- `Add Note` must be followed immediately by a divider before the remaining container actions.
+- Tree and workspace grid container-card menus must preserve this ordering consistently.
 
 ### 6.5.3 Recycle Bin Menu Matrix
 
@@ -557,11 +537,11 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - Workspace `grid` mode and workspace `treemap` mode must reuse the same base card renderer for normal cards.
 - The `grid`/`treemap` mode toggle is a workspace-shell control and must remain in the top workspace header rather than inside the child-card content section.
 - Treemap mode must not introduce a separate note/checkbox/link/image/drawing card implementation with divergent layout, spacing, menu, or interaction behavior.
-- The only intended rendering difference between workspace `grid` and workspace `treemap` is that treemap folder cards may render visible descendant cards inline inside the same folder card shell.
+- The only intended rendering difference between workspace `grid` and workspace `treemap` is that treemap container cards may render visible descendant cards inline inside the same card shell.
 - Shared card-grid layout decisions such as masonry row behavior, responsive column rules, and shared spacing constants should come from shared code paths/constants rather than duplicated per-mode values.
-- Treemap folder inline-child layout should adapt column count to visible child density so the UI consumes available width before creating extreme vertical growth.
-- When inline folder content still exceeds a practical height, the folder should constrain that region and allow internal scrolling rather than expanding indefinitely.
-- Width propagation across nested treemap folders is intentional: ancestor folders may claim additional parent-grid width so the deepest visible folder can maintain usable child-card widths.
+- Treemap folder/list inline-child layout should adapt column count to visible child density so the UI consumes available width before creating extreme vertical growth.
+- When inline folder/list content still exceeds a practical height, the container should constrain that region and allow internal scrolling rather than expanding indefinitely.
+- Width propagation across nested treemap folders/lists is intentional: ancestor containers may claim additional parent-grid width so the deepest visible container can maintain usable child-card widths.
 - Shared interactions such as right-click menus, `...` menus, rename, double-click open, and drag-reorder should be implemented through shared controller/render paths wherever the behavior contract is the same.
 - When a feature applies to both workspace modes, implementation should extend the shared path rather than copy the feature into a second mode-specific renderer.
 
@@ -572,7 +552,7 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - Persisted cards must remain plain JSON objects; class instances must not be serialized into IndexedDB, import/export files, or sync payloads.
 - UI components and store normalization should consume the registry instead of duplicating `cardType` switch statements for shared behavior.
 - Type-specific rendering and editing controls may remain in component code when they are genuinely unique to a card type, but shared applicability decisions should come from the registry.
-- Folder cards are normal registered card types with `canHaveChildren = true`.
+- Folder and list cards are normal registered card types with `canHaveChildren = true`.
 
 ### 6.8 Block Type Registry Contract
 
@@ -643,36 +623,32 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - `link`: link block UI,
 - `image`: image block UI,
 - `drawing`: drawing block UI,
-- `folder`: no block editor.
-- Sub-note management UI in workspace is shown for Home and folder-type cards.
+- `folder`: no block editor,
+- `list`: no block editor.
+- Sub-note management UI in workspace is shown for Home and container card types (`folder` and `list`).
 
 ## 8. Import/Export Data Contract
 
 ### 8.1 Export payload
 - Export formatting is centralized in `src/src/lib/import-export.ts` and covered by `script/import-export-contract.test.ts`.
 - Shape:
-- Top-level key order is `version`, `exportedAt`, `cards`, `todoCardIds`, `todoItems`, `todoLists`.
+- Top-level key order is `version`, `exportedAt`, `cards`.
 - `version`: app version derived from runtime `version.json`, with last-known cached runtime fallback and explicit unknown fallback when unavailable,
 - `exportedAt`: ISO timestamp,
-- `cards`: full root card array including nested children,
-- `todoCardIds`: compatibility array derived from ToDo card items only,
-- `todoItems`: compatibility ordered ToDo item array for the first list,
-- `todoLists`: ordered ToDo list array containing list metadata and list-local card/divider items.
+- `cards`: full root card array including nested children and list-card metadata.
 - Export JSON is pretty-printed with two-space indentation.
 - Download filename format: `notes-backup-YYYY-MM-DD_HH-MM.json` using the local device time at export.
 
 ### 8.2 Import accepted formats
 - Current format: `{ cards: Card[] }` optionally with metadata.
-- Current ToDo format: optional `todoLists` containing ToDo list metadata and list-local card/divider items.
-- Compatibility ToDo formats: optional `todoItems` and optional `todoCardIds`; used to create one `New List` when `todoLists` is absent.
+- Current ToDo format: `list` card types plus `todoListColor`/`todoListOrder` metadata in the card tree.
+- Legacy standalone ToDo formats (`todoLists`, `todoItems`, `todoCardIds`) are ignored.
+- Legacy marked folders with `isTodoList` are normalized to `cardType: "list"`.
 - Legacy format: `{ categories: any[], cards: any[] }` migrated to current tree.
 
 ### 8.3 Merge vs override semantics
 - `merge`: root-level concatenation `[...existing.cards, ...imported.cards]`.
 - `override`: `state.cards = imported.cards`.
-- `merge`: imported valid ToDo lists are appended after existing ToDo lists.
-- `override`: imported valid ToDo lists replace current ToDo lists.
-- ToDo list/item import normalization removes missing/deleted card references, duplicate same-list card references, and malformed list/items.
 - Validation note:
 - current UI enforces JSON parse validity for import, while payload structure validation remains minimal.
 
@@ -741,10 +717,10 @@ This table is the canonical source for subtle action/menu/card-type combinations
 Verify the product behavior items below:
 
 - Can create root and nested notes.
-- Can create typed notes from type picker: Note, Checkbox, Link, Image, Drawing, Folder.
+- Can create typed notes from type picker: Note, Checkbox, Link, Image, Drawing, Graph, Folder, List.
 - Can rename notes from tree and workspace.
 - Tree and workspace normal-card menus can be opened from both `...` and right-click.
-- Folder menus place `Add Note` first, followed by a divider, in both tree and workspace.
+- Folder and List menus place `Add Note` first, followed by a divider, in both tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.
 - Move picker excludes invalid self/descendant targets and store validation still rejects invalid targets as safety.
@@ -752,19 +728,24 @@ Verify the product behavior items below:
 - Tree drag reorder does not nest into cards/folders; parent changes use `Move to...`.
 - Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
-- Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only folder inline-child rendering differs in treemap.
+- Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only container inline-child rendering differs in treemap.
 - The treemap toggle appears in the top workspace header, not in the sub-notes content toolbar.
 - Treemap restores the previously selected mode after refresh.
 - Treemap drag-reorder works per visible sibling group, including inside expanded folders.
-- Treemap folder inline children expand into additional masonry columns as density grows instead of remaining a single tall column.
-- Very large treemap folder child regions become internally scrollable instead of forcing unbounded card height.
+- Treemap folder/list inline children expand into additional masonry columns as density grows instead of remaining a single tall column.
+- Very large treemap folder/list child regions become internally scrollable instead of forcing unbounded card height.
 - Workspace grid and treemap both use denser responsive column counts than earlier releases, so cards render narrower by default.
-- Deep nested treemap folders preserve a two-column child layout on medium-and-up widths when available, with ancestor folders widening to support that layout.
+- Deep nested treemap folders/lists preserve a two-column child layout on medium-and-up widths when available, with ancestor containers widening to support that layout.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.
 - Tree and workspace normal-card menu ordering stays in sync for shared actions (`Add Note`, `Rename`, `Move to...`, `Move Up`, `Move Down`, `Change type...`, `Delete`).
 - Type-change dialog appears and selecting a new type updates icon/UI immediately.
 - Type change is non-destructive: switching type does not delete hidden blocks/children.
-- Tree icons match card type (`note`, `link`, `image`, `drawing`, `folder`) with checkbox rows as explicit exception (no extra icon).
+- Tree icons match card type (`note`, `link`, `image`, `drawing`, `graph`, `folder`, `list`) with checkbox rows as explicit exception (no extra icon).
+- List note type appears in create/change-type dialogs and uses a list icon.
+- ToDo view columns are derived from List cards.
+- Checkbox descendants of List cards render as ToDo items in depth-first visual order.
+- Reordering Todo items updates the underlying checkbox card order.
+- Cross-list Todo item dragging is disabled.
 - Checkbox quick toggle works in tree/grid for checkbox-type cards.
 - Long checkbox-card titles in workspace wrap inside the card boundary instead of overflowing before multiline wrapping engages.
 - Can reorder blocks via drag and up/down actions.

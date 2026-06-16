@@ -141,7 +141,7 @@ export function normalizeGraphBlock(block: GraphBlock): GraphBlock {
 }
 
 export type ContentBlock = TextBlock | BulletBlock | ImageBlock | CheckboxBlock | LinkBlock | DrawingBlock | GraphBlock;
-export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'graph' | 'folder';
+export type CardType = 'note' | 'checkbox' | 'link' | 'image' | 'drawing' | 'graph' | 'folder' | 'list';
 
 export interface Card {
   id: string;
@@ -150,6 +150,9 @@ export interface Card {
   backgroundColor?: string | null;
   textColor?: '#111827' | '#ffffff' | null;
   textColorHsv?: { h: number; s: number; v: number } | null;
+  isTodoList?: boolean;
+  todoListColor?: string | null;
+  todoListOrder?: number | null;
   blocks: ContentBlock[];
   parentId: string | null;
   children: Card[];
@@ -165,14 +168,13 @@ export interface Card {
 
 export interface AppState {
   cards: Card[]; // Root level cards
-  todoLists: TodoList[];
 }
 
 export interface TodoList {
   id: string;
   title: string;
   color: string;
-  items: TodoItem[];
+  items: TodoCardItem[];
 }
 
 export interface TodoCardItem {

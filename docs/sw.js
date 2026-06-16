@@ -8,7 +8,7 @@ const PRECACHE_ASSETS = [
   './manifest.json',
   './icons/favicon.ico',
   './version.json',
-    './assets/index-C-hi2HPo.js',
+    './assets/index-CWW4li8p.js',
   './assets/index-DLvtWor4.css',
 ];
 

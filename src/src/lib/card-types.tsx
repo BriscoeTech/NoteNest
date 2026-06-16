@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Image,
   LayoutGrid,
+  ListTodo,
   Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -299,6 +300,18 @@ class FolderCard extends Cardbase {
   }
 }
 
+class ListCard extends Cardbase {
+  readonly canHaveChildren = true;
+
+  constructor() {
+    super('list', 'List', ListTodo, []);
+  }
+
+  renderTreeIcon(_isExpanded: boolean): ReactNode {
+    return <ListTodo className="w-4 h-4 text-muted-foreground shrink-0" />;
+  }
+}
+
 export const CARD_TYPES = [
   new NoteCard(),
   new CheckboxCard(),
@@ -307,6 +320,7 @@ export const CARD_TYPES = [
   new DrawingCard(),
   new GraphCard(),
   new FolderCard(),
+  new ListCard(),
 ] as const satisfies readonly CardTypeDefinition[];
 
 export const CARD_TYPE_ORDER = CARD_TYPES.map((definition) => definition.type);

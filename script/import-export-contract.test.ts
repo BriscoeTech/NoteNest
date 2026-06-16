@@ -3,20 +3,20 @@ import {
   buildExportBackup,
   createExportFilename,
   getImportCards,
-  getImportTodoCardIds,
-  getImportTodoItems,
-  getImportTodoLists,
   stringifyExportBackup,
 } from '../src/src/lib/import-export';
-import type { Card, TodoItem, TodoList } from '../src/src/lib/types';
+import type { Card } from '../src/src/lib/types';
 
 const exportedAt = new Date(2026, 3, 26, 9, 5, 0, 0);
 
 const cards: Card[] = [
   {
     id: 'folder-1',
-    title: 'Folder',
-    cardType: 'folder',
+    title: 'List',
+    cardType: 'list',
+    isTodoList: false,
+    todoListColor: '#16a34a',
+    todoListOrder: 500,
     blocks: [],
     parentId: null,
     children: [
@@ -24,6 +24,9 @@ const cards: Card[] = [
         id: 'graph-1',
         title: 'Graph',
         cardType: 'graph',
+        isTodoList: false,
+        todoListColor: null,
+        todoListOrder: null,
         blocks: [{
           id: 'graph-block-1',
           type: 'graph',
@@ -51,24 +54,11 @@ const cards: Card[] = [
   },
 ];
 
-const todoItems: TodoItem[] = [
-  { id: 'todo-card-graph-1', type: 'card', cardId: 'graph-1' },
-  { id: 'divider-1', type: 'divider', title: 'End of week' },
-];
-
-const todoLists: TodoList[] = [
-  { id: 'list-1', title: 'New List', color: '#2563eb', items: todoItems },
-  { id: 'list-2', title: 'Vacation', color: '#16a34a', items: [] },
-];
-
-const backup = buildExportBackup(cards, '1.2.3', exportedAt, todoLists);
-assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards', 'todoCardIds', 'todoItems', 'todoLists']);
+const backup = buildExportBackup(cards, '1.2.3', exportedAt);
+assert.deepEqual(Object.keys(backup), ['version', 'exportedAt', 'cards']);
 assert.equal(backup.version, '1.2.3');
 assert.equal(backup.exportedAt, exportedAt.toISOString());
 assert.equal(backup.cards, cards);
-assert.deepEqual(backup.todoCardIds, ['graph-1']);
-assert.deepEqual(backup.todoItems, todoItems);
-assert.deepEqual(backup.todoLists, todoLists);
 
 const json = stringifyExportBackup(backup);
 assert.equal(json, JSON.stringify(backup, null, 2));
@@ -78,14 +68,6 @@ assert.equal(createExportFilename(exportedAt), 'notes-backup-2026-04-26_09-05.js
 
 const roundTripCards = getImportCards(JSON.parse(json));
 assert.deepEqual(roundTripCards, cards);
-assert.deepEqual(getImportTodoCardIds(JSON.parse(json)), ['graph-1']);
-assert.deepEqual(getImportTodoItems(JSON.parse(json)), todoItems);
-assert.deepEqual(getImportTodoLists(JSON.parse(json)), todoLists);
-assert.deepEqual(getImportTodoCardIds({ cards }), []);
-assert.deepEqual(getImportTodoItems({ cards }), []);
-assert.deepEqual(getImportTodoLists({ cards }), []);
-assert.deepEqual(getImportTodoCardIds({ todoItems, cards }), []);
-assert.deepEqual(getImportTodoCardIds({ todoCardIds: ['graph-1'], cards }), ['graph-1']);
 
 const importedWithMissingType = getImportCards({
   cards: [{
@@ -139,3 +121,26 @@ assert.equal(legacyImport[0].children.length, 1);
 assert.equal(legacyImport[0].children[0].parentId, 'cat-1');
 assert.equal(legacyImport[0].children[0].cardType, 'note');
 assert.equal(legacyImport[0].children[0].blocks[0]?.type, 'text');
+
+const legacyMarkedListImport = getImportCards({
+  cards: [{
+    id: 'legacy-marked-list',
+    title: 'Marked List',
+    cardType: 'folder',
+    isTodoList: true,
+    todoListColor: '#2563eb',
+    todoListOrder: 123,
+    blocks: [],
+    parentId: null,
+    children: [],
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    isDeleted: false,
+  }],
+});
+
+assert.equal(legacyMarkedListImport[0].cardType, 'list');
+assert.equal(legacyMarkedListImport[0].isTodoList, false);
+assert.equal(legacyMarkedListImport[0].todoListColor, '#2563eb');
+assert.equal(legacyMarkedListImport[0].todoListOrder, 123);
