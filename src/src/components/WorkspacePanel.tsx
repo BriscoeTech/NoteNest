@@ -12,6 +12,7 @@ import {
   CARD_TYPE_ORDER,
   CardTypeIcon,
   cardTypeOpensOnCreate,
+  cardTypeCanHaveChildren,
   cardTypeUsesCreateFilePicker,
   createCardBlockContext,
   createInitialBlocksForCardType,
@@ -60,6 +61,7 @@ interface WorkspacePanelProps {
   onPermanentlyDeleteCard: (id: string) => void;
   onEmptyRecycleBin: () => void;
   onReorderCard: (id: string, direction: 'up' | 'down') => void;
+  onInsertCardRelative: (id: string, targetId: string, position: 'before' | 'after') => void;
   onReorderChildren: (parentId: string | null, ids: string[]) => void;
   onMoveTodoItem: (activeItemId: string, targetListId: string, overItemId: string | null, position: 'before' | 'after') => void;
   onMoveTodoCardToPosition: (listId: string, cardId: string, position: number, excludedCardIds: Set<string>) => void;
@@ -2075,6 +2077,22 @@ interface GridCardItemProps {
   canCreateCards?: boolean;
   forceSingleColumn?: boolean;
   nestingDepth?: number;
+  treemapDragController?: TreemapDragController;
+}
+
+type TreemapDropTarget =
+  | { kind: 'relative'; targetId: string; position: 'before' | 'after' }
+  | { kind: 'container'; parentId: string | null };
+
+interface TreemapDragController {
+  activeCardId: string | null;
+  dropTarget: TreemapDropTarget | null;
+  onCardDragStart: (event: React.DragEvent<HTMLDivElement>, cardId: string) => void;
+  onCardDragOver: (event: React.DragEvent<HTMLDivElement>, card: Card) => void;
+  onCardDrop: (event: React.DragEvent<HTMLDivElement>) => void;
+  onCardDragEnd: () => void;
+  onContainerDragOver: (event: React.DragEvent<HTMLDivElement>, parentId: string | null) => void;
+  onContainerDrop: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 interface SortableCardGridProps {
@@ -2082,6 +2100,14 @@ interface SortableCardGridProps {
   className: string;
   strategy: SortingStrategy;
   onReorderIds: (ids: string[]) => void;
+  renderCard: (card: Card, dropIndicator: 'before' | 'after' | null) => React.ReactNode;
+}
+
+interface TreemapCardGridProps {
+  cards: Card[];
+  className: string;
+  containerId: string | null;
+  dragController: TreemapDragController;
   renderCard: (card: Card, dropIndicator: 'before' | 'after' | null) => React.ReactNode;
 }
 
@@ -2176,6 +2202,41 @@ function SortableCardGrid({
         </div>
       </SortableContext>
     </DndContext>
+  );
+}
+
+function TreemapCardGrid({
+  cards,
+  className,
+  containerId,
+  dragController,
+  renderCard,
+}: TreemapCardGridProps) {
+  const isContainerTarget =
+    dragController.dropTarget?.kind === 'container' &&
+    dragController.dropTarget.parentId === containerId;
+
+  const getDropIndicator = (cardId: string): 'before' | 'after' | null => {
+    const target = dragController.dropTarget;
+    if (target?.kind !== 'relative' || target.targetId !== cardId) return null;
+    return target.position;
+  };
+
+  return (
+    <div
+      className={cn(
+        "relative rounded-md transition-colors",
+        className,
+        isContainerTarget && "bg-primary/5 outline outline-2 outline-primary/25"
+      )}
+      onDragOver={(event) => dragController.onContainerDragOver(event, containerId)}
+      onDrop={dragController.onContainerDrop}
+    >
+      {isContainerTarget && (
+        <div className="pointer-events-none absolute left-0 right-0 top-0 z-30 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]" />
+      )}
+      {cards.map((card) => renderCard(card, getDropIndicator(card.id)))}
+    </div>
   );
 }
 
@@ -2491,7 +2552,9 @@ function GridCardItem({
   canCreateCards = true,
   forceSingleColumn = false,
   nestingDepth = 0,
+  treemapDragController,
 }: GridCardItemProps) {
+  const sortableEnabled = sortable && !treemapDragController;
   const {
     attributes,
     listeners,
@@ -2499,7 +2562,7 @@ function GridCardItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: sortableId ?? card.id, disabled: !sortable });
+  } = useSortable({ id: sortableId ?? card.id, disabled: !sortableEnabled });
   const contentRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
   const [rowSpan, setRowSpan] = useState(1);
@@ -2545,7 +2608,7 @@ function GridCardItem({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging || treemapDragController?.activeCardId === card.id ? 0.5 : 1,
     gridRowEnd: `span ${rowSpan}`,
   };
 
@@ -2595,6 +2658,9 @@ function GridCardItem({
     shouldSpanWide,
     shouldSpanExtraWide,
   } = gridLayout;
+  const isTreemapContainerDropTarget =
+    treemapDragController?.dropTarget?.kind === 'container' &&
+    treemapDragController.dropTarget.parentId === card.id;
 
   const handleRenameStart = () => {
     const node = titleRef.current;
@@ -2630,6 +2696,11 @@ function GridCardItem({
     <div
       ref={setNodeRef}
       style={style}
+      draggable={Boolean(treemapDragController) && !isRecycleBin}
+      onDragStart={treemapDragController ? (event) => treemapDragController.onCardDragStart(event, card.id) : undefined}
+      onDragOver={treemapDragController ? (event) => treemapDragController.onCardDragOver(event, card) : undefined}
+      onDrop={treemapDragController?.onCardDrop}
+      onDragEnd={treemapDragController?.onCardDragEnd}
       className={cn(
         "relative group",
         !forceSingleColumn && shouldSpanWide && "md:col-span-2",
@@ -2644,6 +2715,11 @@ function GridCardItem({
           )}
         />
         )}
+      {isTreemapContainerDropTarget && (
+        <div className="pointer-events-none absolute inset-0 z-30 rounded-md border-2 border-primary/60 bg-primary/5">
+          <div className="absolute left-3 right-3 top-3 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]" />
+        </div>
+      )}
       {todoBadges.length > 0 && (
         <div
           className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1"
@@ -2674,6 +2750,7 @@ function GridCardItem({
                   }}
                   className="h-7 w-12 rounded-full bg-background px-1 text-center text-xs font-semibold shadow-sm"
                   style={{ borderColor: getTodoListColorBorder(badge.color) }}
+                  onFocus={(e) => e.currentTarget.select()}
                   autoFocus
                 />
               );
@@ -2715,8 +2792,8 @@ function GridCardItem({
           onNavigate();
         }}
         onContextMenu={handleContextMenu}
-        {...(sortable ? attributes : {})}
-        {...(sortable ? listeners : {})}
+        {...(sortableEnabled ? attributes : {})}
+        {...(sortableEnabled ? listeners : {})}
       >
         {isFolderCard && (
           <div
@@ -2811,7 +2888,9 @@ function GridCardItem({
         {imageBlock && (
           <div
             className={cn("w-full cursor-pointer", isMediaCard ? "" : "mt-2 px-2")}
-            onDragStart={(e) => e.preventDefault()}
+            onDragStart={(e) => {
+              if (!treemapDragController) e.preventDefault();
+            }}
           >
             <div className={cn("overflow-hidden", isMediaCard ? "bg-muted/20" : "rounded border bg-muted/20")}>
               <img
@@ -2831,7 +2910,9 @@ function GridCardItem({
         {drawingBlock && (
           <div
             className={cn("w-full cursor-pointer", isMediaCard ? "" : "mt-2 px-2")}
-            onDragStart={(e) => e.preventDefault()}
+            onDragStart={(e) => {
+              if (!treemapDragController) e.preventDefault();
+            }}
           >
             <div className={cn("overflow-hidden", isMediaCard ? "bg-muted/20" : "rounded border bg-muted/20")}>
               <img
@@ -2879,46 +2960,90 @@ function GridCardItem({
             )}
           >
             {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onChangeCardColorById && onReorderCardById && onReorderChildren && (
-              <SortableCardGrid
-                cards={visibleChildren}
-                className={nestedChildrenClassName}
-                strategy={rectSortingStrategy}
-                onReorderIds={(ids) => onReorderChildren(card.id, ids)}
-                renderCard={(child, childDropIndicator) => (
-                  <GridCardItem
-                    key={child.id}
-                    card={child}
-                    onNavigate={() => onNavigateCardById(child.id)}
-                    onAddNote={() => onOpenCreateTypePicker(child.id)}
-                    onMoveStart={() => onMoveStartById(child.id)}
-                    onRename={(title) => onUpdateCardTitleById(child.id, title)}
-                    onDelete={() => onDeleteCardById(child.id)}
-                    onUpdateBlocks={(blocks) => onUpdateBlocksById(child.id, blocks)}
-                    onOpenTypePicker={() => onOpenChangeTypePickerByCard(child)}
-                    onReorder={(dir) => onReorderCardById(child.id, dir)}
-                    dropIndicator={childDropIndicator}
-                    inlineChildren={true}
-                    nestedGapClassName={nestedChildrenClassName}
-                    nestingDepth={nestingDepth + 1}
-                    onNavigateCardById={onNavigateCardById}
-                    onOpenCreateTypePicker={onOpenCreateTypePicker}
-                    onMoveStartById={onMoveStartById}
-                    onUpdateCardTitleById={onUpdateCardTitleById}
-                    onDeleteCardById={onDeleteCardById}
-                    onUpdateBlocksById={onUpdateBlocksById}
-                    onOpenChangeTypePickerByCard={onOpenChangeTypePickerByCard}
-                    onChangeCardColorById={onChangeCardColorById}
-                    onReorderCardById={onReorderCardById}
-                    onReorderChildren={onReorderChildren}
-                    todoBadges={getTodoBadges?.(child.id)}
-                    getTodoBadges={getTodoBadges}
-                    onTodoNumberChange={onTodoNumberChange}
-                    getTodoMenuActions={getTodoMenuActions}
-                    canCreateCards={canCreateCards}
-                    forceSingleColumn={forceSingleColumn}
-                  />
-                )}
-              />
+              treemapDragController ? (
+                <TreemapCardGrid
+                  cards={visibleChildren}
+                  className={nestedChildrenClassName}
+                  containerId={card.id}
+                  dragController={treemapDragController}
+                  renderCard={(child, childDropIndicator) => (
+                    <GridCardItem
+                      key={child.id}
+                      card={child}
+                      onNavigate={() => onNavigateCardById(child.id)}
+                      onAddNote={() => onOpenCreateTypePicker(child.id)}
+                      onMoveStart={() => onMoveStartById(child.id)}
+                      onRename={(title) => onUpdateCardTitleById(child.id, title)}
+                      onDelete={() => onDeleteCardById(child.id)}
+                      onUpdateBlocks={(blocks) => onUpdateBlocksById(child.id, blocks)}
+                      onOpenTypePicker={() => onOpenChangeTypePickerByCard(child)}
+                      onReorder={(dir) => onReorderCardById(child.id, dir)}
+                      dropIndicator={childDropIndicator}
+                      inlineChildren={true}
+                      nestedGapClassName={nestedChildrenClassName}
+                      nestingDepth={nestingDepth + 1}
+                      onNavigateCardById={onNavigateCardById}
+                      onOpenCreateTypePicker={onOpenCreateTypePicker}
+                      onMoveStartById={onMoveStartById}
+                      onUpdateCardTitleById={onUpdateCardTitleById}
+                      onDeleteCardById={onDeleteCardById}
+                      onUpdateBlocksById={onUpdateBlocksById}
+                      onOpenChangeTypePickerByCard={onOpenChangeTypePickerByCard}
+                      onChangeCardColorById={onChangeCardColorById}
+                      onReorderCardById={onReorderCardById}
+                      onReorderChildren={onReorderChildren}
+                      todoBadges={getTodoBadges?.(child.id)}
+                      getTodoBadges={getTodoBadges}
+                      onTodoNumberChange={onTodoNumberChange}
+                      getTodoMenuActions={getTodoMenuActions}
+                      canCreateCards={canCreateCards}
+                      forceSingleColumn={forceSingleColumn}
+                      treemapDragController={treemapDragController}
+                    />
+                  )}
+                />
+              ) : (
+                <SortableCardGrid
+                  cards={visibleChildren}
+                  className={nestedChildrenClassName}
+                  strategy={rectSortingStrategy}
+                  onReorderIds={(ids) => onReorderChildren(card.id, ids)}
+                  renderCard={(child, childDropIndicator) => (
+                    <GridCardItem
+                      key={child.id}
+                      card={child}
+                      onNavigate={() => onNavigateCardById(child.id)}
+                      onAddNote={() => onOpenCreateTypePicker(child.id)}
+                      onMoveStart={() => onMoveStartById(child.id)}
+                      onRename={(title) => onUpdateCardTitleById(child.id, title)}
+                      onDelete={() => onDeleteCardById(child.id)}
+                      onUpdateBlocks={(blocks) => onUpdateBlocksById(child.id, blocks)}
+                      onOpenTypePicker={() => onOpenChangeTypePickerByCard(child)}
+                      onReorder={(dir) => onReorderCardById(child.id, dir)}
+                      dropIndicator={childDropIndicator}
+                      inlineChildren={true}
+                      nestedGapClassName={nestedChildrenClassName}
+                      nestingDepth={nestingDepth + 1}
+                      onNavigateCardById={onNavigateCardById}
+                      onOpenCreateTypePicker={onOpenCreateTypePicker}
+                      onMoveStartById={onMoveStartById}
+                      onUpdateCardTitleById={onUpdateCardTitleById}
+                      onDeleteCardById={onDeleteCardById}
+                      onUpdateBlocksById={onUpdateBlocksById}
+                      onOpenChangeTypePickerByCard={onOpenChangeTypePickerByCard}
+                      onChangeCardColorById={onChangeCardColorById}
+                      onReorderCardById={onReorderCardById}
+                      onReorderChildren={onReorderChildren}
+                      todoBadges={getTodoBadges?.(child.id)}
+                      getTodoBadges={getTodoBadges}
+                      onTodoNumberChange={onTodoNumberChange}
+                      getTodoMenuActions={getTodoMenuActions}
+                      canCreateCards={canCreateCards}
+                      forceSingleColumn={forceSingleColumn}
+                    />
+                  )}
+                />
+              )
             )}
           </div>
         )}
@@ -3074,6 +3199,7 @@ export function WorkspacePanel({
   onPermanentlyDeleteCard,
   onEmptyRecycleBin,
   onReorderCard,
+  onInsertCardRelative,
   onReorderChildren,
   onMoveTodoItem,
   onMoveTodoCardToPosition,
@@ -3102,6 +3228,136 @@ export function WorkspacePanel({
     const saved = window.localStorage.getItem(CHILDREN_VIEW_MODE_STORAGE_KEY);
     return saved === 'treemap' ? 'treemap' : 'grid';
   });
+  const [treemapActiveCardId, setTreemapActiveCardId] = useState<string | null>(null);
+  const [treemapDropTarget, setTreemapDropTarget] = useState<TreemapDropTarget | null>(null);
+  const treemapActiveCardIdRef = useRef<string | null>(null);
+  const treemapDropTargetRef = useRef<TreemapDropTarget | null>(null);
+
+  const setTreemapActiveCard = (id: string | null) => {
+    treemapActiveCardIdRef.current = id;
+    setTreemapActiveCardId(id);
+  };
+
+  const setTreemapTarget = (target: TreemapDropTarget | null) => {
+    treemapDropTargetRef.current = target;
+    setTreemapDropTarget(target);
+  };
+
+  const resetTreemapDrag = () => {
+    setTreemapActiveCard(null);
+    setTreemapTarget(null);
+  };
+
+  const canDropTreemapCardToParent = (cardId: string, parentId: string | null): boolean => {
+    if (cardId === parentId) return false;
+    if (parentId === null) return true;
+    const parentCard = findCardById(allCards, parentId);
+    if (!parentCard || parentCard.isDeleted || !cardTypeCanHaveChildren(parentCard.cardType)) return false;
+    return !getDescendantIds(allCards, cardId).includes(parentId);
+  };
+
+  const canUseTreemapRelativeTarget = (cardId: string, targetId: string): boolean => {
+    if (cardId === targetId) return false;
+    const targetCard = findCardById(allCards, targetId);
+    if (!targetCard || targetCard.isDeleted) return false;
+    return canDropTreemapCardToParent(cardId, targetCard.parentId);
+  };
+
+  const getTreemapCardTarget = (event: React.DragEvent<HTMLDivElement>, card: Card, activeCardId: string): TreemapDropTarget | null => {
+    if (!canUseTreemapRelativeTarget(activeCardId, card.id)) return null;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offsetY = event.clientY - rect.top;
+    const activeCard = findCardById(allCards, activeCardId);
+    const canDropInside =
+      activeCard?.parentId !== card.id &&
+      cardTypeCanHaveChildren(card.cardType) &&
+      canDropTreemapCardToParent(activeCardId, card.id);
+
+    if (canDropInside && offsetY > rect.height * 0.25 && offsetY < rect.height * 0.75) {
+      return { kind: 'container', parentId: card.id };
+    }
+
+    return {
+      kind: 'relative',
+      targetId: card.id,
+      position: offsetY < rect.height / 2 ? 'before' : 'after',
+    };
+  };
+
+  const handleTreemapCardDragStart = (event: React.DragEvent<HTMLDivElement>, cardId: string) => {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `card:${cardId}`);
+    setTreemapActiveCard(cardId);
+    setTreemapTarget(null);
+  };
+
+  const handleTreemapCardDragOver = (event: React.DragEvent<HTMLDivElement>, card: Card) => {
+    const activeCardId = treemapActiveCardIdRef.current;
+    if (!activeCardId) return;
+
+    const target = getTreemapCardTarget(event, card, activeCardId);
+    if (!target) {
+      setTreemapTarget(null);
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setTreemapTarget(target);
+  };
+
+  const handleTreemapContainerDragOver = (event: React.DragEvent<HTMLDivElement>, parentId: string | null) => {
+    const activeCardId = treemapActiveCardIdRef.current;
+    if (!activeCardId) return;
+    const activeCard = findCardById(allCards, activeCardId);
+    if (!activeCard || activeCard.parentId === parentId || !canDropTreemapCardToParent(activeCardId, parentId)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setTreemapTarget({ kind: 'container', parentId });
+  };
+
+  const applyTreemapDropTarget = () => {
+    const activeCardId = treemapActiveCardIdRef.current;
+    const target = treemapDropTargetRef.current;
+    if (!activeCardId || !target) return;
+
+    if (target.kind === 'relative') {
+      if (canUseTreemapRelativeTarget(activeCardId, target.targetId)) {
+        onInsertCardRelative(activeCardId, target.targetId, target.position);
+      }
+      return;
+    }
+
+    const activeCard = findCardById(allCards, activeCardId);
+    if (activeCard?.parentId !== target.parentId && canDropTreemapCardToParent(activeCardId, target.parentId)) {
+      onMoveCard(activeCardId, target.parentId);
+    }
+  };
+
+  const handleTreemapDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    applyTreemapDropTarget();
+    resetTreemapDrag();
+  };
+
+  const treemapDragController: TreemapDragController = {
+    activeCardId: treemapActiveCardId,
+    dropTarget: treemapDropTarget,
+    onCardDragStart: handleTreemapCardDragStart,
+    onCardDragOver: handleTreemapCardDragOver,
+    onCardDrop: handleTreemapDrop,
+    onCardDragEnd: resetTreemapDrag,
+    onContainerDragOver: handleTreemapContainerDragOver,
+    onContainerDrop: handleTreemapDrop,
+  };
 
   const handleMoveStart = (id: string) => {
     setCardToMove(id);
@@ -3634,11 +3890,11 @@ export function WorkspacePanel({
                 ))}
             </div>
           ) : childrenViewMode === 'treemap' && canUseTreemap ? (
-            <SortableCardGrid
+            <TreemapCardGrid
               cards={sortedChildrenCards}
               className={getChildrenGridClassName(sidebarOpen)}
-              strategy={rectSortingStrategy}
-              onReorderIds={(ids) => onReorderChildren(currentCard?.id ?? null, ids)}
+              containerId={currentCard?.id ?? null}
+              dragController={treemapDragController}
               renderCard={(card, dropIndicator) => (
                 <GridCardItem
                   key={card.id}
@@ -3668,6 +3924,7 @@ export function WorkspacePanel({
                   getTodoBadges={getTodoBadges}
                   onTodoNumberChange={(listId, id, position) => onMoveTodoCardToPosition(listId, id, position, checkedTodoCardIds)}
                   getTodoMenuActions={getTodoMenuActions}
+                  treemapDragController={treemapDragController}
                 />
               )}
             />

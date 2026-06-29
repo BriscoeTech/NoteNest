@@ -266,6 +266,7 @@ export default function NotesApp() {
           onPermanentlyDeleteCard={store.permanentlyDeleteCard}
           onEmptyRecycleBin={store.emptyRecycleBin}
           onReorderCard={store.moveCardStep}
+          onInsertCardRelative={store.reorderCardRelative}
           onReorderChildren={store.reorderChildren}
           onMoveTodoItem={store.moveTodoItem}
           onMoveTodoCardToPosition={store.moveTodoCardToPosition}
