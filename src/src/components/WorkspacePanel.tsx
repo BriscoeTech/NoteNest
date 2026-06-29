@@ -2626,6 +2626,7 @@ function GridCardItem({
     .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
   const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length, nestingDepth);
   const shouldConstrainInlineChildren = visibleChildren.length > 6;
+  const shouldSuspendInlineChildScroll = Boolean(treemapDragController?.activeCardId);
   const cardBackgroundColor = normalizeCardColor(card.backgroundColor);
   const readableTextColor = normalizeCardTextColor(card.textColor) ?? getReadableTextColor(cardBackgroundColor);
   const cardTextColor = readableTextColor ?? 'hsl(var(--card-foreground))';
@@ -2956,7 +2957,11 @@ function GridCardItem({
           <div
             className={cn(
               "w-full mt-4",
-              shouldConstrainInlineChildren && "max-h-[70vh] overflow-y-auto pr-1"
+              shouldConstrainInlineChildren && (
+                shouldSuspendInlineChildScroll
+                  ? "max-h-[70vh] overflow-visible pr-1"
+                  : "max-h-[70vh] overflow-y-auto pr-1"
+              )
             )}
           >
             {visibleChildren.length > 0 && onNavigateCardById && onOpenCreateTypePicker && onMoveStartById && onUpdateCardTitleById && onDeleteCardById && onUpdateBlocksById && onOpenChangeTypePickerByCard && onChangeCardColorById && onReorderCardById && onReorderChildren && (

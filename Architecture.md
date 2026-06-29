@@ -130,9 +130,10 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Card color dialog supports HSV background selection and black/white text color selection, persisting text HSV metadata for future text-color expansion 
 | UX | Grid cards open note on double-click (all card types) 
 | UX | Workspace children cards use masonry packing while preserving existing responsive column counts and drag-reorder behavior 
-| UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer and sortable-grid behavior while only adding inline container-child rendering 
+| UX | Workspace supports `grid` and `treemap` child-view modes, with treemap reusing the same card renderer while adding inline container-child rendering and visible-hierarchy drag organization
 | UX | Treemap folder/list cards use adaptive nested masonry columns for visible inline children instead of a fixed single-column stack 
-| UX | Oversized treemap folder/list child regions are height-constrained and scroll internally instead of expanding without bound 
+| UX | Treemap drag/drop can move cards between visible folders/lists/root scopes and shows either before/after insertion lines or container-scope drop highlights
+| UX | Oversized treemap folder/list child regions are height-constrained and scroll internally instead of expanding without bound, but suspend internal scrolling while a card is being dragged out
 | UX | Workspace child-card grids use denser responsive column counts so cards render narrower by default than in earlier releases 
 | UX | Deep nested treemap folders/lists preserve a two-column child layout at medium-and-up widths when space is available 
 | UX | Ancestor treemap folders/lists may widen across additional parent-grid columns to preserve readable deeper child-card widths 
@@ -192,9 +193,11 @@ This section is the authoritative feature contract. Changes must be reflected he
 4. User can reorder within siblings from the tree (up/down or drag reindex) and from the workspace grid (drag reindex).
 5. Tree and workspace drag-reorder UI show an insertion line indicating the before/after drop position.
 6. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
-7. In treemap mode, drag-reorder is scoped per visible sibling group:
-- top-level visible cards reorder among top-level siblings,
-- cards rendered inside a folder/list reorder only within that container's visible children.
+7. In treemap mode, drag/drop works across the visible hierarchy:
+- dropping near the top/bottom edge of a visible card inserts before/after that card in the target card's parent scope,
+- dropping in the middle of a visible folder/list moves the dragged card into that container,
+- dropping on a visible child-grid container moves the dragged card into that container/root scope,
+- oversized inline folder/list child regions suspend internal scrolling while a card is being dragged so the card can be pulled out to another visible scope.
 
 ### 3.4 Delete and recover
 1. Delete marks target card and descendants `isDeleted = true`.
@@ -457,7 +460,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Grid cards render image/drawing previews with native image drag disabled to preserve card drag-reorder.
 - Folder and list cards in grid use folder-style shape while keeping standard card color theme.
 - In treemap mode, folder/list-card inline children use adaptive nested masonry columns rather than a fixed single-column stack.
-- Treemap folder/list inline-child regions may become internally scrollable once they exceed a practical height budget.
+- Treemap drag/drop supports moving cards across visible folder/list/root scopes with before/after insertion lines and container-scope drop highlights.
+- Treemap folder/list inline-child regions may become internally scrollable once they exceed a practical height budget, but they suspend internal scroll while a card drag is active so users can drag cards out of the region.
 - In deeper nested treemap levels, inline child grids should stabilize around a two-column layout on medium-and-up widths when practical.
 - Parent treemap folders/lists may widen across additional parent-grid columns to preserve readable child width for deeper visible containers.
 - Checkbox-card title rows must preserve `min-w-0` shrink behavior so long titles wrap inside the card instead of overflowing past the card edge first.
@@ -732,9 +736,9 @@ Verify the product behavior items below:
 - Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only container inline-child rendering differs in treemap.
 - The treemap toggle appears in the top workspace header, not in the sub-notes content toolbar.
 - Treemap restores the previously selected mode after refresh.
-- Treemap drag-reorder works per visible sibling group, including inside expanded folders.
+- Treemap drag/drop can reorder within a visible sibling group and move cards between visible folders/lists/root scopes.
 - Treemap folder/list inline children expand into additional masonry columns as density grows instead of remaining a single tall column.
-- Very large treemap folder/list child regions become internally scrollable instead of forcing unbounded card height.
+- Very large treemap folder/list child regions become internally scrollable instead of forcing unbounded card height, but do not auto-scroll during active treemap card drags.
 - Workspace grid and treemap both use denser responsive column counts than earlier releases, so cards render narrower by default.
 - Deep nested treemap folders/lists preserve a two-column child layout on medium-and-up widths when available, with ancestor containers widening to support that layout.
 - Card type can be changed from `...` -> `Change type...` in tree and grid.

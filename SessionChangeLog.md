@@ -3,6 +3,26 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-06-29
+
+### Priority Editing and Treemap Drag Organization
+
+**Author**: Codex
+
+**Changes**:
+- Changed ToDo priority badge editing so the focused priority number is selected automatically and the next typed value replaces it.
+- Added treemap drag/drop organization across visible folders, lists, and root scopes in the right-hand workspace view.
+- Added treemap drop feedback for before/after insertion lines and folder/list/root container-scope targets.
+- Kept normal grid drag sorting on the existing sortable-grid path while using native treemap drag targets for visible hierarchy moves.
+- Suspended oversized treemap folder/list inline-region scrolling during active card drags so cards can be pulled out to other visible scopes.
+- Updated architecture notes for visible-hierarchy treemap drag/drop and drag-out scroll behavior.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm run test`
+- `npm run build`
+
 ## 2026-06-16
 
 ### Build Timestamp Identity
