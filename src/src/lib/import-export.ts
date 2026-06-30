@@ -2,6 +2,7 @@ import type { Card, ContentBlock } from '@/lib/types';
 import { generateId } from '@/lib/types';
 import { inferCardTypeFromCardData } from '@/lib/card-types';
 import { normalizeContentBlock } from '@/lib/block-types';
+import { ensureSiblingSortOrderMatchesArray } from '@/lib/card-order';
 
 export interface ExportBackup {
   builtAt: string;
@@ -14,7 +15,7 @@ export function normalizeBlocks(blocks: ContentBlock[] = []): ContentBlock[] {
 }
 
 export function normalizeCardTree(cards: Card[] = []): Card[] {
-  return cards.map((card) => {
+  const normalizedCards = cards.map((card) => {
     const inferredCardType = inferCardTypeFromCardData(card);
     const cardType = inferredCardType === 'folder' && card.isTodoList ? 'list' : inferredCardType;
     return {
@@ -27,6 +28,7 @@ export function normalizeCardTree(cards: Card[] = []): Card[] {
       children: normalizeCardTree(card.children || []),
     };
   });
+  return ensureSiblingSortOrderMatchesArray(normalizedCards);
 }
 
 export function migrateLegacyData(categories: any[] = [], legacyCards: any[] = []): Card[] {

@@ -1,7 +1,7 @@
 // Offline-first service worker for the NoteNest app shell.
 const CACHE_PREFIX = 'notenest-built-';
 const LEGACY_CACHE_PREFIX = 'notenest-v';
-const CACHE_NAME = `${CACHE_PREFIX}2026-06-29T21:36:18.394Z`;
+const CACHE_NAME = `${CACHE_PREFIX}2026-06-29T22:36:06.862Z`;
 // Use relative paths so GitHub Pages subpaths work.
 const PRECACHE_ASSETS = [
   './',
@@ -9,8 +9,8 @@ const PRECACHE_ASSETS = [
   './manifest.json',
   './icons/favicon.ico',
   './build-info.json',
-  './assets/index-BLi4DSAK.css',
-  './assets/index-mx015pou.js',
+  './assets/index-DszlbjOD.js',
+  './assets/index-DvHWax8C.css',
 ];
 
 self.addEventListener('install', (event) => {

@@ -193,7 +193,9 @@ This section is the authoritative feature contract. Changes must be reflected he
 4. User can reorder within siblings from the tree (up/down or drag reindex) and from the workspace grid (drag reindex).
 5. Tree and workspace drag-reorder UI show an insertion line indicating the before/after drop position.
 6. Reordering updates visible sibling order while preserving deleted siblings in current store logic.
-7. In treemap mode, drag/drop works across the visible hierarchy:
+7. Reordering must assign a deterministic, strictly descending sibling `sortOrder` sequence from a single reorder operation so later sorted renders restore the exact same visual order.
+8. Tree, workspace grid, treemap, and ToDo derivation must read card siblings through the same stable visual-order semantics.
+9. In treemap mode, drag/drop works across the visible hierarchy:
 - dropping near the top/bottom edge of a visible card inserts before/after that card in the target card's parent scope,
 - dropping in the middle of a visible folder/list moves the dragged card into that container,
 - dropping on a visible child-grid container moves the dragged card into that container/root scope,
@@ -299,7 +301,10 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - Restore rebuilds subtree parent links consistently under the chosen or automatically resolved restore target.
 - Automatic restore resolution prefers the card's original parent, then the nearest non-deleted ancestor, and falls back to root only when no live ancestor remains.
 - Sorting uses `sortOrder` (higher value renders earlier).
+- Visual sibling sorting is stable: equal `sortOrder` values preserve existing array order instead of introducing nondeterministic movement.
 - Reordering operates on non-deleted sibling sets while preserving deleted siblings in the resulting list.
+- Reordering and relative insert operations must rewrite sibling `sortOrder` values as a strictly descending sequence for the final visual order.
+- Loaded/imported sibling lists with invalid, duplicate, or non-descending `sortOrder` values are normalized to match their stored array order.
 - Search results exclude deleted cards except in recycle bin workflows.
 - Recycle bin search matching is title-only.
 - Recycle Bin collection includes deleted descendants, not only top-level deleted roots.
@@ -346,6 +351,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Storage key: `notecards_data`.
 - Primary store: IndexedDB via `idb-keyval`.
 - Save behavior: serialize whole `AppState` JSON on each post-load state change.
+- Save writes are sequenced against the latest serialized state so an older asynchronous IndexedDB write cannot overwrite a newer drag/reorder state.
 - Load behavior:
 - Try IndexedDB first.
 - If missing, check legacy localStorage key and migrate.
@@ -733,6 +739,7 @@ Verify the product behavior items below:
 - Tree drag reorder does not nest into cards/folders; parent changes use `Move to...`.
 - Drag reorder shows insertion line feedback in both tree and workspace grid.
 - Reorder behavior preserves deleted siblings while reordering visible siblings.
+- Reordered cards keep the same visual order after leaving and returning to a folder, refreshing the app, and switching between tree/grid/treemap render paths.
 - Workspace `grid` and `treemap` modes use the same card/menu behavior for shared features; only container inline-child rendering differs in treemap.
 - The treemap toggle appears in the top workspace header, not in the sub-notes content toolbar.
 - Treemap restores the previously selected mode after refresh.

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import type { Card, CardType, ContentBlock } from '@/lib/types';
 import { RECYCLE_BIN_ID, getAllCardIds, getDescendantIds, findCardById } from '@/lib/types';
 import { getReadableTextColor, normalizeCardColor, normalizeCardTextColor } from '@/lib/card-color';
+import { sortCardsByVisualOrder } from '@/lib/card-order';
 import {
   CARD_TYPE_LABELS,
   CARD_TYPE_ORDER,
@@ -322,13 +323,7 @@ function TreeItem({
 
       {isExpanded && hasChildren && (
         <div>
-          {card.children
-            .filter(c => !c.isDeleted)
-            .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0)) // Using sortOrder or UpdatedAt?
-            // Legacy categories had sortOrder. Cards had updatedAt.
-            // Let's use updatedAt for now as default sort.
-            // actually user might want manual sort later.
-            .map(child => (
+          {sortCardsByVisualOrder(card.children.filter(c => !c.isDeleted)).map(child => (
             <TreeItem
               key={child.id}
               card={child}
@@ -675,9 +670,7 @@ export function CategoryTree({
           </DropdownMenu>
         </div>
 
-        {cards
-          .filter(c => !c.isDeleted)
-          .map(card => (
+        {sortCardsByVisualOrder(cards.filter(c => !c.isDeleted)).map(card => (
             <TreeItem
               key={card.id}
               card={card}

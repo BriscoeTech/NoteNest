@@ -5,6 +5,26 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ## 2026-06-29
 
+### Deterministic Card Ordering Persistence
+
+**Author**: Codex
+
+**Changes**:
+- Added a shared card-order helper for stable visual sorting, deterministic sibling rank assignment, visible-sibling reordering, and load/import repair of invalid or duplicate `sortOrder` values.
+- Reworked store reorder paths so tree, workspace grid, treemap relative drops, and ToDo item moves write a strict descending `sortOrder` sequence from one reorder operation.
+- Guarded visible-sibling reorders against partial ID lists so search-like or hidden subsets cannot rewrite an entire folder order.
+- Changed add, move, and restore flows so inserted cards receive a sort rank above their target siblings instead of relying on raw timestamps.
+- Sequenced IndexedDB saves against the latest serialized state so older asynchronous writes cannot persist after a newer drag/reorder state.
+- Updated tree, workspace grid, treemap, nested folder rendering, and ToDo derivation to use the same stable visual sort semantics.
+- Added a focused card-order contract test and included it in `npm test`.
+- Updated `Architecture.md` with the deterministic ordering and save sequencing contracts.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ### Priority Editing and Treemap Drag Organization
 
 **Author**: Codex

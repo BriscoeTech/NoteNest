@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Card, AppState, ContentBlock, CardType, TodoCardItem, TodoList } from '@/lib/types';
 import { blockMatchesSearch } from '@/lib/block-types';
 import {
@@ -8,6 +8,12 @@ import {
   normalizeCardTree,
   stringifyExportBackup,
 } from '@/lib/import-export';
+import {
+  assignSortOrdersByVisualOrder,
+  getNextSiblingSortOrder,
+  reorderVisibleSiblingCards,
+  sortCardsByVisualOrder,
+} from '@/lib/card-order';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
@@ -31,10 +37,6 @@ const defaultState: AppState = {
 
 function getTodoListColor(index: number): string {
   return TODO_LIST_COLORS[index % TODO_LIST_COLORS.length];
-}
-
-function sortCardsByVisualOrder(cards: Card[]): Card[] {
-  return [...cards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
 }
 
 function collectTodoCheckboxItems(listCard: Card): TodoCardItem[] {
@@ -74,24 +76,18 @@ function getTodoListsFromCards(cards: Card[]): TodoList[] {
   });
 }
 
-function updateCardTree(cards: Card[], id: string, updater: (card: Card) => Card): Card[] {
-  return cards.map((card) => {
-    if (card.id === id) return updater(card);
-    return { ...card, children: updateCardTree(card.children, id, updater) };
-  });
-}
-
 function moveCardRelativeInTree(cards: Card[], cardId: string, targetId: string, position: 'before' | 'after'): Card[] {
   const targetCard = findCardById(cards, targetId);
   if (!targetCard || cardId === targetId || !canMoveCard(cards, cardId, targetCard.parentId)) return cards;
 
   let detachedCard: Card | null = null;
   const targetParentId = targetCard.parentId;
+  const now = Date.now();
   const detachCard = (items: Card[]): Card[] => {
     const next: Card[] = [];
     for (const card of items) {
       if (card.id === cardId) {
-        detachedCard = { ...card, parentId: targetParentId, updatedAt: Date.now() };
+        detachedCard = { ...card, parentId: targetParentId, updatedAt: now };
         continue;
       }
       next.push({ ...card, children: detachCard(card.children) });
@@ -102,35 +98,42 @@ function moveCardRelativeInTree(cards: Card[], cardId: string, targetId: string,
   const withoutCard = detachCard(cards);
   if (!detachedCard) return cards;
   const movedCard = detachedCard;
-  const now = Date.now();
 
   const insertIntoList = (items: Card[]): Card[] => {
-    const targetIndex = items.findIndex((card) => card.id === targetId);
+    const visibleItems = sortCardsByVisualOrder(items.filter((card) => !card.isDeleted));
+    const targetIndex = visibleItems.findIndex((card) => card.id === targetId);
     if (targetIndex === -1) return items;
-    const next = [...items];
+    const next = [...visibleItems];
     next.splice(position === 'before' ? targetIndex : targetIndex + 1, 0, movedCard);
-    const len = next.length;
-    return next.map((card, index) => ({
-      ...card,
-      parentId: targetParentId,
-      sortOrder: now + (len - index),
-    }));
+    const hiddenItems = items.filter((card) => card.isDeleted);
+    return assignSortOrdersByVisualOrder([...next, ...hiddenItems], now);
   };
 
   if (targetParentId === null) {
     return insertIntoList(withoutCard);
   }
 
-  return withoutCard.map((card) => {
-    if (card.id === targetParentId) {
-      return { ...card, children: insertIntoList(card.children) };
-    }
-    return { ...card, children: updateCardTree(card.children, targetParentId, (parent) => ({ ...parent, children: insertIntoList(parent.children) })) };
-  });
+  const updateParentChildren = (items: Card[]): Card[] =>
+    items.map((card) => {
+      if (card.id === targetParentId) {
+        return { ...card, children: insertIntoList(card.children) };
+      }
+      return { ...card, children: updateParentChildren(card.children) };
+    });
+
+  return updateParentChildren(withoutCard);
 }
+
+function getSiblingCards(cards: Card[], parentId: string | null): Card[] {
+  if (parentId === null) return cards;
+  return findCardById(cards, parentId)?.children ?? [];
+}
+
 export function useNotesStore() {
   const [state, setState] = useState<AppState>(defaultState);
   const [isLoaded, setIsLoaded] = useState(false);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const latestSerializedStateRef = useRef<string | null>(null);
 
   // Load state from IDB (or localStorage fallack migration)
   useEffect(() => {
@@ -171,12 +174,20 @@ export function useNotesStore() {
 
   // Save state to IDB on change
   useEffect(() => {
-    if (isLoaded) {
-      set(STORAGE_KEY, JSON.stringify(state)).catch(err => console.error('Failed to save to IDB', err));
-    }
+    if (!isLoaded) return;
+    const serializedState = JSON.stringify(state);
+    latestSerializedStateRef.current = serializedState;
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (latestSerializedStateRef.current !== serializedState) return;
+        await set(STORAGE_KEY, serializedState);
+      })
+      .catch(err => console.error('Failed to save to IDB', err));
   }, [state, isLoaded]);
 
   const addCard = useCallback((title: string, parentId: string | null, cardType: CardType = 'note'): string => {
+    const now = Date.now();
     const newCard: Card = {
       id: generateId(),
       title,
@@ -190,15 +201,21 @@ export function useNotesStore() {
       todoListOrder: null,
       parentId,
       children: [],
-      sortOrder: Date.now(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      sortOrder: now,
+      createdAt: now,
+      updatedAt: now,
       isDeleted: false
     };
-    setState(prev => ({
-      ...prev,
-      cards: addCardToParent(prev.cards, parentId, newCard)
-    }));
+    setState(prev => {
+      const siblings = getSiblingCards(prev.cards, parentId);
+      return {
+        ...prev,
+        cards: addCardToParent(prev.cards, parentId, {
+          ...newCard,
+          sortOrder: getNextSiblingSortOrder(siblings, now),
+        })
+      };
+    });
     return newCard.id;
   }, []);
 
@@ -230,99 +247,23 @@ export function useNotesStore() {
 
   const reorderCardRelative = useCallback((cardId: string, targetId: string, position: 'before' | 'after') => {
     setState(prev => {
-      const movingCard = findCardById(prev.cards, cardId);
-      const targetCard = findCardById(prev.cards, targetId);
-      if (!movingCard || !targetCard || movingCard.id === targetCard.id) return prev;
-
-      const targetParentId = targetCard.parentId;
-      if (!canMoveCard(prev.cards, cardId, targetParentId)) {
-        return prev;
-      }
-
-      let detachedCard: Card | null = null;
-      const detachCard = (cards: Card[]): Card[] => {
-        const next: Card[] = [];
-        for (const card of cards) {
-          if (card.id === cardId) {
-            detachedCard = { ...card, parentId: targetParentId, updatedAt: Date.now() };
-            continue;
-          }
-          next.push({ ...card, children: detachCard(card.children) });
-        }
-        return next;
-      };
-
-      const withoutCard = detachCard(prev.cards);
-      if (!detachedCard) return prev;
-      const movedCard = detachedCard;
-
-      const insertIntoList = (list: Card[]): Card[] => {
-        const targetIndex = list.findIndex(card => card.id === targetId);
-        if (targetIndex === -1) return list;
-        const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-        const next = [...list];
-        next.splice(insertIndex, 0, movedCard);
-        const now = Date.now();
-        const len = next.length;
-        return next.map((card, index) => ({
-          ...card,
-          parentId: targetParentId,
-          sortOrder: now + (len - index),
-        }));
-      };
-
-      if (targetParentId === null) {
-        return { ...prev, cards: insertIntoList(withoutCard) };
-      }
-
-      const updateParentChildren = (cards: Card[]): Card[] =>
-        cards.map(card => {
-          if (card.id === targetParentId) {
-            return { ...card, children: insertIntoList(card.children) };
-          }
-          return { ...card, children: updateParentChildren(card.children) };
-        });
-
-      return { ...prev, cards: updateParentChildren(withoutCard) };
+      const cards = moveCardRelativeInTree(prev.cards, cardId, targetId, position);
+      return cards === prev.cards ? prev : { ...prev, cards };
     });
   }, []);
 
   const reorderChildren = useCallback((parentId: string | null, childIds: string[]) => {
     setState(prev => {
-      // Helper to reorder a list based on IDs
-      const reorderList = (list: Card[], ids: string[]): Card[] => {
-        const listMap = new Map(list.map(c => [c.id, c]));
-        const newList: Card[] = [];
-        // Add cards in the order of ids
-        const len = ids.length;
-        ids.forEach((id, index) => {
-          const card = listMap.get(id);
-          if (card) {
-             // Update sortOrder to persist order
-             // Existing sort is descending (b - a), so higher value is first/top.
-             // We assign (len - index) to ensure first item has highest value.
-             newList.push({ ...card, sortOrder: (Date.now() + (len - index)) }); 
-             listMap.delete(id);
-          }
-        });
-        // Append any remaining cards (shouldn't happen if ids is complete)
-        // Give them lower sort order
-        let remainingIndex = 1;
-        listMap.forEach(card => {
-           newList.push({ ...card, sortOrder: Date.now() - remainingIndex++ });
-        });
-        return newList;
-      };
-
       if (parentId === null) {
-        const newRoot = reorderList(prev.cards, childIds);
+        const newRoot = reorderVisibleSiblingCards(prev.cards, childIds);
+        if (newRoot === prev.cards) return prev;
         return { ...prev, cards: newRoot };
       } else {
-        // Find parent and update its children
         const updateParent = (cards: Card[]): Card[] => {
           return cards.map(c => {
             if (c.id === parentId) {
-              return { ...c, children: reorderList(c.children, childIds) };
+              const children = reorderVisibleSiblingCards(c.children, childIds);
+              return children === c.children ? c : { ...c, children };
             }
             return { ...c, children: updateParent(c.children) };
           });
@@ -347,9 +288,7 @@ export function useNotesStore() {
       }
 
       // Filter non-deleted and sort descending (visual order)
-      const sortedSiblings = siblings
-        .filter(c => !c.isDeleted)
-        .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+      const sortedSiblings = sortCardsByVisualOrder(siblings.filter(c => !c.isDeleted));
 
       const currentIndex = sortedSiblings.findIndex(c => c.id === cardId);
       if (currentIndex === -1) return prev;
@@ -370,59 +309,18 @@ export function useNotesStore() {
       // Swap
       [newOrderIds[currentIndex], newOrderIds[newIndex]] = [newOrderIds[newIndex], newOrderIds[currentIndex]];
 
-      // Re-use reorder logic
-      // We need to re-apply this to the parent's children (or root)
-      // Copy-paste reorder logic but internal to avoid state update collision? 
-      // Actually we can just update the state directly here similar to reorderChildren
-      
-      const reorderList = (list: Card[], ids: string[]): Card[] => {
-        const listMap = new Map(list.map(c => [c.id, c]));
-        const newList: Card[] = [];
-        const len = ids.length;
-        const now = Date.now();
-        ids.forEach((id, index) => {
-          const c = listMap.get(id);
-          if (c) {
-             newList.push({ ...c, sortOrder: now + (len - index) }); 
-             listMap.delete(id);
-          }
-        });
-        listMap.forEach(c => newList.push(c));
-        return newList;
-      };
-
       if (card.parentId === null) {
-         // Reorder root
-         // We need to preserve deleted cards which were filtered out
-         const deletedRoots = prev.cards.filter(c => c.parentId === null && c.isDeleted);
-         // And reorder the visible ones
-         const reorderedVisible = reorderList(sortedSiblings, newOrderIds);
-         
-         // Combine: We need to replace the root cards in prev.cards
-         // easiest is to map prev.cards? No, prev.cards is the full tree.
-         // Root cards are those in prev.cards with parentId === null.
-         // We can reconstruct prev.cards.
-         
-         // Actually, prev.cards contains EVERYTHING if flattened? 
-         // No, looking at structure: AppState { cards: Card[] }. 
-         // And loadState/migrateLegacyData suggests it returns `rootCards`.
-         // So `state.cards` is the LIST OF ROOT CARDS (which contain children recursively).
-         
-         // So for Root cards:
-         const otherRoots = prev.cards.filter(c => c.id !== cardId && !newOrderIds.includes(c.id)); // Should be just deleted ones
+         const reorderedRoots = reorderVisibleSiblingCards(prev.cards, newOrderIds);
          return {
             ...prev,
-            cards: [...reorderedVisible, ...otherRoots]
+            cards: reorderedRoots
          };
       } else {
         // Update parent
         const updateParent = (cards: Card[]): Card[] => {
           return cards.map(c => {
             if (c.id === card.parentId) {
-               // Preserve deleted children
-               const deletedChildren = c.children.filter(child => child.isDeleted);
-               const reorderedVisible = reorderList(sortedSiblings, newOrderIds);
-               return { ...c, children: [...reorderedVisible, ...deletedChildren] };
+               return { ...c, children: reorderVisibleSiblingCards(c.children, newOrderIds) };
             }
             return { ...c, children: updateParent(c.children) };
           });
@@ -538,6 +436,7 @@ export function useNotesStore() {
         null;
 
       const restoredCard = rebuildRestoredSubtree(detachedCard, resolvedTargetParentId);
+      restoredCard.sortOrder = getNextSiblingSortOrder(getSiblingCards(withoutCard, resolvedTargetParentId), now);
       const withCardAdded = addCardToParent(withoutCard, resolvedTargetParentId, restoredCard);
       return { ...prev, cards: withCardAdded };
     });

@@ -227,6 +227,10 @@ export function addCardToParent(cards: Card[], parentId: string | null, newCard:
   });
 }
 
+function getNextSortOrder(cards: Card[], now: number): number {
+  return Math.max(now, ...cards.map(c => Number.isFinite(c.sortOrder) ? c.sortOrder : 0)) + 1;
+}
+
 export function updateCardInTree(cards: Card[], id: string, updates: Partial<Card>): Card[] {
   return cards.map(c => {
     if (c.id === id) {
@@ -265,8 +269,16 @@ export function moveCardToParent(cards: Card[], cardId: string, newParentId: str
   const card = findCardById(cards, cardId);
   if (!card) return cards;
   
+  const now = Date.now();
   const withoutCard = removeCardFromTree(cards, cardId);
-  const movedCard: Card = { ...card, parentId: newParentId, updatedAt: Date.now() };
+  const targetParent = newParentId ? findCardById(withoutCard, newParentId) : null;
+  const targetSiblings = newParentId === null ? withoutCard : targetParent?.children ?? [];
+  const movedCard: Card = {
+    ...card,
+    parentId: newParentId,
+    sortOrder: getNextSortOrder(targetSiblings, now),
+    updatedAt: now
+  };
   
   return addCardToParent(withoutCard, newParentId, movedCard);
 }

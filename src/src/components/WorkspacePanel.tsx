@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { sortCardsByVisualOrder } from '@/lib/card-order';
 import { CardOptionsMenu, type TodoMenuAction } from './CardOptionsMenu';
 import { CategoryPickerDialog } from './CategoryPickerDialog';
 import { CardColorDialog } from './CardColorDialog';
@@ -2621,9 +2622,7 @@ function GridCardItem({
     graphBlock,
   } = getTypedBlocksByCardType(card);
   const normalizedGraphBlock = graphBlock ? normalizeGraphBlock(graphBlock) : undefined;
-  const visibleChildren = card.children
-    .filter((child) => !child.isDeleted)
-    .sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+  const visibleChildren = sortCardsByVisualOrder(card.children.filter((child) => !child.isDeleted));
   const nestedChildrenClassName = nestedGapClassName ?? getNestedChildrenGridClassName(visibleChildren.length, nestingDepth);
   const shouldConstrainInlineChildren = visibleChildren.length > 6;
   const shouldSuspendInlineChildScroll = Boolean(treemapDragController?.activeCardId);
@@ -3542,7 +3541,7 @@ export function WorkspacePanel({
   const currentCardTypeDefinition = currentCard ? getCardTypeDefinition(currentCard.cardType) : null;
   const canShowChildrenUI = !isTodoView && (isRecycleBin || !currentCard || Boolean(currentCardTypeDefinition?.canHaveChildren));
   const canUseTreemap = !isTodoView && !isRecycleBin && !searchQuery && canShowChildrenUI;
-  const sortedChildrenCards = [...childrenCards].sort((a, b) => (b.sortOrder || 0) - (a.sortOrder || 0));
+  const sortedChildrenCards = sortCardsByVisualOrder(childrenCards);
   const checkedTodoCardIds = useMemo(() => {
     const ids = new Set<string>();
     const collect = (cards: Card[]) => {
@@ -3935,7 +3934,7 @@ export function WorkspacePanel({
             />
           ) : (
             <SortableCardGrid
-              cards={childrenCards}
+              cards={sortedChildrenCards}
               className={getChildrenGridClassName(sidebarOpen)}
               strategy={rectSortingStrategy}
               onReorderIds={(ids) => onReorderChildren(currentCard?.id ?? null, ids)}
