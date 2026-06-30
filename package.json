@@ -7,7 +7,7 @@
     "dev": "vite dev --port 5000",
     "build": "tsx script/build.ts",
     "check": "tsc",
-    "test": "tsx script/card-types-contract.test.tsx && tsx script/import-export-contract.test.ts && tsx script/card-order-contract.test.ts"
+    "test": "tsx script/card-types-contract.test.tsx && tsx script/import-export-contract.test.ts && tsx script/card-order-contract.test.ts && tsx script/todo-order-contract.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

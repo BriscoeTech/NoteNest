@@ -14,6 +14,7 @@ import {
   reorderVisibleSiblingCards,
   sortCardsByVisualOrder,
 } from '@/lib/card-order';
+import { applyTodoCardOrder, moveTodoCardInOrder, moveTodoCardToPriority } from '@/lib/todo-order';
 import { get, set } from 'idb-keyval';
 import { 
   generateId, 
@@ -50,7 +51,7 @@ function collectTodoCheckboxItems(listCard: Card): TodoCardItem[] {
     }
   };
   visit(listCard.children);
-  return items;
+  return applyTodoCardOrder(items, listCard.todoCardOrder);
 }
 
 function getTodoListsFromCards(cards: Card[]): TodoList[] {
@@ -199,6 +200,7 @@ export function useNotesStore() {
       isTodoList: false,
       todoListColor: null,
       todoListOrder: null,
+      todoCardOrder: null,
       parentId,
       children: [],
       sortOrder: now,
@@ -569,9 +571,8 @@ export function useNotesStore() {
       const todoLists = getTodoListsFromCards(prev.cards);
       const sourceList = todoLists.find((list) => list.items.some((item) => item.id === activeItemId));
       if (!sourceList || sourceList.id !== targetListId) return prev;
-      const targetCardId = overItemId ?? sourceList.items[sourceList.items.length - 1]?.cardId;
-      if (!targetCardId || targetCardId === activeItemId) return prev;
-      return { ...prev, cards: moveCardRelativeInTree(prev.cards, activeItemId, targetCardId, position) };
+      const todoCardOrder = moveTodoCardInOrder(sourceList.items, activeItemId, overItemId, position);
+      return { ...prev, cards: updateCardInTree(prev.cards, targetListId, { todoCardOrder }) };
     });
   }, []);
 
@@ -579,17 +580,8 @@ export function useNotesStore() {
     setState(prev => {
       const targetList = getTodoListsFromCards(prev.cards).find((list) => list.id === listId);
       if (!targetList || !targetList.items.some((item) => item.cardId === cardId)) return prev;
-      const eligibleItems = targetList.items.filter((item) => !excludedCardIds.has(item.cardId));
-      const withoutActive = eligibleItems.filter((item) => item.cardId !== cardId);
-      if (withoutActive.length === 0) return prev;
-      const safePosition = Math.min(Math.max(Math.floor(position), 1), withoutActive.length + 1);
-      const targetIndex = safePosition > withoutActive.length ? withoutActive.length - 1 : safePosition - 1;
-      const targetCardId = withoutActive[targetIndex]?.cardId;
-      if (!targetCardId) return prev;
-      return {
-        ...prev,
-        cards: moveCardRelativeInTree(prev.cards, cardId, targetCardId, safePosition > withoutActive.length ? 'after' : 'before')
-      };
+      const todoCardOrder = moveTodoCardToPriority(targetList.items, cardId, position, excludedCardIds);
+      return { ...prev, cards: updateCardInTree(prev.cards, listId, { todoCardOrder }) };
     });
   }, []);
 

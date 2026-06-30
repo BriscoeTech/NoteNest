@@ -153,6 +153,7 @@ export interface Card {
   isTodoList?: boolean;
   todoListColor?: string | null;
   todoListOrder?: number | null;
+  todoCardOrder?: string[] | null;
   blocks: ContentBlock[];
   parentId: string | null;
   children: Card[];

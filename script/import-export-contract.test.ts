@@ -17,6 +17,7 @@ const cards: Card[] = [
     isTodoList: false,
     todoListColor: '#16a34a',
     todoListOrder: 500,
+    todoCardOrder: ['graph-1'],
     blocks: [],
     parentId: null,
     children: [
@@ -27,6 +28,7 @@ const cards: Card[] = [
         isTodoList: false,
         todoListColor: null,
         todoListOrder: null,
+        todoCardOrder: null,
         blocks: [{
           id: 'graph-block-1',
           type: 'graph',
@@ -98,6 +100,27 @@ if (normalizedGraphBlock.type === 'graph') {
   assert.equal(normalizedGraphBlock.columns, 2);
   assert.equal(normalizedGraphBlock.cells.length, 4);
 }
+
+const importedWithTodoOrder = getImportCards({
+  cards: [{
+    id: 'list-with-order',
+    title: 'List with order',
+    cardType: 'list',
+    isTodoList: false,
+    todoListColor: '#2563eb',
+    todoListOrder: 50,
+    todoCardOrder: ['card-a', 123, null, 'card-b'],
+    blocks: [],
+    parentId: null,
+    children: [],
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    isDeleted: false,
+  }],
+});
+
+assert.deepEqual(importedWithTodoOrder[0].todoCardOrder, ['card-a', 'card-b']);
 
 const legacyImport = getImportCards({
   categories: [

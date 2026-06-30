@@ -5,13 +5,28 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 
 ## 2026-06-29
 
+### ToDo Ordering Isolation
+
+**Author**: Codex
+
+**Changes**:
+- Confirmed ToDo item reorder was still using the normal tree-move path, which allowed ToDo priority changes to move/reorder notes in the folder tree.
+- Added `todoCardOrder` as list-card metadata for ToDo-specific item order.
+- Changed ToDo drag reorder and priority-number edits to update `todoCardOrder` only, leaving card `parentId` and normal `sortOrder` unchanged.
+- Added a ToDo order helper and contract tests for applying stored ToDo order, drag reorder, and priority-position edits with checked cards excluded from priority numbering.
+- Updated architecture notes so ToDo item order is explicitly separate from folder/tree order.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+
 ### Deterministic Card Ordering Persistence
 
 **Author**: Codex
 
 **Changes**:
 - Added a shared card-order helper for stable visual sorting, deterministic sibling rank assignment, visible-sibling reordering, and load/import repair of invalid or duplicate `sortOrder` values.
-- Reworked store reorder paths so tree, workspace grid, treemap relative drops, and ToDo item moves write a strict descending `sortOrder` sequence from one reorder operation.
+- Reworked normal tree reorder paths so tree, workspace grid, and treemap relative drops write a strict descending `sortOrder` sequence from one reorder operation.
 - Guarded visible-sibling reorders against partial ID lists so search-like or hidden subsets cannot rewrite an entire folder order.
 - Changed add, move, and restore flows so inserted cards receive a sort rank above their target siblings instead of relying on raw timestamps.
 - Sequenced IndexedDB saves against the latest serialized state so older asynchronous writes cannot persist after a newer drag/reorder state.

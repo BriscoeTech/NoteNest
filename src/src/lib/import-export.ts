@@ -24,6 +24,9 @@ export function normalizeCardTree(cards: Card[] = []): Card[] {
       isTodoList: false,
       todoListColor: typeof card.todoListColor === 'string' ? card.todoListColor : null,
       todoListOrder: typeof card.todoListOrder === 'number' ? card.todoListOrder : null,
+      ...(Array.isArray(card.todoCardOrder)
+        ? { todoCardOrder: card.todoCardOrder.filter((id): id is string => typeof id === 'string') }
+        : {}),
       blocks: normalizeBlocks(card.blocks || []),
       children: normalizeCardTree(card.children || []),
     };
@@ -41,6 +44,7 @@ export function migrateLegacyData(categories: any[] = [], legacyCards: any[] = [
     isTodoList: false,
     todoListColor: null,
     todoListOrder: null,
+    todoCardOrder: null,
     blocks: [],
     parentId: cat.parentId,
     children: [],
@@ -66,6 +70,7 @@ export function migrateLegacyData(categories: any[] = [], legacyCards: any[] = [
       isTodoList: false,
       todoListColor: null,
       todoListOrder: null,
+      todoCardOrder: null,
       blocks: normalizeBlocks(blocks),
       parentId: card.categoryId || null,
       children: [],

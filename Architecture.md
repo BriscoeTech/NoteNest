@@ -56,8 +56,8 @@ This section is the authoritative feature contract. Changes must be reflected he
 | ToDo | Selectable left-panel ToDo view separate from Home/card hierarchy
 | ToDo | ToDo view supports zero or more `list`-type cards rendered as horizontal columns
 | ToDo | Each ToDo list column is backed by a card in the normal hierarchy; standalone ToDo lists are not stored
-| ToDo | Checkbox-type descendants of a `list` card become that list's Todo items in depth-first visual order
-| ToDo | List item order and priority numbering are derived from the underlying card tree order
+| ToDo | Checkbox-type descendants of a `list` card become that list's Todo items in depth-first visual order by default
+| ToDo | List item order and priority numbering are derived from list-card `todoCardOrder` when present, without changing normal folder order
 | ToDo | ToDo card priority numbers are derived per list and shown as list-colored in-card badges wherever cards render
 | ToDo | ToDo list color selection includes white and black options; white swatches/badges must retain visible borders and readable badge text
 | ToDo | Checkbox cards may appear in multiple ToDo columns only by being descendants of nested/ancestor `list` cards; badges are ordered by list column order
@@ -251,15 +251,16 @@ This section is the authoritative feature contract. Changes must be reflected he
 8. User removes a list from ToDo after confirmation; this changes the backing card type from `list` to `folder` without deleting cards.
 9. The ToDo view renders lists as horizontal columns; narrow layouts may horizontally scroll and expose list jump tabs.
 10. A list's items are all non-deleted checkbox-type descendants of the backing list card.
-11. Nested folder/list contents are flattened into list items in depth-first visual order.
-12. Priority numbers are derived from that flattened visual order and count only unchecked checkbox cards.
-13. Checked checkbox cards remain in their tree positions but are excluded from priority numbering.
-14. When checked cards are shown, they render list-colored empty ToDo badges; when hidden, they are omitted from the ToDo view but remain in the card tree.
-15. User can drag ToDo cards within their source list; this reorders the underlying checkbox cards in the card tree.
-16. Dragging ToDo cards between list columns is disabled.
-17. User can click a card's list-specific ToDo badge and enter a priority number; the underlying checkbox card is moved within its source list's card tree order.
-18. If a user enters a priority number larger than the eligible card count in that list, the card moves to the end of eligible priority order.
-19. Standalone ToDo lists, ToDo-only card membership records, and ToDo dividers are not part of the current model.
+11. Nested folder/list contents are flattened into list items in depth-first visual order by default.
+12. ToDo card drag order and priority edits are stored on the backing list card as ToDo-specific order metadata and must not move cards in the normal folder tree.
+13. Priority numbers are derived from the ToDo-specific list order and count only unchecked checkbox cards.
+14. Checked checkbox cards remain in their tree positions but are excluded from priority numbering.
+15. When checked cards are shown, they render list-colored empty ToDo badges; when hidden, they are omitted from the ToDo view but remain in the card tree.
+16. User can drag ToDo cards within their source list; this reorders ToDo priority/order only.
+17. Dragging ToDo cards between list columns is disabled.
+18. User can click a card's list-specific ToDo badge and enter a priority number; this changes ToDo priority/order only.
+19. If a user enters a priority number larger than the eligible card count in that list, the card moves to the end of eligible priority order.
+20. Standalone ToDo lists, ToDo-only card membership records, and ToDo dividers are not part of the current model.
 
 ## 4. Data Model and Invariants
 
@@ -270,7 +271,7 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - `AppState`: `{ cards: Card[] }` where `cards` are root cards.
 - `TodoList`: derived UI view model, not persisted as standalone app state; `id`, `title`, `color`, `items`.
 - `Card`:
-- `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, optional `todoListColor`, optional `todoListOrder`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
+- `id`, `title`, `cardType`, optional `backgroundColor`, optional `textColor`, optional `textColorHsv`, optional `todoListColor`, optional `todoListOrder`, optional `todoCardOrder`, `blocks`, `parentId`, `children`, `sortOrder`, `createdAt`, `updatedAt`, `isDeleted`.
 - `TodoCardItem`: derived UI view model for checkbox cards in list columns: `id`, `type: "card"`, `cardId`.
 - `ContentBlock` union:
 - `TextBlock`, `BulletBlock`, `ImageBlock`, `CheckboxBlock`, `LinkBlock`, `DrawingBlock`, `GraphBlock`.
@@ -314,11 +315,12 @@ Source of truth for card-type behavior: `src/src/lib/card-types.tsx`.
 - ToDo list titles come from the backing list card title.
 - ToDo list color is stored separately from normal card color in `todoListColor`.
 - ToDo list column order is stored separately from normal folder/card order in `todoListOrder`.
-- ToDo list items are derived from non-deleted checkbox-type descendants of each list card in depth-first visual order.
+- ToDo card order is stored separately from normal folder/card order in `todoCardOrder`.
+- ToDo list items are derived from non-deleted checkbox-type descendants of each list card in depth-first visual order, then ordered by `todoCardOrder` when present; missing/new checkbox descendants append in depth-first visual order.
 - ToDo card priority numbers are derived per list by counting unchecked derived `TodoCardItem` entries; checked card entries are ignored for numbering.
-- ToDo item drag reorder within a list updates the underlying card tree order.
+- ToDo item drag reorder within a list updates only `todoCardOrder`, not card `parentId` or normal `sortOrder`.
 - ToDo item drag reorder between lists is disabled.
-- Standalone ToDo membership/order, ToDo dividers, and persisted `todoLists` are not part of the current data model.
+- Standalone ToDo list state, ToDo-only card membership records, ToDo dividers, and persisted `todoLists` are not part of the current data model.
 - Current image creation/edit flows keep at most one image block per card by replacing existing image block on add.
 - Drawing editor opens with Select as default tool.
 - Drawing session undo/redo history is reset when opening a drawing note.
@@ -344,8 +346,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - update list title/color,
 - remove a list by changing its backing card to `folder`,
 - reorder ToDo list columns via `todoListOrder`,
-- move a ToDo card within its source list by updating the underlying card tree order,
-- move a ToDo card to a list-specific priority position within its source list.
+- move a ToDo card within its source list by updating backing-card `todoCardOrder`,
+- move a ToDo card to a list-specific priority position within its source list without changing normal folder order.
 
 ### 5.2 Persistence contract
 - Storage key: `notecards_data`.
@@ -652,7 +654,7 @@ This table is the canonical source for subtle action/menu/card-type combinations
 
 ### 8.2 Import accepted formats
 - Current format: `{ cards: Card[] }` optionally with metadata.
-- Current ToDo format: `list` card types plus `todoListColor`/`todoListOrder` metadata in the card tree.
+- Current ToDo format: `list` card types plus `todoListColor`/`todoListOrder`/`todoCardOrder` metadata in the card tree.
 - Legacy standalone ToDo formats (`todoLists`, `todoItems`, `todoCardIds`) are ignored.
 - Legacy marked folders with `isTodoList` are normalized to `cardType: "list"`.
 - Legacy format: `{ categories: any[], cards: any[] }` migrated to current tree.
@@ -755,8 +757,8 @@ Verify the product behavior items below:
 - Tree icons match card type (`note`, `link`, `image`, `drawing`, `graph`, `folder`, `list`) with checkbox rows as explicit exception (no extra icon).
 - List note type appears in create/change-type dialogs and uses a list icon.
 - ToDo view columns are derived from List cards.
-- Checkbox descendants of List cards render as ToDo items in depth-first visual order.
-- Reordering Todo items updates the underlying checkbox card order.
+- Checkbox descendants of List cards render as ToDo items in list-specific ToDo order, with new items falling back to depth-first visual order.
+- Reordering Todo items updates list-specific `todoCardOrder` only and does not move or reorder cards in the folder tree.
 - Cross-list Todo item dragging is disabled.
 - Checkbox quick toggle works in tree/grid for checkbox-type cards.
 - Long checkbox-card titles in workspace wrap inside the card boundary instead of overflowing before multiline wrapping engages.
