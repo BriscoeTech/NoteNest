@@ -3,6 +3,24 @@
 This file captures chronological implementation history and session-level updates.
 Architecture requirements and product contracts belong in `Architecture.md`.
 
+## 2026-07-01
+
+### Native Spellcheck Context Menu in Workspace Cards
+
+**Author**: Codex
+
+**Changes**:
+- Preserved the browser's native context menu on editable workspace card text so misspelled words can show spellcheck/autocorrect suggestions.
+- Applied the behavior to workspace card titles, text blocks, and bullet text fields.
+- Kept the normal NoteNest card action menu available when right-clicking non-editable card surfaces.
+- Updated architecture notes with the editable-text exception to card-level right-click handling.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-29
 
 ### ToDo Ordering Isolation

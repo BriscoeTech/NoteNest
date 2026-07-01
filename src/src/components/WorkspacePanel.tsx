@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
-import type { MutableRefObject, ReactNode, RefObject } from 'react';
+import type { MouseEvent, MutableRefObject, ReactNode, RefObject } from 'react';
 import { Plus, Search, X, Folder, ChevronDown, Trash2, FolderInput, MoreVertical, MoreHorizontal, Type, List, ChevronUp, Image, GripVertical, FileText, ArrowUp, Link as LinkIcon, ExternalLink, Pencil, Brush, Eraser, Undo2, Redo2, Move, Minus, Square, Circle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, horizontalListSortingStrategy, rectSortingStrategy, type SortingStrategy } from '@dnd-kit/sortable';
@@ -87,6 +87,10 @@ interface TodoBadge {
   isChecked: boolean;
   label: string;
 }
+
+const allowNativeTextContextMenu = (event: MouseEvent<HTMLElement>) => {
+  event.stopPropagation();
+};
 
 function isCheckedTodoCard(card: Card): boolean {
   const { checkboxBlock } = getTypedBlocksByCardType(card);
@@ -1835,6 +1839,7 @@ class TextBlockEditorDefinition extends BlockEditorbase<TextBlock> {
             value={block.content}
             onChange={(e) => onUpdate({ ...block, content: e.target.value })}
             onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)}
+            onContextMenu={allowNativeTextContextMenu}
             disabled={isRecycleBin}
             placeholder={isSelected ? "Type text here..." : ""}
             className="w-full border-none shadow-none focus-visible:ring-0 p-3 resize-none min-h-[44px] overflow-hidden text-base bg-muted/30 rounded placeholder:text-muted-foreground/40"
@@ -1980,7 +1985,7 @@ class BulletBlockEditorDefinition extends BlockEditorbase<BulletBlock> {
             {block.items.map((bullet, index) => (
               <div key={bullet.id} className="flex items-start gap-2 group/bullet" style={{ paddingLeft: (bullet.indent * 16) + 'px' }}>
                 <span className="text-muted-foreground font-bold mt-1 select-none text-sm">•</span>
-                <Textarea ref={(el) => { if (el) context.bulletRefs.current.set(bullet.id, el); else context.bulletRefs.current.delete(bullet.id); }} value={bullet.content} onChange={(e) => updateBullet(bullet.id, e.target.value)} onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)} onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)} disabled={isRecycleBin} placeholder={isSelected ? "..." : ""} className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground" rows={1} />
+                <Textarea ref={(el) => { if (el) context.bulletRefs.current.set(bullet.id, el); else context.bulletRefs.current.delete(bullet.id); }} value={bullet.content} onChange={(e) => updateBullet(bullet.id, e.target.value)} onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)} onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)} onContextMenu={allowNativeTextContextMenu} disabled={isRecycleBin} placeholder={isSelected ? "..." : ""} className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground" rows={1} />
                 {isSelected && <button className="p-2 text-muted-foreground hover:text-destructive min-h-[36px] min-w-[36px] flex items-center justify-center" onClick={() => removeBullet(bullet.id)} disabled={isRecycleBin}><Trash2 className="w-3.5 h-3.5" /></button>}
               </div>
             ))}
@@ -2847,6 +2852,7 @@ function GridCardItem({
                 e.currentTarget.focus();
               }}
               onPointerDown={(e) => e.stopPropagation()}
+              onContextMenu={allowNativeTextContextMenu}
               onDoubleClick={(e) => e.stopPropagation()}
             >
               {card.title}
