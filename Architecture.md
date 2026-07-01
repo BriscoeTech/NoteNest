@@ -148,6 +148,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | PWA | Normal refresh must render reliably (no white-screen loop) with active service worker 
 | PWA | Offline startup must succeed from a previously cached app shell after at least one successful online load 
 | Deploy | Static GitHub Pages build to `docs/` 
+| Deploy | Tailscale HTTPS hosting under `https://data.moray-notothen.ts.net/NoteNest/` via local port `5300` and `/NoteNest` path base
 
 ## 3. User Flows
 
@@ -686,6 +687,15 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - The build pipeline is static-site oriented and produces deploy artifacts in `docs/`.
 - Build script (`script/build.ts`) outputs to repo `docs/` with `base: "./"` for GitHub Pages compatibility.
 - `docs/` is a required tracked deploy artifact for GitHub Pages branch-folder publishing and must not be removed as an "orphaned" directory.
+- Production local hosting uses `script/serve-built.mjs` to serve the tracked `docs/` build under `/NoteNest`.
+- Server lifecycle scripts follow the sibling app pattern:
+- `script/start-server.sh` builds, stops any prior server, starts via user `systemd` when available, and verifies health/frontend routes,
+- `script/run-server.sh` is the long-running wrapper,
+- `script/stop-server.sh` stops the user service or detached process,
+- `script/status-server.sh` reports PID/listener/health/frontend state.
+- The default production local URL is `http://127.0.0.1:5300/NoteNest/`.
+- The default health URL is `http://127.0.0.1:5300/NoteNest/api/health`.
+- Tailscale Serve exposes the app at `https://data.moray-notothen.ts.net/NoteNest/` by proxying `/NoteNest` to `http://127.0.0.1:5300/NoteNest/`.
 
 ## 10. Technology Choices and Rationale
 
@@ -699,8 +709,8 @@ This table is the canonical source for subtle action/menu/card-type combinations
 - simple IndexedDB wrapper for local-first persistence.
 - `@dnd-kit`:
 - robust drag-and-drop for block and grid sorting.
-- No backend:
-- lower operational complexity, true offline-first behavior.
+- No data backend:
+- user note data remains local-first in the browser; the production server only serves static build assets and a health endpoint.
 
 ## 11. Non-Functional Requirements
 
@@ -839,3 +849,6 @@ Verify the product behavior items below:
 - recycle-bin cards/rows expose restore and delete-forever via `...` menu.
 - Recycle Bin row restore/delete actions are menu-based, not always-visible buttons.
 - PWA install prompt/behavior and service worker registration still function.
+- `script/start-server.sh` starts a healthy production server at `http://127.0.0.1:5300/NoteNest/`.
+- Tailscale HTTPS route `https://data.moray-notothen.ts.net/NoteNest/` loads the app.
+- Tailscale HTTPS route `https://data.moray-notothen.ts.net/NoteNest/api/health` returns healthy JSON.

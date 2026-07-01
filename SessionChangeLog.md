@@ -38,6 +38,49 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - `npm test`
 - `npm run build`
 
+### Editable Text Drag Activation Guard Hardening
+
+**Author**: Codex
+
+**Changes**:
+- Added editable-target filtering around dnd-kit sortable listeners so card/list drag sensors do not activate when gestures begin inside editable text.
+- Temporarily disable native treemap card dragging for pointer gestures that begin inside editable text, then restore draggable state after the gesture ends.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
+### Path-Based Tailscale Hosting
+
+**Author**: Codex
+
+**Changes**:
+- Added a production static server for the built `docs/` output with `/NoteNest` path-base enforcement and `/NoteNest/api/health`.
+- Added NoteNest server lifecycle scripts matching the sibling app pattern:
+- `script/server-common.sh`
+- `script/run-server.sh`
+- `script/start-server.sh`
+- `script/stop-server.sh`
+- `script/status-server.sh`
+- Added npm aliases for production server start/stop/status.
+- Updated architecture notes with the local `5300` port, `/NoteNest` path base, and Tailscale HTTPS route.
+- Added root website documentation at `../PathBasedTailscaleHostingPattern.md` explaining how new apps should follow the shared pattern.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+- `./script/start-server.sh`
+- `./script/status-server.sh`
+- `curl -fsS http://127.0.0.1:5300/NoteNest/api/health`
+- `curl -fsS http://127.0.0.1:5300/NoteNest/`
+- `sudo tailscale serve --bg --set-path /NoteNest http://127.0.0.1:5300/NoteNest/`
+- `curl -fsS https://data.moray-notothen.ts.net/NoteNest/api/health`
+- `curl -fsS https://data.moray-notothen.ts.net/NoteNest/`
+
 ## 2026-06-29
 
 ### ToDo Ordering Isolation

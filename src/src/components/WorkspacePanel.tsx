@@ -112,7 +112,22 @@ const handleEditableTextDoubleClick = (event: MouseEvent<HTMLElement>) => {
 };
 
 const isEditableTextTarget = (target: EventTarget | null) => {
-  return target instanceof HTMLElement && Boolean(target.closest('input, textarea, [contenteditable="true"]'));
+  const node = target as (Node & { parentElement?: Element | null }) | null;
+  if (!node || typeof node.nodeType !== 'number') return false;
+  const element = node.nodeType === 1 ? (node as unknown as Element) : node.parentElement ?? null;
+  return Boolean(element?.closest?.('input, textarea, [contenteditable="true"]'));
+};
+
+const getEditableSafeDragListeners = (listeners: Record<string, any>) => {
+  return Object.fromEntries(
+    Object.entries(listeners).map(([eventName, handler]) => [
+      eventName,
+      (event: { target: EventTarget | null }) => {
+        if (isEditableTextTarget(event.target)) return;
+        return typeof handler === 'function' ? handler(event) : undefined;
+      },
+    ])
+  );
 };
 
 function isCheckedTodoCard(card: Card): boolean {
@@ -2457,6 +2472,7 @@ function TodoDividerItem({ item, dropIndicator, onRename, onDelete }: TodoDivide
   } = useSortable({ id: item.id });
   const labelRef = useRef<HTMLDivElement | null>(null);
   const [rowSpan, setRowSpan] = useState(6);
+  const dragListeners = useMemo(() => getEditableSafeDragListeners(listeners || {}), [listeners]);
 
   useLayoutEffect(() => {
     const node = labelRef.current?.parentElement?.parentElement;
@@ -2505,7 +2521,7 @@ function TodoDividerItem({ item, dropIndicator, onRename, onDelete }: TodoDivide
       <div
         className="relative flex min-h-14 cursor-grab items-center gap-3 rounded-md px-2 py-3 active:cursor-grabbing"
         {...attributes}
-        {...listeners}
+        {...dragListeners}
       >
         <div className="h-px flex-1 bg-border" />
         <div
@@ -2605,6 +2621,7 @@ function GridCardItem({
   const [colorDialogOpen, setColorDialogOpen] = useState(false);
   const [editingTodoBadgeListId, setEditingTodoBadgeListId] = useState<string | null>(null);
   const [todoNumberDraft, setTodoNumberDraft] = useState('');
+  const dragListeners = useMemo(() => getEditableSafeDragListeners(listeners || {}), [listeners]);
 
   useEffect(() => {
     if (!editingTodoBadgeListId) {
@@ -2694,6 +2711,11 @@ function GridCardItem({
   const isTreemapContainerDropTarget =
     treemapDragController?.dropTarget?.kind === 'container' &&
     treemapDragController.dropTarget.parentId === card.id;
+  const nativeCardDragEnabled = Boolean(treemapDragController) && !isRecycleBin;
+
+  const restoreNativeCardDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.draggable = nativeCardDragEnabled;
+  };
 
   const handleRenameStart = () => {
     const node = titleRef.current;
@@ -2729,7 +2751,13 @@ function GridCardItem({
     <div
       ref={setNodeRef}
       style={style}
-      draggable={Boolean(treemapDragController) && !isRecycleBin}
+      draggable={nativeCardDragEnabled}
+      onPointerDownCapture={(event) => {
+        event.currentTarget.draggable = nativeCardDragEnabled && !isEditableTextTarget(event.target);
+      }}
+      onPointerUpCapture={restoreNativeCardDrag}
+      onPointerCancelCapture={restoreNativeCardDrag}
+      onPointerLeave={restoreNativeCardDrag}
       onDragStart={treemapDragController ? (event) => {
         if (isEditableTextTarget(event.target)) {
           event.preventDefault();
@@ -2833,7 +2861,7 @@ function GridCardItem({
         }}
         onContextMenu={handleContextMenu}
         {...(sortableEnabled ? attributes : {})}
-        {...(sortableEnabled ? listeners : {})}
+        {...(sortableEnabled ? dragListeners : {})}
       >
         {isFolderCard && (
           <div
@@ -3707,6 +3735,7 @@ export function WorkspacePanel({
                     if (item.type !== 'card') return false;
                     return showCheckedTodoItems || !checkedTodoCardIds.has(item.cardId);
                   });
+                  const dragListeners = getEditableSafeDragListeners(dragHandleProps.listeners);
                   return (
                     <section
                       key={list.id}
@@ -3716,7 +3745,7 @@ export function WorkspacePanel({
                       <div
                         className="group mb-3 flex cursor-grab items-center gap-2 rounded-sm active:cursor-grabbing"
                         {...dragHandleProps.attributes}
-                        {...dragHandleProps.listeners}
+                        {...dragListeners}
                       >
                         <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <DropdownMenu>
