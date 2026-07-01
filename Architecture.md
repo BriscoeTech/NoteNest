@@ -124,7 +124,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 | UX | Recycle Bin rows use the card type iconography; checkbox cards show a non-interactive checked or unchecked state preview 
 | UX | Card actions are context-driven through shared card action menus for normal cards, with recycle-bin action menus for deleted-card recovery/cleanup 
 | UX | Normal card action menus are available from both `...` trigger and right-click in tree and workspace grid 
-| UX | Editable workspace card text preserves the native browser context menu so spellcheck/autocorrect suggestions remain accessible
+| UX | Editable workspace card text preserves native text interactions, including drag selection, title double-click selection, and spellcheck/autocorrect context menus
 | UX | Normal card action menus expose a shared card color dialog for cards, folders, and lists 
 | UX | Card color dialog provides eight local palette slots; the default/no-color slot cannot be overwritten 
 | UX | Card color palette swatches and active editor preview show sample text on the selected background 
@@ -165,7 +165,7 @@ This section is the authoritative feature contract. Changes must be reflected he
 11. When the graph editor is closed, only the currently visible matrix remains persisted; session-only buffered cells are discarded.
 12. For `folder` and `list` types, the content editor is hidden and sub-note area is shown.
 13. Changes are persisted to IndexedDB after state updates.
-14. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile, except editable workspace card text surfaces where the native browser context menu is preserved for spellcheck/autocorrect.
+14. Normal card action menus may be opened either from the visible `...` trigger or by right-clicking the card row/card tile, except editable workspace card text surfaces where native text selection and spellcheck/autocorrect behavior is preserved.
 15. User may open the shared card color dialog from a normal card action menu to choose a card/folder/list background and black/white text color.
 16. Applying a palette color writes the resolved background/text values onto the selected card/folder/list only; later palette edits must not mutate cards that previously used that preset.
 
@@ -464,6 +464,8 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Grid cards open on double-click (all types).
 - Grid-card action menus are available from both `...` and right-click.
 - Grid-card editable text surfaces, including card titles, text blocks, and bullet text fields, must stop propagation of `contextmenu` events without preventing default browser behavior so native spellcheck/autocorrect suggestions can appear.
+- Grid-card editable text surfaces must stop mouse/touch drag activation from reaching card/list drag sensors so dragging across text selects text instead of moving the card.
+- Content-editable titles in draggable workspace surfaces select their full text on double-click instead of opening or dragging the card.
 - Masonry layout must preserve the existing responsive column-count rules; it changes vertical packing only.
 - Child-card drag reorder semantics and store reorder logic must remain unchanged under masonry layout.
 - Child-card drag reorder UI shows a before/after insertion indicator while dragging.
@@ -504,7 +506,7 @@ Source of truth: `src/src/hooks/use-notes-store.ts`.
 - Menu visibility pattern:
 - desktop layouts may reveal the `...` trigger on hover to preserve compact card layouts,
 - right-click must still expose the same normal-card action set without requiring the trigger.
-- Editable text fields inside workspace grid cards are a deliberate exception to card-level right-click handling: they preserve the native browser context menu for text editing, spellcheck, and autocorrect.
+- Editable text fields inside workspace grid cards are a deliberate exception to card-level gesture handling: they preserve native text selection, text editing, spellcheck, and autocorrect behavior instead of starting card drag or opening card-level right-click actions.
 
 ### 6.5.1 Normal Card Action Matrix
 
@@ -737,6 +739,8 @@ Verify the product behavior items below:
 - Can rename notes from tree and workspace.
 - Tree and workspace normal-card menus can be opened from both `...` and right-click.
 - Right-clicking editable workspace card text with spelling suggestions opens the native browser spellcheck/autocorrect menu instead of the card action menu.
+- Dragging across editable workspace card text selects text instead of moving the card.
+- Double-clicking editable workspace card/list titles selects the full title text instead of opening or dragging the card.
 - Folder and List menus place `Add Note` first, followed by a divider, in both tree and workspace.
 - Can move note to another parent and to root.
 - Cannot move note into itself/descendants.

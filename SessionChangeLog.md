@@ -21,6 +21,23 @@ Architecture requirements and product contracts belong in `Architecture.md`.
 - `npm test`
 - `npm run build`
 
+### Editable Text Selection in Draggable Cards
+
+**Author**: Codex
+
+**Changes**:
+- Stopped editable workspace text mouse/touch starts from activating card, ToDo-list, and divider drag sensors.
+- Restored drag-to-highlight behavior for workspace card titles, text blocks, bullet text fields, ToDo dividers, and ToDo list headers.
+- Added full-text selection on double-click for content-editable titles in draggable workspace surfaces.
+- Guarded treemap native card drag startup when the gesture begins inside editable text.
+- Updated architecture notes with the editable-text selection and drag-sensor exception.
+- Rebuilt tracked GitHub Pages assets in `docs/`.
+
+**Validation**:
+- `npm run check`
+- `npm test`
+- `npm run build`
+
 ## 2026-06-29
 
 ### ToDo Ordering Isolation

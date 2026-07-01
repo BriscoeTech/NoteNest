@@ -92,6 +92,29 @@ const allowNativeTextContextMenu = (event: MouseEvent<HTMLElement>) => {
   event.stopPropagation();
 };
 
+const stopEditableTextDragActivation = (event: { stopPropagation: () => void }) => {
+  event.stopPropagation();
+};
+
+const selectEditableTextContents = (node: HTMLElement) => {
+  node.focus();
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  selection.removeAllRanges();
+  selection.addRange(range);
+};
+
+const handleEditableTextDoubleClick = (event: MouseEvent<HTMLElement>) => {
+  event.stopPropagation();
+  selectEditableTextContents(event.currentTarget);
+};
+
+const isEditableTextTarget = (target: EventTarget | null) => {
+  return target instanceof HTMLElement && Boolean(target.closest('input, textarea, [contenteditable="true"]'));
+};
+
 function isCheckedTodoCard(card: Card): boolean {
   const { checkboxBlock } = getTypedBlocksByCardType(card);
   return Boolean(checkboxBlock?.checked);
@@ -1840,6 +1863,8 @@ class TextBlockEditorDefinition extends BlockEditorbase<TextBlock> {
             onChange={(e) => onUpdate({ ...block, content: e.target.value })}
             onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)}
             onContextMenu={allowNativeTextContextMenu}
+            onMouseDown={stopEditableTextDragActivation}
+            onTouchStart={stopEditableTextDragActivation}
             disabled={isRecycleBin}
             placeholder={isSelected ? "Type text here..." : ""}
             className="w-full border-none shadow-none focus-visible:ring-0 p-3 resize-none min-h-[44px] overflow-hidden text-base bg-muted/30 rounded placeholder:text-muted-foreground/40"
@@ -1985,7 +2010,7 @@ class BulletBlockEditorDefinition extends BlockEditorbase<BulletBlock> {
             {block.items.map((bullet, index) => (
               <div key={bullet.id} className="flex items-start gap-2 group/bullet" style={{ paddingLeft: (bullet.indent * 16) + 'px' }}>
                 <span className="text-muted-foreground font-bold mt-1 select-none text-sm">•</span>
-                <Textarea ref={(el) => { if (el) context.bulletRefs.current.set(bullet.id, el); else context.bulletRefs.current.delete(bullet.id); }} value={bullet.content} onChange={(e) => updateBullet(bullet.id, e.target.value)} onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)} onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)} onContextMenu={allowNativeTextContextMenu} disabled={isRecycleBin} placeholder={isSelected ? "..." : ""} className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground" rows={1} />
+                <Textarea ref={(el) => { if (el) context.bulletRefs.current.set(bullet.id, el); else context.bulletRefs.current.delete(bullet.id); }} value={bullet.content} onChange={(e) => updateBullet(bullet.id, e.target.value)} onKeyDown={(e) => handleBulletKeyDown(e, bullet, index)} onInput={(e) => context.autoResize(e.target as HTMLTextAreaElement)} onContextMenu={allowNativeTextContextMenu} onMouseDown={stopEditableTextDragActivation} onTouchStart={stopEditableTextDragActivation} disabled={isRecycleBin} placeholder={isSelected ? "..." : ""} className="flex-1 min-h-[36px] py-1.5 px-1 border-none shadow-none focus-visible:ring-0 resize-none text-base bg-transparent placeholder:text-muted-foreground/30 overflow-hidden text-foreground" rows={1} />
                 {isSelected && <button className="p-2 text-muted-foreground hover:text-destructive min-h-[36px] min-w-[36px] flex items-center justify-center" onClick={() => removeBullet(bullet.id)} disabled={isRecycleBin}><Trash2 className="w-3.5 h-3.5" /></button>}
               </div>
             ))}
@@ -2500,8 +2525,11 @@ function TodoDividerItem({ item, dropIndicator, onRename, onDelete }: TodoDivide
             e.stopPropagation();
             e.currentTarget.focus();
           }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
+          onPointerDown={stopEditableTextDragActivation}
+          onMouseDown={stopEditableTextDragActivation}
+          onTouchStart={stopEditableTextDragActivation}
+          onContextMenu={allowNativeTextContextMenu}
+          onDoubleClick={handleEditableTextDoubleClick}
         >
           {item.title}
         </div>
@@ -2702,7 +2730,14 @@ function GridCardItem({
       ref={setNodeRef}
       style={style}
       draggable={Boolean(treemapDragController) && !isRecycleBin}
-      onDragStart={treemapDragController ? (event) => treemapDragController.onCardDragStart(event, card.id) : undefined}
+      onDragStart={treemapDragController ? (event) => {
+        if (isEditableTextTarget(event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        treemapDragController.onCardDragStart(event, card.id);
+      } : undefined}
       onDragOver={treemapDragController ? (event) => treemapDragController.onCardDragOver(event, card) : undefined}
       onDrop={treemapDragController?.onCardDrop}
       onDragEnd={treemapDragController?.onCardDragEnd}
@@ -2851,16 +2886,18 @@ function GridCardItem({
                 e.stopPropagation();
                 e.currentTarget.focus();
               }}
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={stopEditableTextDragActivation}
+              onMouseDown={stopEditableTextDragActivation}
+              onTouchStart={stopEditableTextDragActivation}
               onContextMenu={allowNativeTextContextMenu}
-              onDoubleClick={(e) => e.stopPropagation()}
+              onDoubleClick={handleEditableTextDoubleClick}
             >
               {card.title}
             </div>
           </div>
         )}
         {linkBlock && (
-          <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="w-full mt-1 px-2" onClick={(e) => e.stopPropagation()} onPointerDown={stopEditableTextDragActivation} onMouseDown={stopEditableTextDragActivation} onTouchStart={stopEditableTextDragActivation}>
              {linkBlock.url ? (
                <div className={cn("flex items-center gap-1", checkboxBlock ? "justify-start" : "justify-center")}>
                  <LinkIcon className={cn("w-3 h-3 shrink-0", !readableTextColor && "text-primary")} style={{ color: readableTextColor }} />
@@ -3708,7 +3745,11 @@ export function WorkspacePanel({
                           suppressContentEditableWarning
                           className="min-w-0 flex-1 rounded-sm px-1 text-base font-semibold outline-none focus:bg-background focus:ring-1 focus:ring-ring"
                           onBlur={(e) => onUpdateTodoListTitle(list.id, e.currentTarget.textContent || '')}
-                          onPointerDown={(e) => e.stopPropagation()}
+                          onPointerDown={stopEditableTextDragActivation}
+                          onMouseDown={stopEditableTextDragActivation}
+                          onTouchStart={stopEditableTextDragActivation}
+                          onContextMenu={allowNativeTextContextMenu}
+                          onDoubleClick={handleEditableTextDoubleClick}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
